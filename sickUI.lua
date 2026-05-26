@@ -657,20 +657,19 @@ sickUi.createWindow = function(title, width, height)
     end
 
     self.inputBeganConnection = game:GetService("UserInputService").InputBegan:Connect(function(input)
-        if input.KeyCode then
-            if tostring(input.KeyCode):find("%.P$") then
-                self.visible = not self.visible
-                self:render()
-                return
-            end
+        if input.KeyCode == Enum.KeyCode.P then
+            self.visible = not self.visible
+            self:render()
+            return
         end
 
         if not self.visible then return end
         
-        local mouseX = game:GetService("Players").LocalPlayer:GetMouse().X
-        local mouseY = game:GetService("Players").LocalPlayer:GetMouse().Y
+        local mousePos = game:GetService("UserInputService"):GetMouseLocation()
+        local mouseX = mousePos.X
+        local mouseY = mousePos.Y
         
-        if tostring(input.UserInputType):find("MouseButton1") then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
             if mouseX >= self.x and mouseX <= self.x + self.width and mouseY >= self.y and mouseY <= self.y + 25 then
                 self.dragging = true
                 self.dragOffset = Vector2.new(mouseX - self.x, mouseY - self.y)
@@ -741,7 +740,7 @@ sickUi.createWindow = function(title, width, height)
     end)
 
     self.inputEndedConnection = game:GetService("UserInputService").InputEnded:Connect(function(input)
-        if tostring(input.UserInputType):find("MouseButton1") then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
             self.dragging = false
         end
     end)
@@ -750,14 +749,16 @@ sickUi.createWindow = function(title, width, height)
         while self.visible ~= nil do
             task.wait()
             if self.visible and self.dragging then
-                self.x = game:GetService("Players").LocalPlayer:GetMouse().X - self.dragOffset.X
-                self.y = game:GetService("Players").LocalPlayer:GetMouse().Y - self.dragOffset.Y
+                local mousePos = game:GetService("UserInputService"):GetMouseLocation()
+                self.x = mousePos.X - self.dragOffset.X
+                self.y = mousePos.Y - self.dragOffset.Y
                 self:render()
             end
             
             if self.visible then
-                local mouseX = game:GetService("Players").LocalPlayer:GetMouse().X
-                local mouseY = game:GetService("Players").LocalPlayer:GetMouse().Y
+                local mousePos = game:GetService("UserInputService"):GetMouseLocation()
+                local mouseX = mousePos.X
+                local mouseY = mousePos.Y
                 local hovered = false
                 local activeTabObj = self.tabs[self.activeTab]
                 if activeTabObj and activeTabObj.sections then
@@ -826,5 +827,4 @@ sickUi.createWindow = function(title, width, height)
     end
 end
 
-_G.sickUi = sickUi
 return sickUi
