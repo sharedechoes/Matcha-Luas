@@ -826,4 +826,5 @@ sickUi.createWindow = function(title, width, height)
     end
 end
 
+shared.sickUi = sickUi
 return sickUi
