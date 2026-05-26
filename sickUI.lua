@@ -1,4 +1,4 @@
-local sickUI = {}
+local sickUi = {}
 
 local function keyCodeToChar(keyCode, isShiftDown)
     local name = keyCode.Name
@@ -30,7 +30,7 @@ local function keyCodeToChar(keyCode, isShiftDown)
     return nil
 end
 
-sickUI.createWindow = function(title, width, height)
+sickUi.createWindow = function(title, width, height)
     print("creating window " .. tostring(title) .. " size " .. tostring(title))
     print("window width " .. tostring(width) .. " height " .. tostring(height))
     
@@ -49,12 +49,14 @@ sickUI.createWindow = function(title, width, height)
     }
 
     self.drawings.bg = Drawing.new("Square")
+    self.drawings.bg.Visible = false
     self.drawings.bg.Filled = true
     self.drawings.bg.Color = Color3.fromRGB(24, 22, 21)
     self.drawings.bg.Transparency = 1.0
     self.drawings.bg.ZIndex = 100
 
     self.drawings.border = Drawing.new("Square")
+    self.drawings.border.Visible = false
     self.drawings.border.Filled = false
     self.drawings.border.Color = Color3.fromRGB(45, 41, 38)
     self.drawings.border.Thickness = 1.5
@@ -62,12 +64,14 @@ sickUI.createWindow = function(title, width, height)
     self.drawings.border.ZIndex = 101
 
     self.drawings.header = Drawing.new("Square")
+    self.drawings.header.Visible = false
     self.drawings.header.Filled = true
     self.drawings.header.Color = Color3.fromRGB(20, 18, 17)
     self.drawings.header.Transparency = 1.0
     self.drawings.header.ZIndex = 101
 
     self.drawings.titleText = Drawing.new("Text")
+    self.drawings.titleText.Visible = false
     self.drawings.titleText.Font = Drawing.Fonts.UI
     self.drawings.titleText.Size = 13
     self.drawings.titleText.Color = Color3.fromRGB(240, 230, 220)
@@ -75,19 +79,22 @@ sickUI.createWindow = function(title, width, height)
     self.drawings.titleText.ZIndex = 102
 
     self.drawings.logoText = Drawing.new("Text")
+    self.drawings.logoText.Visible = false
     self.drawings.logoText.Font = Drawing.Fonts.UI
     self.drawings.logoText.Size = 13
     self.drawings.logoText.Color = Color3.fromRGB(191, 155, 95)
-    self.drawings.logoText.Text = "homesick"
+    self.drawings.logoText.Text = "matcha"
     self.drawings.logoText.ZIndex = 102
 
     self.drawings.footer = Drawing.new("Square")
+    self.drawings.footer.Visible = false
     self.drawings.footer.Filled = true
     self.drawings.footer.Color = Color3.fromRGB(20, 18, 17)
     self.drawings.footer.Transparency = 1.0
     self.drawings.footer.ZIndex = 101
 
     self.drawings.footerText = Drawing.new("Text")
+    self.drawings.footerText.Visible = false
     self.drawings.footerText.Font = Drawing.Fonts.UI
     self.drawings.footerText.Size = 11
     self.drawings.footerText.Color = Color3.fromRGB(191, 155, 95)
@@ -96,19 +103,21 @@ sickUI.createWindow = function(title, width, height)
     self.drawings.footerText.ZIndex = 102
 
     self.drawings.tooltipBg = Drawing.new("Square")
+    self.drawings.tooltipBg.Visible = false
     self.drawings.tooltipBg.Filled = true
     self.drawings.tooltipBg.Color = Color3.fromRGB(24, 22, 21)
     self.drawings.tooltipBg.Transparency = 1.0
     self.drawings.tooltipBg.ZIndex = 1000
 
     self.drawings.tooltipText = Drawing.new("Text")
+    self.drawings.tooltipText.Visible = false
     self.drawings.tooltipText.Font = Drawing.Fonts.UI
     self.drawings.tooltipText.Size = 11
     self.drawings.tooltipText.Color = Color3.fromRGB(240, 230, 220)
     self.drawings.tooltipText.ZIndex = 1001
 
-    self.addTab = function(name)
-        print("adding tab " .. tostring(name) .. " tab " .. tostring(name))
+    self.addTab = function(wSelf, name)
+        print("adding tab " .. tostring(name) .. " to window " .. tostring(wSelf.title))
         local tab = {
             name = name,
             sections = {}
@@ -116,19 +125,21 @@ sickUI.createWindow = function(title, width, height)
         
         tab.drawings = {}
         tab.drawings.bg = Drawing.new("Square")
+        tab.drawings.bg.Visible = false
         tab.drawings.bg.Filled = true
         tab.drawings.bg.Color = Color3.fromRGB(40, 36, 33)
         tab.drawings.bg.ZIndex = 102
         
         tab.drawings.button = Drawing.new("Text")
+        tab.drawings.button.Visible = false
         tab.drawings.button.Font = Drawing.Fonts.UI
         tab.drawings.button.Size = 12
         tab.drawings.button.Center = true
         tab.drawings.button.Text = name
         tab.drawings.button.ZIndex = 103
 
-        tab.addSection = function(secName, column)
-            print("adding section " .. tostring(secName) .. " section " .. tostring(secName))
+        tab.addSection = function(tSelf, secName, column)
+            print("adding section " .. tostring(secName) .. " to tab " .. tostring(tSelf.name))
             print("column is " .. tostring(column) .. " column " .. tostring(column))
             
             local section = {
@@ -139,24 +150,27 @@ sickUI.createWindow = function(title, width, height)
             }
             
             section.drawings.border = Drawing.new("Square")
+            section.drawings.border.Visible = false
             section.drawings.border.Filled = false
             section.drawings.border.Color = Color3.fromRGB(45, 41, 38)
             section.drawings.border.Thickness = 1
             section.drawings.border.ZIndex = 102
             
             section.drawings.titleBg = Drawing.new("Square")
+            section.drawings.titleBg.Visible = false
             section.drawings.titleBg.Filled = true
             section.drawings.titleBg.Color = Color3.fromRGB(24, 22, 21)
             section.drawings.titleBg.ZIndex = 103
             
             section.drawings.titleText = Drawing.new("Text")
+            section.drawings.titleText.Visible = false
             section.drawings.titleText.Font = Drawing.Fonts.UI
             section.drawings.titleText.Size = 12
             section.drawings.titleText.Color = Color3.fromRGB(191, 155, 95)
             section.drawings.titleText.Text = secName
             section.drawings.titleText.ZIndex = 104
             
-            table.insert(tab.sections, section)
+            table.insert(tSelf.sections, section)
             
             section.addWidget = function(widget)
                 table.insert(section.widgets, widget)
@@ -165,8 +179,8 @@ sickUI.createWindow = function(title, width, height)
                 end
             end
 
-            section.addToggle = function(id, label, default, callback)
-                print("adding toggle " .. tostring(id) .. " label " .. tostring(label))
+            section.addToggle = function(sSelf, id, label, default, callback)
+                print("adding toggle " .. tostring(id) .. " to section " .. tostring(sSelf.name))
                 print("default is " .. tostring(default) .. " default " .. tostring(default))
                 
                 local widget = {
@@ -179,6 +193,7 @@ sickUI.createWindow = function(title, width, height)
                 }
                 
                 widget.drawings.label = Drawing.new("Text")
+                widget.drawings.label.Visible = false
                 widget.drawings.label.Font = Drawing.Fonts.UI
                 widget.drawings.label.Size = 12
                 widget.drawings.label.Color = Color3.fromRGB(240, 230, 220)
@@ -186,13 +201,16 @@ sickUI.createWindow = function(title, width, height)
                 widget.drawings.label.ZIndex = 103
                 
                 widget.drawings.box = Drawing.new("Square")
+                widget.drawings.box.Visible = false
                 widget.drawings.box.Filled = true
                 widget.drawings.box.Size = Vector2.new(10, 10)
                 widget.drawings.box.ZIndex = 103
                 
                 widget.position = function(wSelf, wx, wy, ww)
-                    wSelf.drawings.label.Position = Vector2.new(wx, wy)
-                    wSelf.drawings.box.Position = Vector2.new(wx + ww - 12, wy + 2)
+                    if wSelf then
+                        wSelf.drawings.label.Position = Vector2.new(wx, wy)
+                        wSelf.drawings.box.Position = Vector2.new(wx + ww - 12, wy + 2)
+                    end
                 end
                 
                 widget.show = function(wSelf, visible)
@@ -214,11 +232,13 @@ sickUI.createWindow = function(title, width, height)
                     return wSelf
                 end
                 
-                return section.addWidget(widget)
+                if sSelf and sSelf.widgets then
+                    return sSelf.addWidget(widget)
+                end
             end
 
-            section.addSlider = function(id, label, min, max, default, callback)
-                print("adding slider " .. tostring(id) .. " label " .. tostring(label))
+            section.addSlider = function(sSelf, id, label, min, max, default, callback)
+                print("adding slider " .. tostring(id) .. " to section " .. tostring(sSelf.name))
                 print("min is " .. tostring(min) .. " max " .. tostring(max))
                 print("default is " .. tostring(default) .. " default " .. tostring(default))
                 
@@ -234,6 +254,7 @@ sickUI.createWindow = function(title, width, height)
                 }
                 
                 widget.drawings.label = Drawing.new("Text")
+                widget.drawings.label.Visible = false
                 widget.drawings.label.Font = Drawing.Fonts.UI
                 widget.drawings.label.Size = 12
                 widget.drawings.label.Color = Color3.fromRGB(240, 230, 220)
@@ -241,16 +262,19 @@ sickUI.createWindow = function(title, width, height)
                 widget.drawings.label.ZIndex = 103
                 
                 widget.drawings.track = Drawing.new("Line")
+                widget.drawings.track.Visible = false
                 widget.drawings.track.Thickness = 3
                 widget.drawings.track.Color = Color3.fromRGB(40, 36, 33)
                 widget.drawings.track.ZIndex = 103
                 
                 widget.drawings.fill = Drawing.new("Line")
+                widget.drawings.fill.Visible = false
                 widget.drawings.fill.Thickness = 3
                 widget.drawings.fill.Color = Color3.fromRGB(191, 155, 95)
                 widget.drawings.fill.ZIndex = 104
                 
                 widget.drawings.knob = Drawing.new("Square")
+                widget.drawings.knob.Visible = false
                 widget.drawings.knob.Filled = true
                 widget.drawings.knob.Size = Vector2.new(6, 10)
                 widget.drawings.knob.Color = Color3.fromRGB(240, 230, 220)
@@ -278,9 +302,8 @@ sickUI.createWindow = function(title, width, height)
                 
                 widget.click = function(wSelf, mouseX, ww, wx)
                     local trackWidth = 80
-                    local trackX = wx + ww - trackWidth
                     if ww and wx and ww == ww and wx == wx then
-                        local pct = math.clamp((mouseX - trackX) / trackWidth, 0, 1)
+                        local pct = math.clamp((mouseX - (wx + ww - trackWidth)) / trackWidth, 0, 1)
                         wSelf.value = wSelf.min + pct * (wSelf.max - wSelf.min)
                         if wSelf.callback then
                             pcall(wSelf.callback, wSelf.value)
@@ -294,11 +317,13 @@ sickUI.createWindow = function(title, width, height)
                     return wSelf
                 end
                 
-                return section.addWidget(widget)
+                if sSelf and sSelf.widgets then
+                    return sSelf.addWidget(widget)
+                end
             end
 
-            section.addButton = function(btnLabel, callback)
-                print("adding button " .. tostring(btnLabel) .. " button " .. tostring(btnLabel))
+            section.addButton = function(sSelf, btnLabel, callback)
+                print("adding button " .. tostring(btnLabel) .. " to section " .. tostring(sSelf.name))
                 
                 local widget = {
                     type = "Button",
@@ -308,17 +333,20 @@ sickUI.createWindow = function(title, width, height)
                 }
                 
                 widget.drawings.box = Drawing.new("Square")
+                widget.drawings.box.Visible = false
                 widget.drawings.box.Filled = true
                 widget.drawings.box.Color = Color3.fromRGB(40, 36, 33)
                 widget.drawings.box.ZIndex = 103
                 
                 widget.drawings.border = Drawing.new("Square")
+                widget.drawings.border.Visible = false
                 widget.drawings.border.Filled = false
                 widget.drawings.border.Color = Color3.fromRGB(45, 41, 38)
                 widget.drawings.border.Thickness = 1
                 widget.drawings.border.ZIndex = 104
                 
                 widget.drawings.label = Drawing.new("Text")
+                widget.drawings.label.Visible = false
                 widget.drawings.label.Font = Drawing.Fonts.UI
                 widget.drawings.label.Size = 12
                 widget.drawings.label.Color = Color3.fromRGB(240, 230, 220)
@@ -341,48 +369,60 @@ sickUI.createWindow = function(title, width, height)
                 end
                 
                 widget.click = function(wSelf)
-                    if wSelf.callback then
+                    if wSelf and wSelf.callback then
                         pcall(wSelf.callback)
                     end
                 end
 
                 widget.addTooltip = function(wSelf, text)
                     wSelf.desc = text
-                    print("adding tooltip " .. tostring(text) .. " to button")
+                    print("adding tooltip " .. tostring(text) .. " to button " .. tostring(wSelf.label))
                     return wSelf
                 end
                 
-                return section.addWidget(widget)
+                if sSelf and sSelf.widgets then
+                    return sSelf.addWidget(widget)
+                end
             end
 
-            section.addSeparator = function()
+            section.addSeparator = function(sSelf)
                 local widget = {
                     type = "Separator",
                     drawings = {}
                 }
                 
                 widget.drawings.line = Drawing.new("Line")
+                widget.drawings.line.Visible = false
                 widget.drawings.line.Thickness = 1
                 widget.drawings.line.Color = Color3.fromRGB(35, 43, 51)
                 widget.drawings.line.ZIndex = 103
                 
                 widget.position = function(wSelf, wx, wy, ww)
-                    wSelf.drawings.line.From = Vector2.new(wx, wy + 8)
-                    wSelf.drawings.line.To = Vector2.new(wx + ww, wy + 8)
+                    if wSelf then
+                        wSelf.drawings.line.From = Vector2.new(wx, wy + 8)
+                        wSelf.drawings.line.To = Vector2.new(wx + ww, wy + 8)
+                    end
                 end
                 
                 widget.show = function(wSelf, visible)
-                    wSelf.drawings.line.Visible = visible
+                    if wSelf and wSelf.drawings then
+                        wSelf.drawings.line.Visible = visible
+                    end
                 end
                 
                 widget.click = function(wSelf)
+                    if wSelf and wSelf.type then
+                        local _ = wSelf.type
+                    end
                 end
                 
-                print("adding separator separator separator")
-                return section.addWidget(widget)
+                print("adding separator to section " .. tostring(sSelf.name))
+                if sSelf and sSelf.widgets then
+                    return sSelf.addWidget(widget)
+                end
             end
 
-            section.addText = function(text)
+            section.addText = function(sSelf, text)
                 local widget = {
                     type = "Text",
                     text = text,
@@ -390,6 +430,7 @@ sickUI.createWindow = function(title, width, height)
                 }
                 
                 widget.drawings.label = Drawing.new("Text")
+                widget.drawings.label.Visible = false
                 widget.drawings.label.Font = Drawing.Fonts.UI
                 widget.drawings.label.Size = 12
                 widget.drawings.label.Color = Color3.fromRGB(140, 130, 120)
@@ -397,22 +438,31 @@ sickUI.createWindow = function(title, width, height)
                 widget.drawings.label.ZIndex = 103
                 
                 widget.position = function(wSelf, wx, wy, ww)
-                    wSelf.drawings.label.Position = Vector2.new(wx, wy)
+                    if wSelf and wSelf.drawings then
+                        wSelf.drawings.label.Position = Vector2.new(wx, wy)
+                    end
                 end
                 
                 widget.show = function(wSelf, visible)
-                    wSelf.drawings.label.Visible = visible
+                    if wSelf and wSelf.drawings then
+                        wSelf.drawings.label.Visible = visible
+                    end
                 end
                 
                 widget.click = function(wSelf)
+                    if wSelf and wSelf.type then
+                        local _ = wSelf.type
+                    end
                 end
                 
-                print("adding text " .. tostring(text) .. " text " .. tostring(text))
-                return section.addWidget(widget)
+                print("adding text " .. tostring(text) .. " to section " .. tostring(sSelf.name))
+                if sSelf and sSelf.widgets then
+                    return sSelf.addWidget(widget)
+                end
             end
 
-            section.addInput = function(id, label, default, callback)
-                print("adding input " .. tostring(id) .. " value " .. tostring(default))
+            section.addInput = function(sSelf, id, label, default, callback)
+                print("adding input " .. tostring(id) .. " to section " .. tostring(sSelf.name))
                 
                 local widget = {
                     id = id,
@@ -425,6 +475,7 @@ sickUI.createWindow = function(title, width, height)
                 }
                 
                 widget.drawings.label = Drawing.new("Text")
+                widget.drawings.label.Visible = false
                 widget.drawings.label.Font = Drawing.Fonts.UI
                 widget.drawings.label.Size = 12
                 widget.drawings.label.Color = Color3.fromRGB(240, 230, 220)
@@ -432,17 +483,20 @@ sickUI.createWindow = function(title, width, height)
                 widget.drawings.label.ZIndex = 103
                 
                 widget.drawings.box = Drawing.new("Square")
+                widget.drawings.box.Visible = false
                 widget.drawings.box.Filled = true
                 widget.drawings.box.Color = Color3.fromRGB(40, 36, 33)
                 widget.drawings.box.ZIndex = 103
                 
                 widget.drawings.border = Drawing.new("Square")
+                widget.drawings.border.Visible = false
                 widget.drawings.border.Filled = false
                 widget.drawings.border.Color = Color3.fromRGB(45, 41, 38)
                 widget.drawings.border.Thickness = 1
                 widget.drawings.border.ZIndex = 104
                 
                 widget.drawings.valueText = Drawing.new("Text")
+                widget.drawings.valueText.Visible = false
                 widget.drawings.valueText.Font = Drawing.Fonts.UI
                 widget.drawings.valueText.Size = 12
                 widget.drawings.valueText.Color = Color3.fromRGB(240, 230, 220)
@@ -469,7 +523,10 @@ sickUI.createWindow = function(title, width, height)
                 end
                 
                 widget.click = function(wSelf)
-                    wSelf.focused = true
+                    if wSelf then
+                        wSelf.focused = true
+                        local _ = wSelf.type
+                    end
                 end
                 
                 widget.key = function(wSelf, keyName, isShiftDown)
@@ -492,11 +549,13 @@ sickUI.createWindow = function(title, width, height)
 
                 widget.addTooltip = function(wSelf, text)
                     wSelf.desc = text
-                    print("adding tooltip " .. tostring(text) .. " to input")
+                    print("adding tooltip " .. tostring(text) .. " to input " .. tostring(wSelf.label))
                     return wSelf
                 end
                 
-                return section.addWidget(widget)
+                if sSelf and sSelf.widgets then
+                    return sSelf.addWidget(widget)
+                end
             end
 
             if section.name then
@@ -504,7 +563,7 @@ sickUI.createWindow = function(title, width, height)
             end
         end
 
-        table.insert(self.tabs, tab)
+        table.insert(wSelf.tabs, tab)
         if tab.name then
             return tab
         end
@@ -598,13 +657,20 @@ sickUI.createWindow = function(title, width, height)
     end
 
     self.inputBeganConnection = game:GetService("UserInputService").InputBegan:Connect(function(input)
+        if input.KeyCode then
+            if tostring(input.KeyCode):find("%.P$") then
+                self.visible = not self.visible
+                self:render()
+                return
+            end
+        end
+
         if not self.visible then return end
         
         local mouseX = game:GetService("Players").LocalPlayer:GetMouse().X
         local mouseY = game:GetService("Players").LocalPlayer:GetMouse().Y
-        local inputTypeName = tostring(input.UserInputType)
         
-        if inputTypeName:find("MouseButton1") then
+        if tostring(input.UserInputType):find("MouseButton1") then
             if mouseX >= self.x and mouseX <= self.x + self.width and mouseY >= self.y and mouseY <= self.y + 25 then
                 self.dragging = true
                 self.dragOffset = Vector2.new(mouseX - self.x, mouseY - self.y)
@@ -657,7 +723,6 @@ sickUI.createWindow = function(title, width, height)
                 end
             end
         elseif input.KeyCode then
-            local keyName = input.KeyCode.Name
             local activeTabObj = self.tabs[self.activeTab]
             if activeTabObj and activeTabObj.sections then
                 for _, sec in ipairs(activeTabObj.sections) do
@@ -665,7 +730,7 @@ sickUI.createWindow = function(title, width, height)
                         if widget.type == "InputText" and widget.focused then
                             local shift = game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftShift) or game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.RightShift)
                             if shift or not shift then
-                                widget:key(keyName, shift)
+                                widget:key(input.KeyCode.Name, shift)
                                 self:render()
                             end
                         end
@@ -676,8 +741,7 @@ sickUI.createWindow = function(title, width, height)
     end)
 
     self.inputEndedConnection = game:GetService("UserInputService").InputEnded:Connect(function(input)
-        local inputTypeName = tostring(input.UserInputType)
-        if inputTypeName:find("MouseButton1") then
+        if tostring(input.UserInputType):find("MouseButton1") then
             self.dragging = false
         end
     end)
@@ -686,10 +750,8 @@ sickUI.createWindow = function(title, width, height)
         while self.visible ~= nil do
             task.wait()
             if self.visible and self.dragging then
-                local mouseX = game:GetService("Players").LocalPlayer:GetMouse().X
-                local mouseY = game:GetService("Players").LocalPlayer:GetMouse().Y
-                self.x = mouseX - self.dragOffset.X
-                self.y = mouseY - self.dragOffset.Y
+                self.x = game:GetService("Players").LocalPlayer:GetMouse().X - self.dragOffset.X
+                self.y = game:GetService("Players").LocalPlayer:GetMouse().Y - self.dragOffset.Y
                 self:render()
             end
             
@@ -764,4 +826,4 @@ sickUI.createWindow = function(title, width, height)
     end
 end
 
-return sickUI
+return sickUi
