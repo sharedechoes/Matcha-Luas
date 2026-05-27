@@ -135,7 +135,7 @@ local ProjectState = {
     tooltipAt = 0,
     tooltipX = 0,
     tooltipY = 0,
-    showWaifu = true,
+    showWaifu = false,
     waifuDrawing = nil,
     lastFrame = clock(),
     lastErrorAt = 0,
@@ -755,9 +755,10 @@ local function makeItem(section, item)
     return handle
 end
 
-local function createSection(tab, name)
+local function createSection(tab, name, side)
     local section = {
         name = tostring(name or "Section"),
+        side = tostring(side or "Left"),
         items = {},
         collapsed = false,
     }
@@ -1018,8 +1019,8 @@ function UI:Tab(name)
     applyInputState(false)
 
     local tabApi = {}
-    function tabApi:Section(sectionName)
-        return createSection(tab, sectionName)
+    function tabApi:Section(sectionName, side)
+        return createSection(tab, sectionName, side)
     end
     return tabApi
 end
@@ -2168,8 +2169,6 @@ local function renderTabs(click, px, py, pw)
         return click
     end
 
-    rect(px, py, pw, TAB_H, Theme.surface2, 20, 7, ProjectState.showWaifu and 0.25 or nil)
-
     local totalW = count * TAB_MIN_W
     local needsScroll = totalW > pw
     local tabW = needsScroll and TAB_MIN_W or (pw / count)
@@ -2191,7 +2190,7 @@ local function renderTabs(click, px, py, pw)
 
     if needsScroll and scrollX > 1 then
         local arrowHovered = over(px, py, 18, TAB_H)
-        rect(px, py, 18, TAB_H, arrowHovered and Theme.surface3 or Theme.surface2, 26, 0)
+        rect(px, py, 18, TAB_H, arrowHovered and Theme.surface3 or Theme.surface, 26, 0)
         local cy = centerY(py, TAB_H)
         triangle(V2(px + 6, cy), V2(px + 12, cy - 4), V2(px + 12, cy + 4), Theme.sub, 27, true)
         if click and arrowHovered then
@@ -2203,7 +2202,7 @@ local function renderTabs(click, px, py, pw)
     if needsScroll and scrollX < maxScroll - 1 then
         local ax = px + pw - 18
         local arrowHovered = over(ax, py, 18, TAB_H)
-        rect(ax, py, 18, TAB_H, arrowHovered and Theme.surface3 or Theme.surface2, 26, 0)
+        rect(ax, py, 18, TAB_H, arrowHovered and Theme.surface3 or Theme.surface, 26, 0)
         local cy = centerY(py, TAB_H)
         triangle(V2(ax + 12, cy), V2(ax + 6, cy - 4), V2(ax + 6, cy + 4), Theme.sub, 27, true)
         if click and arrowHovered then
@@ -2233,13 +2232,10 @@ local function renderTabs(click, px, py, pw)
         if visible then
             local active = ProjectState.activeTab == tab
             if active then
-                rect(tx + 3, py + 3, tabW - 6, TAB_H - 6, Theme.accent, 22, 6)
-                txt(tab.name, tx + tabW / 2, centerY(py, TAB_H), Theme.white, 13, FontBold, 25, true, false, tabW - 12)
+                strokeRect(tx + 4, py + 3, tabW - 8, TAB_H - 6, Theme.accent, 22, 10)
+                txt(tab.name, tx + tabW / 2, centerY(py, TAB_H), Theme.text, 13, FontBold, 25, true, false, tabW - 12)
             else
                 local hovered = over(tx, py, tabW, TAB_H)
-                if hovered then
-                    rect(tx + 3, py + 3, tabW - 6, TAB_H - 6, Theme.surface3, 21, 6)
-                end
                 txt(tab.name, tx + tabW / 2, centerY(py, TAB_H), hovered and Theme.text or Theme.sub, 13, FontSystem, 25, true, false, tabW - 12)
                 if click and hovered then
                     ProjectState.activeTab = tab
@@ -2250,13 +2246,6 @@ local function renderTabs(click, px, py, pw)
                     click = false
                     ProjectState.tabScrollToActive = true
                 end
-            end
-        end
-
-        if i < count then
-            local sepX = contentX + tabW * i - scrollX
-            if sepX >= contentX and sepX <= contentX + contentW then
-                line(sepX, py + 5, sepX, py + TAB_H - 5, Theme.border, 23)
             end
         end
     end
@@ -2348,6 +2337,180 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
     return click, rightClick
 end
 
+local function getItemHeight(item)
+    if item.type == "slider" then
+        return 38
+    elseif item.type == "dropdown" then
+        return 44
+    elseif item.type == "textbox" then
+        return 44
+    end
+    return 28
+end
+
+local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBottom, click, held, rightClick)
+    local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
+    local z = 30
+    
+    if sy + secH >= clipTop and sy <= clipBottom then
+        rect(colX, sy, colW, secH, Theme.surface2, z, 8)
+        strokeRect(colX, sy, colW, secH, Theme.border, z + 1, 8)
+        
+        txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2)
+        
+        local rowY = sy + 28
+        local rowW = colW - 24
+        local rowX = colX + 12
+        
+        for ii = 1, #section.items do
+            local item = section.items[ii]
+            local itemH = getItemHeight(item)
+            
+            if rowY >= clipTop and rowY + itemH <= clipBottom then
+                local disabled = isItemDisabled(item)
+                local trans = disabled and 0.4 or nil
+                
+                if over(rowX, rowY, rowW, itemH - 2) and item.type ~= "divider" then
+                    rect(rowX - 4, rowY, rowW + 8, itemH - 2, C3(42, 42, 49), z + 3, 5, trans)
+                    if item.tooltip and not disabled then
+                        tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
+                    end
+                end
+                
+                if item.type == "label" then
+                    txt(item.label, rowX, textTop(rowY, itemH - 2, 13), item.color or Theme.text, 13, FontSystem, z + 12, false, false, rowW, trans)
+                    
+                elseif item.type == "toggle" then
+                    rect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
+                    strokeRect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
+                    
+                    txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 120, trans)
+                    
+                    click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
+                    
+                    if item.tooltip then
+                        txt("?", rowX + rowW - 12, textTop(rowY, itemH - 2, 13), Theme.sub, 13, FontSystem, z + 12, true)
+                    end
+                    
+                    if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled then
+                        local onKeybind = item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)
+                        local onColor = item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)
+                        if not onKeybind and not onColor then
+                            setItemValue(item, not item.value, true)
+                            click = false
+                        end
+                    end
+                    
+                elseif item.type == "slider" then
+                    txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 80, trans)
+                    
+                    txt(tostring(item.value) .. tostring(item.suffix or ""), rowX + rowW - 4 - textWidth(tostring(item.value) .. tostring(item.suffix or ""), 13, FontSystem), rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, 60, trans)
+                    
+                    local sx, sw = rowX + 4, rowW - 8
+                    local sy_bar = rowY + 22
+                    local denom = max(0.0001, (item.max or 100) - (item.min or 0))
+                    local frac = clamp(((item.value or 0) - (item.min or 0)) / denom, 0, 1)
+                    
+                    rect(sx, sy_bar, sw, 4, C3(58, 58, 64), z + 12, 2, trans)
+                    if frac > 0 then
+                        rect(sx, sy_bar, sw * frac, 4, Theme.accent, z + 13, 2, trans)
+                    end
+                    
+                    circle(sx + sw * frac, sy_bar + 2, 5, Theme.knob, z + 14, true, 0, 32, trans)
+                    
+                    if item.tooltip then
+                        txt("?", rowX + rowW - 12, rowY + 2, Theme.sub, 13, FontSystem, z + 12, true)
+                    end
+                    
+                    if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled then
+                        ProjectState.sliderDrag = item
+                        click = false
+                    end
+                    if held and not popupBlocking and not disabled and (ProjectState.sliderDrag == item) then
+                        local raw = (item.min or 0) + denom * clamp((ProjectState.mouseX - sx) / sw, 0, 1)
+                        local snapped = snapValue(raw, item)
+                        if snapped ~= item.value then
+                            item.value = snapped
+                            safeCallback(item.callback, snapped)
+                        end
+                    end
+                    
+                elseif item.type == "dropdown" then
+                    txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 20, trans)
+                    
+                    local dx, dw = rowX + 4, rowW - 8
+                    local dy_box = rowY + 18
+                    local boxH = 22
+                    
+                    rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and C3(55, 55, 62) or C3(42, 42, 48), z + 12, 4, trans)
+                    strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
+                    
+                    txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 14, false, false, dw - 28, trans)
+                    drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
+                    
+                    if item.tooltip then
+                        txt("?", rowX + rowW - 12, rowY + 2, Theme.sub, 13, FontSystem, z + 12, true)
+                    end
+                    
+                    if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled then
+                        spawnDropdown("item", dx, dy_box + boxH + 4, dw, item.choices, item.value, item.multi, item.callback, item, nil)
+                        click = false
+                    end
+                    
+                elseif item.type == "button" then
+                    local controlY = rowY + 2
+                    rect(rowX + 4, controlY, rowW - 8, itemH - 4, over(rowX + 4, controlY, rowW - 8, itemH - 4) and Theme.accent or C3(42, 42, 48), z + 12, 6, trans)
+                    strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, over(rowX + 4, controlY, rowW - 8, itemH - 4) and Theme.accent or Theme.border, z + 13, 6, trans)
+                    txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), over(rowX + 4, controlY, rowW - 8, itemH - 4) and Theme.bg or Theme.text, 13, FontBold, z + 14, true, false, rowW - 24, trans)
+                    
+                    if click and over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled then
+                        safeCallback(item.callback)
+                        click = false
+                    end
+                    
+                elseif item.type == "textbox" then
+                    txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 20, trans)
+                    
+                    local bx, bw = rowX + 4, rowW - 8
+                    local dy_box = rowY + 18
+                    local boxH = 22
+                    local focused = ProjectState.focus == item
+                    
+                    rect(bx, dy_box, bw, boxH, focused and C3(35, 35, 42) or over(bx, dy_box, bw, boxH) and C3(55, 55, 62) or C3(42, 42, 48), z + 12, 4, trans)
+                    strokeRect(bx, dy_box, bw, boxH, focused and Theme.accent or Theme.border, z + 13, 4, trans)
+                    
+                    local shown = item.value ~= "" and item.value or item.label
+                    if focused and floor(clock() * 2) % 2 == 0 then
+                        shown = tostring(item.value or "") .. "|"
+                    end
+                    txt(shown, bx + 8, textTop(dy_box, boxH, 13), (item.value ~= "" or focused) and Theme.text or Theme.sub, 13, FontUI, z + 14, false, false, bw - 16, trans)
+                    
+                    if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled then
+                        ProjectState.focus = focused and nil or item
+                        click = false
+                    end
+                    
+                elseif item.type == "divider" then
+                    if item.label and item.label ~= "" then
+                        local textW = textWidth(item.label, 11, FontSystem)
+                        local lineW = max(4, (rowW - textW - 16) / 2)
+                        local lineY = centerY(rowY, itemH)
+                        rect(rowX, lineY, lineW, 1, Theme.border, z + 12, 1)
+                        txt(item.label, rowX + lineW + 8, textTop(rowY, itemH, 11), Theme.sub, 11, FontSystem, z + 13, false, false, textW + 4)
+                        rect(rowX + lineW + textW + 16, lineY, lineW, 1, Theme.border, z + 12, 1)
+                    else
+                        rect(rowX, centerY(rowY, itemH), rowW, 1, Theme.border, z + 12, 1)
+                    end
+                end
+            end
+            
+            rowY = rowY + itemH
+        end
+    end
+    
+    return click, held, rightClick
+end
+
 local function renderSections(tab, click, held, rightClick, px, contY, pw, contH)
     if not tab then
         return click, held, rightClick
@@ -2355,24 +2518,49 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
 
     local sectionsToRender = tab.sections
     if ProjectState.searchOpen and ProjectState.searchQuery ~= "" then
-        local results = rebuildSearchResults()
         sectionsToRender = {{
-            name = "Search Results (" .. #results .. ")",
-            items = results,
+            name = "Search Results (" .. #rebuildSearchResults() .. ")",
+            items = rebuildSearchResults(),
             collapsed = false,
         }}
     end
 
-    local contentH = CONTENT_PAD
+    local leftSecs = {}
+    local rightSecs = {}
     for si = 1, #sectionsToRender do
         local section = sectionsToRender[si]
-        local h = SECTION_HEAD_H + CONTENT_PAD
-        if not section.collapsed then
-            h = h + #section.items * ROW_H
+        if section.side == "Right" then
+            rightSecs[#rightSecs + 1] = section
+        else
+            leftSecs[#leftSecs + 1] = section
         end
-        contentH = contentH + h
     end
 
+    local leftTotal = 0
+    for i = 1, #leftSecs do
+        local sec = leftSecs[i]
+        local secH = 28
+        for ii = 1, #sec.items do
+            secH = secH + getItemHeight(sec.items[ii])
+        end
+        secH = secH + 6
+        sec.calculatedHeight = secH
+        leftTotal = leftTotal + secH + 10
+    end
+
+    local rightTotal = 0
+    for i = 1, #rightSecs do
+        local sec = rightSecs[i]
+        local secH = 28
+        for ii = 1, #sec.items do
+            secH = secH + getItemHeight(sec.items[ii])
+        end
+        secH = secH + 6
+        sec.calculatedHeight = secH
+        rightTotal = rightTotal + secH + 10
+    end
+
+    local contentH = max(leftTotal, rightTotal)
     local viewH = max(1, contH - CONTENT_PAD * 2)
     tab.maxScroll = max(0, contentH - viewH)
     tab.scrollY = tab.scrollY or 0
@@ -2409,244 +2597,33 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     local sy = contY + CONTENT_PAD - tab.scrollY
     local clipTop = contY + 4
     local clipBottom = contY + contH - 4
-    local rowX = px + 12
-    local rowW = pw - 24
+    local colW = floor((pw - 10) / 2)
+    local leftX = px
+    local rightX = px + colW + 10
 
-    for si = 1, #sectionsToRender do
-        local section = sectionsToRender[si]
-        local sectionH = SECTION_HEAD_H + CONTENT_PAD
-        if not section.collapsed then
-            sectionH = sectionH + #section.items * ROW_H
-        end
+    local leftY = sy
+    for i = 1, #leftSecs do
+        local section = leftSecs[i]
+        click, held, rightClick = renderSectionCard(section, leftX, leftY, colW, section.calculatedHeight, clipTop, clipBottom, click, held, rightClick)
+        leftY = leftY + section.calculatedHeight + 10
+    end
 
-        if sy + sectionH >= clipTop and sy <= clipBottom then
-            if sy >= clipTop and sy + SECTION_HEAD_H <= clipBottom then
-                local chevronX = rowX
-                local textX = rowX + 16
-                local headerMidY = centerY(sy, SECTION_HEAD_H)
-                if section.collapsed then
-                    triangle(V2(chevronX, headerMidY - 4), V2(chevronX, headerMidY + 4), V2(chevronX + 6, headerMidY), Theme.sub, 35, true)
-                else
-                    triangle(V2(chevronX, headerMidY - 3), V2(chevronX + 8, headerMidY - 3), V2(chevronX + 4, headerMidY + 2), Theme.sub, 35, true)
-                end
-                txt(string.upper(section.name), textX, textTop(sy, SECTION_HEAD_H, 12), Theme.sub, 12, FontBold, 35, false, false, rowW - 16)
-
-                local headerHovered = over(rowX, sy, rowW, SECTION_HEAD_H)
-                if click and headerHovered and not popupBlocking then
-                    section.collapsed = not section.collapsed
-                    click = false
-                end
-            end
-
-            if not section.collapsed then
-                local rowY = sy + SECTION_HEAD_H
-                for ii = 1, #section.items do
-                    local item = section.items[ii]
-
-                    if rowY >= clipTop and rowY + ROW_H <= clipBottom then
-                        local disabled = isItemDisabled(item)
-                        local trans = disabled and 0.4 or nil
-                        local hoveredRow = over(rowX, rowY, rowW, ROW_H - 2)
-
-                        if hoveredRow and item.type ~= "divider" then
-                            rect(rowX - 3, rowY, rowW + 6, ROW_H - 2, C3(42, 42, 49), 36, 5, trans)
-                            if item.tooltip and not disabled then
-                                tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
-                            end
-                        end
-
-                        if item.type == "label" then
-                            txt(item.label, rowX, textTop(rowY, ROW_H - 2, 13), item.color or Theme.text, 13, FontSystem, 42, false, false, rowW, trans)
-                        elseif item.type == "toggle" then
-                            local labelColor = item.value and Theme.text or Theme.sub
-                            if item.unsafe then
-                                labelColor = Theme.unsafe
-                            elseif item.colorpicker and item.colorpicker.overwrite then
-                                labelColor = item.colorpicker.value
-                            end
-                            txt(item.label, rowX, textTop(rowY, ROW_H - 2, 14), labelColor, 14, FontSystem, 42, false, false, rowW - 160, trans)
-
-                            if item.animT == nil then
-                                item.animT = item.value and 1 or 0
-                            end
-                            local targetT = item.value and 1 or 0
-                            if item.animT ~= targetT then
-                                item.animT = smoothValue(item.animT, targetT, 24)
-                                if abs(item.animT - targetT) < 0.001 then
-                                    item.animT = targetT
-                                end
-                            end
-
-                            click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
-
-                            local tx, ty = rowX + rowW - 42, rowY + 6
-                            local hovered = over(tx - 4, ty - 5, 38, 24)
-                            local toggleBg = lerpColor(Theme.toggleOff, Theme.toggleOn, item.animT)
-                            rect(tx, ty, 30, 16, toggleBg, 42, 8, trans)
-                            
-                            local knobX = tx + 6 + 18 * item.animT
-                            circle(knobX, ty + 8, 6, Theme.knob, 44, true, 0, 32, trans)
-
-                            if click and hovered and not popupBlocking and not disabled then
-                                setItemValue(item, not item.value, true)
-                                click = false
-                            end
-                        elseif item.type == "slider" then
-                            txt(item.label, rowX, textTop(rowY, ROW_H - 2, 14), Theme.text, 14, FontSystem, 42, false, false, rowW - 170, trans)
-
-                            local focused = ProjectState.focus == item
-                            local bx, bw = rowX + rowW - 150, 130
-
-                            if focused then
-                                local controlY = rowY + 3
-                                rect(bx, controlY, bw, CONTROL_H, C3(35, 35, 42), 42, 4, trans)
-                                strokeRect(bx, controlY, bw, CONTROL_H, Theme.accent, 43, 4, trans)
-                                local shown = tostring(item._directValue or "")
-                                if floor(clock() * 2) % 2 == 0 then
-                                    shown = shown .. "|"
-                                end
-                                txt(shown, bx + 6, textTop(controlY, CONTROL_H, 13), Theme.text, 13, FontUI, 44, false, false, bw - 12, trans)
-                            else
-                                local sx, sw = rowX + rowW - 150, 104
-                                local denom = max(0.0001, (item.max or 100) - (item.min or 0))
-                                local frac = clamp(((item.value or 0) - (item.min or 0)) / denom, 0, 1)
-
-                                local hot = over(sx - 6, rowY + 4, sw + 12, 22)
-                                local active = (hot or ProjectState.sliderDrag == item) and not popupBlocking and not disabled
-
-                                if item.knobAnim == nil then
-                                    item.knobAnim = active and 1 or 0
-                                end
-                                local targetKnob = active and 1 or 0
-                                if item.knobAnim ~= targetKnob then
-                                    item.knobAnim = smoothValue(item.knobAnim, targetKnob, 18)
-                                    if abs(item.knobAnim - targetKnob) < 0.001 then
-                                        item.knobAnim = targetKnob
-                                    end
-                                end
-
-                                local knobRadius = 5 + 2 * item.knobAnim
-                                local knobColor = lerpColor(Theme.text, Theme.accent, item.knobAnim)
-
-                                rect(sx, rowY + 12, sw, 4, C3(58, 58, 64), 42, 2, trans)
-                                if frac > 0 then
-                                    rect(sx, rowY + 12, sw * frac, 4, Theme.accent, 43, 2, trans)
-                                end
-                                circle(sx + sw * frac, rowY + 14, knobRadius, knobColor, 44, true, 0, 32, trans)
-                                txt(tostring(item.value) .. tostring(item.suffix or ""), sx + sw + 8, textTop(rowY, ROW_H - 2, 13), Theme.text, 13, FontSystem, 44, false, false, 42, trans)
-
-                                if click and hot and not popupBlocking and not disabled then
-                                    ProjectState.sliderDrag = item
-                                    click = false
-                                end
-                                if held and not popupBlocking and not disabled and (ProjectState.sliderDrag == item or hot) then
-                                    ProjectState.sliderDrag = item
-                                    local raw = (item.min or 0) + denom * clamp((ProjectState.mouseX - sx) / sw, 0, 1)
-                                    local snapped = snapValue(raw, item)
-                                    if snapped ~= item.value then
-                                        item.value = snapped
-                                        safeCallback(item.callback, snapped)
-                                    end
-                                end
-                            end
-
-                            local sliderAreaHovered = over(rowX + rowW - 160, rowY + 2, 150, ROW_H - 4)
-                            if rightClick and sliderAreaHovered and not popupBlocking and not disabled then
-                                if Input.shift.held or Input.lshift.held or Input.rshift.held then
-                                    setItemValue(item, item.defaultValue or item.min or 0, true)
-                                else
-                                    ProjectState.focus = item
-                                    item._directValue = tostring(item.value)
-                                end
-                                rightClick = false
-                            end
-                        elseif item.type == "dropdown" then
-                            txt(item.label, rowX, textTop(rowY, ROW_H - 2, 14), Theme.text, 14, FontSystem, 42, false, false, rowW - 170, trans)
-
-                            local dx, dw = rowX + rowW - 150, 130
-                            local controlY = rowY + 3
-                            local hovered = over(dx, controlY, dw, CONTROL_H)
-                            rect(dx, controlY, dw, CONTROL_H, hovered and C3(55, 55, 62) or C3(42, 42, 48), 42, 4, trans)
-                            strokeRect(dx, controlY, dw, CONTROL_H, Theme.border, 43, 4, trans)
-
-                            local display
-                            if item.multi then
-                                display = #item.value > 0 and concat(item.value, ", ") or "-"
-                            else
-                                display = item.value[1] or "-"
-                            end
-                            txt(display, dx + 6, textTop(controlY, CONTROL_H, 13), Theme.text, 13, FontUI, 44, false, false, dw - 24, trans)
-                            drawChevronDown(dx + dw - 15, centerY(controlY, CONTROL_H) - 2, Theme.sub, 45)
-
-                            if click and hovered and not popupBlocking and not disabled then
-                                spawnDropdown("item", dx, rowY + 28, dw, item.choices, item.value, item.multi, item.callback, item, nil)
-                                click = false
-                            end
-                        elseif item.type == "button" then
-                            local controlY = rowY + 2
-                            local hovered = over(rowX, controlY, rowW, CONTROL_H)
-                            rect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or C3(42, 42, 48), 42, 6, trans)
-                            strokeRect(rowX, controlY, rowW, CONTROL_H, hovered and Theme.accent or Theme.border, 43, 6, trans)
-                            txt(item.label, rowX + rowW / 2, centerY(controlY, CONTROL_H), Theme.text, 14, FontSystem, 44, true, false, rowW - 16, trans)
-
-                            if click and hovered and not popupBlocking and not disabled then
-                                safeCallback(item.callback)
-                                click = false
-                            end
-                        elseif item.type == "textbox" then
-                            txt(item.label, rowX, textTop(rowY, ROW_H - 2, 14), Theme.text, 14, FontSystem, 42, false, false, rowW - 170, trans)
-
-                            local bx, bw = rowX + rowW - 150, 130
-                            local focused = ProjectState.focus == item
-                            local controlY = rowY + 3
-                            local hovered = over(bx, controlY, bw, CONTROL_H)
-                            rect(bx, controlY, bw, CONTROL_H, focused and C3(35, 35, 42) or hovered and C3(55, 55, 62) or C3(42, 42, 48), 42, 4, trans)
-                            strokeRect(bx, controlY, bw, CONTROL_H, focused and Theme.accent or Theme.border, 43, 4, trans)
-
-                            local shown = item.value ~= "" and item.value or item.label
-                            if focused and floor(clock() * 2) % 2 == 0 then
-                                shown = tostring(item.value or "") .. "|"
-                            end
-                            txt(shown, bx + 6, textTop(controlY, CONTROL_H, 13), (item.value ~= "" or focused) and Theme.text or Theme.sub, 13, FontUI, 44, false, false, bw - 12, trans)
-
-                            if click and hovered and not popupBlocking and not disabled then
-                                ProjectState.focus = focused and nil or item
-                                click = false
-                            end
-                        elseif item.type == "divider" then
-                            if item.label and item.label ~= "" then
-                                local textVal = item.label
-                                local textW = textWidth(textVal, 11, FontSystem)
-                                local lineW = max(4, (rowW - textW - 16) / 2)
-                                local lineY = centerY(rowY, ROW_H)
-                                rect(rowX, lineY, lineW, 1, Theme.border, 42, 1)
-                                txt(textVal, rowX + lineW + 8, textTop(rowY, ROW_H, 11), Theme.sub, 11, FontSystem, 43, false, false, textW + 4)
-                                rect(rowX + lineW + textW + 16, lineY, lineW, 1, Theme.border, 42, 1)
-                            else
-                                rect(rowX, centerY(rowY, ROW_H), rowW, 1, Theme.border, 42, 1)
-                            end
-                        end
-                    end
-
-                    rowY = rowY + ROW_H
-                end
-            end
-        end
-
-        sy = sy + sectionH
+    local rightY = sy
+    for i = 1, #rightSecs do
+        local section = rightSecs[i]
+        click, held, rightClick = renderSectionCard(section, rightX, rightY, colW, section.calculatedHeight, clipTop, clipBottom, click, held, rightClick)
+        rightY = rightY + section.calculatedHeight + 10
     end
 
     if tab.maxScroll > 0 then
         local trackH = contH - CONTENT_PAD * 2
         local barH = max(22, (trackH / max(contentH, trackH)) * trackH)
         local barY = contY + CONTENT_PAD + (tab.scrollY / max(1, tab.maxScroll)) * (trackH - barH)
-        local trackHovered = over(px + pw - 11, contY + CONTENT_PAD, 12, trackH)
-        local overBar = over(px + pw - 11, barY, 12, barH)
         rect(px + pw - 6, contY + CONTENT_PAD, 3, trackH, C3(45, 45, 52), 50, 2)
         rect(px + pw - 6, barY, 3, barH, Theme.sub, 51, 2)
-        if click and trackHovered and not popupBlocking then
+        if click and over(px + pw - 11, contY + CONTENT_PAD, 12, trackH) and not popupBlocking then
             local grab = barH / 2
-            if overBar then
+            if over(px + pw - 11, barY, 12, barH) then
                 grab = clamp(ProjectState.mouseY - barY, 0, barH)
             end
             ProjectState.scrollDrag = {
@@ -2657,8 +2634,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
         end
         local drag = ProjectState.scrollDrag
         if held and type(drag) == "table" and drag.tab == tab then
-            local frac = clamp((ProjectState.mouseY - (contY + CONTENT_PAD) - drag.grab) / max(1, trackH - barH), 0, 1)
-            tab.targetScrollY = frac * tab.maxScroll
+            tab.targetScrollY = clamp((ProjectState.mouseY - (contY + CONTENT_PAD) - drag.grab) / max(1, trackH - barH), 0, 1) * tab.maxScroll
         end
     elseif type(ProjectState.scrollDrag) == "table" and ProjectState.scrollDrag.tab == tab then
         ProjectState.scrollDrag = nil
@@ -2685,148 +2661,11 @@ local function renderWindow(click, held, rightClick)
     line(x + 2, y + TITLE_H, x + w - 2, y + TITLE_H, Theme.border, 8)
 
     local titleMidY = centerY(y, TITLE_H)
-    local btnY = titleMidY
-
-    local style = ProjectState.windowControlsStyle or "Windows"
-
-    local searchLensX
-    if style == "macOS" or (style == "Custom" and (ProjectState.customControls and ProjectState.customControls.align == "left")) then
-        searchLensX = x + w - 30
-    elseif style == "Windows" then
-        searchLensX = x + w - 124
-    elseif style == "Linux" or (style == "Custom" and (ProjectState.customControls and ProjectState.customControls.align ~= "left")) then
-        searchLensX = x + w - 106
-    end
-
-    local searchLensY = titleMidY - 1
-
-    local closeHot, minHot, restoreHot
-    local searchHot = over(searchLensX - 12, titleMidY - 12, 24, 24)
-    local resizeHovered = not ProjectState.minimized and over(x + w - 16, y + h - 16, 16, 16)
-
-    if style == "macOS" then
-        closeHot = over(x + 14, btnY - 6, 12, 12)
-        minHot = over(x + 32, btnY - 6, 12, 12)
-        restoreHot = over(x + 50, btnY - 6, 12, 12)
-    elseif style == "Windows" then
-        closeHot = over(x + w - 30, y + 2, 28, TITLE_H - 4)
-        restoreHot = over(x + w - 60, y + 2, 28, TITLE_H - 4)
-        minHot = over(x + w - 90, y + 2, 28, TITLE_H - 4)
-    elseif style == "Linux" then
-        closeHot = over(x + w - 26, btnY - 6, 12, 12)
-        restoreHot = over(x + w - 50, btnY - 6, 12, 12)
-        minHot = over(x + w - 74, btnY - 6, 12, 12)
-    elseif style == "Custom" then
-        local custom = ProjectState.customControls or {}
-        local align = custom.align or "right"
-        if align == "left" then
-            closeHot = over(x + 14, btnY - 6, 12, 12)
-            minHot = over(x + 32, btnY - 6, 12, 12)
-            restoreHot = over(x + 50, btnY - 6, 12, 12)
-        else
-            closeHot = over(x + w - 26, btnY - 6, 12, 12)
-            restoreHot = over(x + w - 50, btnY - 6, 12, 12)
-            minHot = over(x + w - 74, btnY - 6, 12, 12)
-        end
-    end
-
-    if style == "macOS" then
-        circle(x + 20, btnY, 6, closeHot and C3(255, 120, 112) or C3(255, 95, 87), 15, true)
-        circle(x + 38, btnY, 6, minHot and C3(255, 210, 50) or C3(255, 189, 46), 15, true)
-        circle(x + 56, btnY, 6, restoreHot and C3(70, 225, 110) or C3(39, 201, 63), 15, true)
-    elseif style == "Windows" then
-        local by = y + 2
-        local bh = TITLE_H - 4
-        local bxClose = x + w - 30
-        local bxRestore = x + w - 60
-        local bxMin = x + w - 90
-        
-        rect(bxClose, by, 28, bh, closeHot and C3(232, 17, 35) or Theme.surface2, 14, 4)
-        rect(bxRestore, by, 28, bh, restoreHot and Theme.surface3 or Theme.surface2, 14, 4)
-        rect(bxMin, by, 28, bh, minHot and Theme.surface3 or Theme.surface2, 14, 4)
-
-        local cx = bxClose + 14
-        local cy = titleMidY
-        local colorClose = closeHot and Theme.white or Theme.text
-        line(cx - 4, cy - 4, cx + 4, cy + 4, colorClose, 15, 1.5)
-        line(cx + 4, cy - 4, cx - 4, cy + 4, colorClose, 15, 1.5)
-
-        local rx = bxRestore + 14
-        local ry = titleMidY
-        local colorRestore = restoreHot and Theme.accent or Theme.text
-        strokeRect(rx - 4, ry - 4, 8, 8, colorRestore, 15)
-
-        local mx = bxMin + 14
-        local my = titleMidY
-        local colorMin = minHot and Theme.accent or Theme.text
-        line(mx - 5, my + 3, mx + 5, my + 3, colorMin, 15, 1.5)
-    elseif style == "Linux" then
-        local circleRad = 6
-        local colorClose = closeHot and Theme.red or Theme.sub
-        local colorMin = minHot and Theme.accent or Theme.sub
-        local colorRestore = restoreHot and Theme.green or Theme.sub
-
-        circle(x + w - 20, btnY, circleRad, colorClose, 15, false, 1.5, 20)
-        circle(x + w - 44, btnY, circleRad, colorRestore, 15, false, 1.5, 20)
-        circle(x + w - 68, btnY, circleRad, colorMin, 15, false, 1.5, 20)
-
-        line(x + w - 22, btnY - 2, x + w - 18, btnY + 2, colorClose, 16, 1)
-        line(x + w - 18, btnY - 2, x + w - 22, btnY + 2, colorClose, 16, 1)
-
-        strokeRect(x + w - 47, btnY - 3, 6, 6, colorRestore, 16)
-
-        line(x + w - 71, btnY, x + w - 65, btnY, colorMin, 16, 1)
-    elseif style == "Custom" then
-        local custom = ProjectState.customControls or {}
-        local align = custom.align or "right"
-        local cClose = custom.closeColor or C3(255, 95, 87)
-        local cMin = custom.minColor or C3(255, 189, 46)
-        local cRestore = custom.restoreColor or C3(39, 201, 63)
-
-        local xClose, xMin, xRestore
-        if align == "left" then
-            xClose, xMin, xRestore = x + 20, x + 38, x + 56
-        else
-            xClose, xMin, xRestore = x + w - 20, x + w - 68, x + w - 44
-        end
-
-        circle(xClose, btnY, 6, closeHot and lerpColor(cClose, Theme.white, 0.3) or cClose, 15, true)
-        circle(xMin, btnY, 6, minHot and lerpColor(cMin, Theme.white, 0.3) or cMin, 15, true)
-        circle(xRestore, btnY, 6, restoreHot and lerpColor(cRestore, Theme.white, 0.3) or cRestore, 15, true)
-    end
 
     if baseClick then
-        if closeHot then
-            setOpen(false)
+        if over(x, y, w, TITLE_H) then
+            ProjectState.drag = {ProjectState.mouseX - x, ProjectState.mouseY - y}
             baseClick = false
-        elseif minHot then
-            ProjectState.minimized = true
-            ProjectState.h = MINIMIZED_H
-            clampWindow()
-            baseClick = false
-        elseif restoreHot then
-            ProjectState.minimized = false
-            ProjectState.h = ProjectState.defaultH
-            clampWindow()
-            baseClick = false
-        elseif searchHot then
-            ProjectState.searchOpen = not ProjectState.searchOpen
-            ProjectState.focus = ProjectState.searchOpen and "search" or nil
-            if not ProjectState.searchOpen then
-                ProjectState.searchQuery = ""
-                ProjectState.searchCacheQuery = nil
-                ProjectState.searchResults = nil
-            end
-            baseClick = false
-        elseif resizeHovered then
-            ProjectState.resizeDrag = {ProjectState.mouseX - w, ProjectState.mouseY - h}
-            baseClick = false
-        elseif over(x, y, w, TITLE_H) then
-            local textboxArea = ProjectState.searchOpen and over(x + 70, y + 8, w - 114, CONTROL_H)
-            if not textboxArea then
-                ProjectState.drag = {ProjectState.mouseX - x, ProjectState.mouseY - y}
-                baseClick = false
-            end
         end
     end
 
@@ -2839,65 +2678,21 @@ local function renderWindow(click, held, rightClick)
         ProjectState.drag = nil
     end
 
-    if held and ProjectState.resizeDrag then
-        local newW = clamp(ProjectState.mouseX - ProjectState.resizeDrag[1], 300, 1000)
-        local newH = clamp(ProjectState.mouseY - ProjectState.resizeDrag[2], 120, 800)
-        ProjectState.w = newW
-        ProjectState.h = newH
-        if not ProjectState.minimized then
-            ProjectState.defaultH = newH
-        end
-        clampWindow()
-        w, h = ProjectState.w, ProjectState.h
-    elseif not held then
-        ProjectState.resizeDrag = nil
-    end
+    txt("Matcha", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
+    txt("Interface", x + 67, textTop(y, TITLE_H, 14), Theme.text, 14, FontSystem, 16)
+    rect(x + 140, textTop(y, TITLE_H, 14) - 1, 30, 16, C3(38, 34, 32), 15, 6)
+    strokeRect(x + 140, textTop(y, TITLE_H, 14) - 1, 30, 16, Theme.accent, 16, 6)
+    txt("Pro", x + 155, textTop(y, TITLE_H, 14) + 7, Theme.accent, 10, FontBold, 17, true)
 
-    if ProjectState.searchOpen then
-        local tbX, tbW = x + 70, w - 114
-        local tbY = y + 8
-        local focused = ProjectState.focus == "search"
-        local hovered = over(tbX, tbY, tbW, CONTROL_H)
-        
-        rect(tbX, tbY, tbW, CONTROL_H, focused and C3(35, 35, 42) or hovered and C3(55, 55, 62) or C3(42, 42, 48), 15, 4)
-        strokeRect(tbX, tbY, tbW, CONTROL_H, focused and Theme.accent or Theme.border, 16, 4)
-
-        local shown = ProjectState.searchQuery or ""
-        if focused and floor(clock() * 2) % 2 == 0 then
-            shown = shown .. "|"
-        end
-        
-        if ProjectState.searchQuery == "" and not focused then
-            txt("Search...", tbX + 6, textTop(tbY, CONTROL_H, 13), Theme.sub, 13, FontUI, 17, false, false, tbW - 12)
-        else
-            txt(shown, tbX + 6, textTop(tbY, CONTROL_H, 13), Theme.text, 13, FontUI, 17, false, false, tbW - 12)
-        end
-
-        if baseClick and hovered then
-            ProjectState.focus = "search"
-            baseClick = false
-        end
-    else
-        local titleX = 14
-        if style == "macOS" or (style == "Custom" and (ProjectState.customControls and ProjectState.customControls.align == "left")) then
-            titleX = 70
-        end
-        local titleMaxW = searchLensX - (x + titleX) - 10
-        txt(ProjectState.title, x + titleX, textTop(y, TITLE_H, 14), Theme.text, 14, FontBold, 16, false, false, titleMaxW)
-    end
-
-    if not ProjectState.minimized and h > MINIMIZED_H then
-        line(x + w - 12, y + h - 4, x + w - 4, y + h - 12, Theme.sub, 60, 1.5)
-        line(x + w - 8, y + h - 4, x + w - 4, y + h - 8, Theme.sub, 60, 1.5)
-        line(x + w - 16, y + h - 4, x + w - 4, y + h - 16, Theme.sub, 60, 1.5)
-    end
+    local userStr = LocalPlayer and LocalPlayer.Name or "kiyomi"
+    txt(userStr, x + w - 14 - textWidth(userStr, 13, FontUI), textTop(y, TITLE_H, 13), Theme.text, 13, FontUI, 16)
 
     if ProjectState.minimized or h <= MINIMIZED_H then
         return click, held, rightClick
     end
 
     local px, py = x + PAD, y + TITLE_H + PAD
-    local pw, ph = w - PAD * 2, h - TITLE_H - PAD * 2
+    local pw, ph = w - PAD * 2, h - TITLE_H - PAD * 2 - 24
     if pw <= 40 or ph <= 40 then
         return click, held, rightClick
     end
@@ -2906,15 +2701,21 @@ local function renderWindow(click, held, rightClick)
 
     local contY = py + TAB_H + 8
     local contH = ph - TAB_H - 8
-    rect(px, contY, pw, contH, Theme.surface2, 20, 8, ProjectState.showWaifu and 0.25 or nil)
-    strokeRect(px, contY, pw, contH, Theme.border, 21, 8)
 
     baseClick, baseHeld, baseRightClick = renderSections(ProjectState.activeTab, baseClick, baseHeld, baseRightClick, px, contY, pw, contH)
 
-    if ProjectState.focus and baseClick and not over(px, contY, pw, contH) and not over(x + 70, y + 8, w - 114, CONTROL_H) then
+    if ProjectState.focus and baseClick and not over(px, contY, pw, contH) then
         ProjectState.focus = nil
         baseClick = false
     end
+
+    local botY = y + h - 24
+    local botH = 24
+    line(x + 2, botY, x + w - 2, botY, Theme.border, 8)
+    circle(x + 14, botY + 12, 3, C3(52, 199, 89), 10)
+    txt("7517 online", x + 24, textTop(botY, botH, 11), Theme.text, 11, FontUI, 10)
+    txt("matcha.pink/discord", x + w / 2, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10, true)
+    txt("Build: May 19 2026", x + w - 14 - textWidth("Build: May 19 2026", 11, FontUI), textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
 
     return popupOpen and click or baseClick, popupOpen and held or baseHeld, popupOpen and rightClick or baseRightClick
 end
@@ -3201,7 +3002,7 @@ sickUi.createWindow = function(title, width, height)
         
         tabWrap.addSection = function(tSelf, secName, column)
             local secWrap = {
-                rawSec = tSelf.rawTab:Section(secName)
+                rawSec = tSelf.rawTab:Section(secName, column)
             }
             
             secWrap.addToggle = function(sSelf, id, label, default, callback)
