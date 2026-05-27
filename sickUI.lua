@@ -48,6 +48,80 @@ sickUi.createWindow = function(title, width, height)
         dragOffset = Vector2.new(0, 0)
     }
 
+    local player = game:GetService("Players").LocalPlayer
+    local mouse = player and player:GetMouse()
+    local userInputService = game:GetService("UserInputService")
+    local useInputBeganMouse = not (mouse and mouse.Button1Down)
+
+    local function isPointInRect(px, py, rx, ry, rw, rh)
+        return px >= rx and px <= rx + rw and py >= ry and py <= ry + rh
+    end
+
+    local function handleMouseClick(mouseX, mouseY)
+        if mouseX >= self.x and mouseX <= self.x + self.width and mouseY >= self.y and mouseY <= self.y + 25 then
+            self.dragging = true
+            self.dragOffset = Vector2.new(mouseX - self.x, mouseY - self.y)
+            return
+        end
+
+        local tabX = self.x + 10
+        local tabY = self.y + 30
+        for i, tab in ipairs(self.tabs) do
+            local tabWidth = tab.drawings.button.TextBounds.X + 20
+            local tabLeft = tabX + (i - 1) * 60 - 10
+            if isPointInRect(mouseX, mouseY, tabLeft, tabY - 2, tabWidth, 18) then
+                self.activeTab = i
+                self:render()
+                return
+            end
+        end
+
+        local activeTabObj = self.tabs[self.activeTab]
+        if activeTabObj and activeTabObj.sections then
+            for _, sec in ipairs(activeTabObj.sections) do
+                for _, widget in ipairs(sec.widgets) do
+                    if widget.type == "Toggle" then
+                        local box = widget.drawings.box
+                        local label = widget.drawings.label
+                        local hitLeft = math.min(box.Position.X - 5, label.Position.X)
+                        local hitRight = math.max(box.Position.X + box.Size.X + 5, label.Position.X + label.TextBounds.X)
+                        if mouseX >= hitLeft and mouseX <= hitRight and mouseY >= label.Position.Y - 2 and mouseY <= label.Position.Y + 16 then
+                            widget:click()
+                            self:render()
+                            return
+                        end
+                    elseif widget.type == "Slider" then
+                        local track = widget.drawings.track
+                        local trackWidth = 80
+                        local trackX = track.From.X
+                        if isPointInRect(mouseX, mouseY, trackX - 5, track.From.Y - 10, trackWidth + 10, 20) then
+                            widget:click(mouseX, trackWidth, trackX)
+                            self:render()
+                            return
+                        end
+                    elseif widget.type == "Button" then
+                        local box = widget.drawings.box
+                        if isPointInRect(mouseX, mouseY, box.Position.X - 5, box.Position.Y - 5, box.Size.X + 10, box.Size.Y + 10) then
+                            widget:click()
+                            self:render()
+                            return
+                        end
+                    elseif widget.type == "InputText" then
+                        local box = widget.drawings.box
+                        if isPointInRect(mouseX, mouseY, box.Position.X - 2, box.Position.Y - 2, box.Size.X + 4, box.Size.Y + 4) then
+                            widget:click()
+                            self:render()
+                            return
+                        else
+                            widget.focused = false
+                            self:render()
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     self.drawings.bg = Drawing.new("Square")
     self.drawings.bg.Visible = false
     self.drawings.bg.Filled = true
@@ -656,78 +730,22 @@ sickUi.createWindow = function(title, width, height)
         end
     end
 
-    self.inputBeganConnection = game:GetService("UserInputService").InputBegan:Connect(function(input)
-        if input.KeyCode == Enum.KeyCode.P then
+    self.inputBeganConnection = userInputService.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.P then
             self.visible = not self.visible
             self:render()
             return
         end
 
         if not self.visible then return end
-        
-        local mousePos = game:GetService("UserInputService"):GetMouseLocation()
-        local mouseX = mousePos.X
-        local mouseY = mousePos.Y
-        
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            if mouseX >= self.x and mouseX <= self.x + self.width and mouseY >= self.y and mouseY <= self.y + 25 then
-                self.dragging = true
-                self.dragOffset = Vector2.new(mouseX - self.x, mouseY - self.y)
-            end
-            
-            local tabX = self.x + 10
-            local tabY = self.y + 30
-            for i, tab in ipairs(self.tabs) do
-                if mouseX >= tabX + (i-1)*60 - 5 and mouseX <= tabX + (i-1)*60 + 45 and mouseY >= tabY - 2 and mouseY <= tabY + 16 then
-                    self.activeTab = i
-                    self:render()
-                end
-            end
-            
-            local activeTabObj = self.tabs[self.activeTab]
-            if activeTabObj and activeTabObj.sections then
-                for _, sec in ipairs(activeTabObj.sections) do
-                    for _, widget in ipairs(sec.widgets) do
-                        if widget.type == "Toggle" then
-                            local box = widget.drawings.box
-                            if mouseX >= box.Position.X - 5 and mouseX <= box.Position.X + box.Size.X + 5 and mouseY >= box.Position.Y - 5 and mouseY <= box.Position.Y + box.Size.Y + 5 then
-                                widget:click()
-                                self:render()
-                            end
-                        elseif widget.type == "Slider" then
-                            local track = widget.drawings.track
-                            local trackWidth = 80
-                            local trackX = track.From.X
-                            if mouseX >= trackX - 5 and mouseX <= trackX + trackWidth + 5 and mouseY >= track.From.Y - 10 and mouseY <= track.From.Y + 10 then
-                                widget:click(mouseX, trackWidth, trackX)
-                                self:render()
-                            end
-                        elseif widget.type == "Button" then
-                            local box = widget.drawings.box
-                            if mouseX >= box.Position.X and mouseX <= box.Position.X + box.Size.X and mouseY >= box.Position.Y and mouseY <= box.Position.Y + box.Size.Y then
-                                widget:click()
-                                self:render()
-                            end
-                        elseif widget.type == "InputText" then
-                            local box = widget.drawings.box
-                            if mouseX >= box.Position.X and mouseX <= box.Position.X + box.Size.X and mouseY >= box.Position.Y and mouseY <= box.Position.Y + box.Size.Y then
-                                widget:click()
-                                self:render()
-                            else
-                                widget.focused = false
-                                self:render()
-                            end
-                        end
-                    end
-                end
-            end
-        elseif input.KeyCode then
+
+        if input.UserInputType == Enum.UserInputType.Keyboard then
             local activeTabObj = self.tabs[self.activeTab]
             if activeTabObj and activeTabObj.sections then
                 for _, sec in ipairs(activeTabObj.sections) do
                     for _, widget in ipairs(sec.widgets) do
                         if widget.type == "InputText" and widget.focused then
-                            local shift = game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftShift) or game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.RightShift)
+                            local shift = userInputService:IsKeyDown(Enum.KeyCode.LeftShift) or userInputService:IsKeyDown(Enum.KeyCode.RightShift)
                             if shift or not shift then
                                 widget:key(input.KeyCode.Name, shift)
                                 self:render()
@@ -736,10 +754,30 @@ sickUi.createWindow = function(title, width, height)
                     end
                 end
             end
+        elseif useInputBeganMouse and input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local mouseX = mouse and mouse.X or game:GetService("Players").LocalPlayer:GetMouse().X
+            local mouseY = mouse and mouse.Y or game:GetService("Players").LocalPlayer:GetMouse().Y
+            handleMouseClick(mouseX, mouseY)
         end
     end)
 
-    self.inputEndedConnection = game:GetService("UserInputService").InputEnded:Connect(function(input)
+    if mouse and mouse.Button1Down then
+        self.mouseButton1Connection = mouse.Button1Down:Connect(function()
+            if not self.visible then return end
+            handleMouseClick(mouse.X, mouse.Y)
+        end)
+    end
+
+    if mouse and mouse.KeyDown then
+        self.mouseKeyDownConnection = mouse.KeyDown:Connect(function(key)
+            if key:lower() == "p" then
+                self.visible = not self.visible
+                self:render()
+            end
+        end)
+    end
+
+    self.inputEndedConnection = userInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             self.dragging = false
         end
@@ -749,16 +787,14 @@ sickUi.createWindow = function(title, width, height)
         while self.visible ~= nil do
             task.wait()
             if self.visible and self.dragging then
-                local mousePos = game:GetService("UserInputService"):GetMouseLocation()
-                self.x = mousePos.X - self.dragOffset.X
-                self.y = mousePos.Y - self.dragOffset.Y
+                self.x = game:GetService("Players").LocalPlayer:GetMouse().X - self.dragOffset.X
+                self.y = game:GetService("Players").LocalPlayer:GetMouse().Y - self.dragOffset.Y
                 self:render()
             end
             
             if self.visible then
-                local mousePos = game:GetService("UserInputService"):GetMouseLocation()
-                local mouseX = mousePos.X
-                local mouseY = mousePos.Y
+                local mouseX = game:GetService("Players").LocalPlayer:GetMouse().X
+                local mouseY = game:GetService("Players").LocalPlayer:GetMouse().Y
                 local hovered = false
                 local activeTabObj = self.tabs[self.activeTab]
                 if activeTabObj and activeTabObj.sections then
@@ -793,6 +829,8 @@ sickUi.createWindow = function(title, width, height)
         pcall(function()
             if wSelf.inputBeganConnection then wSelf.inputBeganConnection:Disconnect() end
             if wSelf.inputEndedConnection then wSelf.inputEndedConnection:Disconnect() end
+            if wSelf.mouseButton1Connection then wSelf.mouseButton1Connection:Disconnect() end
+            if wSelf.mouseKeyDownConnection then wSelf.mouseKeyDownConnection:Disconnect() end
             for _, drawing in pairs(wSelf.drawings) do
                 if drawing then
                     drawing:Remove()
