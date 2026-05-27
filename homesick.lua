@@ -58,6 +58,16 @@ if uis then
         uis.InputBegan:Connect(onInput)
     end
 end
+if Mouse then
+    pcall(function()
+        Mouse.WheelForward:Connect(function()
+            mouseScroll = mouseScroll + 1
+        end)
+        Mouse.WheelBackward:Connect(function()
+            mouseScroll = mouseScroll - 1
+        end)
+    end)
+end
 
 local Fonts = (type(Drawing) == "table" and Drawing.Fonts) or {}
 local FontSystem = Fonts.System or Fonts.UI or 0
@@ -375,7 +385,7 @@ local function setOpen(open)
     applyInputState(false)
     if Mouse then
         pcall(function()
-            Mouse.Icon = open and "http://www.roblox.com/asset/?id=417446600" or ""
+            Mouse.Icon = open and "http://www.roblox.com/asset/?id=12556702945" or ""
         end)
     end
 end
@@ -1925,14 +1935,14 @@ local function renderTabs(click, px, py, pw)
 
     for i = 1, count do
         local tab = ProjectState.tabs[i]
-        local localTx = tabW * (i - 1) - scrollX
+        local localTx = tabW * (i - 1)
         tab.targetX = localTx
         if not tab.currentX then
             tab.currentX = localTx
         end
 
         local active = ProjectState.activeTab == tab
-        local screenX = contentX + tab.currentX
+        local screenX = contentX + tab.currentX - scrollX
         local hovered = over(screenX, py, tabW, TAB_H)
 
         if click and hovered and not ProjectState.draggedTab then
@@ -1943,37 +1953,40 @@ local function renderTabs(click, px, py, pw)
             ProjectState.focus = nil
             ProjectState.draggedTab = tab
             ProjectState.draggedTabOffset = ProjectState.mouseX - screenX
+            ProjectState.dragTabStartMouseX = ProjectState.mouseX
             click = false
             ProjectState.tabScrollToActive = true
         end
 
         if ProjectState.draggedTab == tab then
-            local dragX = ProjectState.mouseX - ProjectState.draggedTabOffset - contentX
-            dragX = clamp(dragX, -scrollX, totalW - tabW - scrollX)
-            tab.currentX = dragX
+            if abs(ProjectState.mouseX - ProjectState.dragTabStartMouseX) > 5 then
+                tab.currentX = clamp(ProjectState.mouseX - ProjectState.draggedTabOffset - contentX + scrollX, 0, totalW - tabW)
 
-            local idx = i
-            if idx > 1 then
-                local prevTab = ProjectState.tabs[idx - 1]
-                if tab.currentX < prevTab.currentX then
-                    ProjectState.tabs[idx], ProjectState.tabs[idx - 1] = ProjectState.tabs[idx - 1], ProjectState.tabs[idx]
-                    if ProjectState.activeIndex == idx then
-                        ProjectState.activeIndex = idx - 1
-                    elseif ProjectState.activeIndex == idx - 1 then
-                        ProjectState.activeIndex = idx
+                local idx = i
+                if idx > 1 then
+                    local prevTab = ProjectState.tabs[idx - 1]
+                    if tab.currentX < prevTab.currentX then
+                        ProjectState.tabs[idx], ProjectState.tabs[idx - 1] = ProjectState.tabs[idx - 1], ProjectState.tabs[idx]
+                        if ProjectState.activeIndex == idx then
+                            ProjectState.activeIndex = idx - 1
+                        elseif ProjectState.activeIndex == idx - 1 then
+                            ProjectState.activeIndex = idx
+                        end
                     end
                 end
-            end
-            if idx < count then
-                local nextTab = ProjectState.tabs[idx + 1]
-                if tab.currentX > nextTab.currentX then
-                    ProjectState.tabs[idx], ProjectState.tabs[idx + 1] = ProjectState.tabs[idx + 1], ProjectState.tabs[idx]
-                    if ProjectState.activeIndex == idx then
-                        ProjectState.activeIndex = idx + 1
-                    elseif ProjectState.activeIndex == idx + 1 then
-                        ProjectState.activeIndex = idx
+                if idx < count then
+                    local nextTab = ProjectState.tabs[idx + 1]
+                    if tab.currentX > nextTab.currentX then
+                        ProjectState.tabs[idx], ProjectState.tabs[idx + 1] = ProjectState.tabs[idx + 1], ProjectState.tabs[idx]
+                        if ProjectState.activeIndex == idx then
+                            ProjectState.activeIndex = idx + 1
+                        elseif ProjectState.activeIndex == idx + 1 then
+                            ProjectState.activeIndex = idx
+                        end
                     end
                 end
+            else
+                tab.currentX = smoothValue(tab.currentX, localTx, 18)
             end
         else
             tab.currentX = smoothValue(tab.currentX, localTx, 18)
@@ -1985,7 +1998,7 @@ local function renderTabs(click, px, py, pw)
 
     for i = 1, count do
         local tab = ProjectState.tabs[i]
-        local tx = contentX + tab.currentX
+        local tx = contentX + tab.currentX - scrollX
         local visible = tx + tabW >= contentX and tx <= contentX + contentW
         if visible then
             local active = ProjectState.activeTab == tab
@@ -2478,36 +2491,36 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
         local section = sectionsToRender[i]
         local secH = section.calculatedHeight
 
-        local targetX, targetY, targetW
+        local targetLocalX, targetLocalY, targetLocalW
         if section.side == "Full" then
-            targetX = px
-            targetY = max(leftY, rightY)
-            targetW = pw
-            leftY = targetY + secH + 10
+            targetLocalX = 0
+            targetLocalY = max(leftY, rightY) - sy
+            targetLocalW = pw
+            leftY = max(leftY, rightY) + secH + 10
             rightY = leftY
         elseif section.side == "Right" then
-            targetX = rightX
-            targetY = rightY
-            targetW = colW
+            targetLocalX = colW + 10
+            targetLocalY = rightY - sy
+            targetLocalW = colW
             rightY = rightY + secH + 10
         else
-            targetX = leftX
-            targetY = leftY
-            targetW = colW
+            targetLocalX = 0
+            targetLocalY = leftY - sy
+            targetLocalW = colW
             leftY = leftY + secH + 10
         end
 
-        if not section.currentX then section.currentX = targetX end
-        if not section.currentY then section.currentY = targetY end
-        if not section.currentW then section.currentW = targetW end
+        if not section.currentX then section.currentX = targetLocalX end
+        if not section.currentY then section.currentY = targetLocalY end
+        if not section.currentW then section.currentW = targetLocalW end
 
-        section.currentX = smoothValue(section.currentX, targetX, 16)
-        section.currentY = smoothValue(section.currentY, targetY, 16)
-        section.currentW = smoothValue(section.currentW, targetW, 16)
+        section.currentX = smoothValue(section.currentX, targetLocalX, 16)
+        section.currentY = smoothValue(section.currentY, targetLocalY, 16)
+        section.currentW = smoothValue(section.currentW, targetLocalW, 16)
 
-        section.lastRenderY = section.currentY
+        section.lastRenderY = sy + section.currentY
 
-        click, held, rightClick = renderSectionCard(section, section.currentX, section.currentY, section.currentW, secH, clipTop, clipBottom, click, held, rightClick, dragSec == section, false)
+        click, held, rightClick = renderSectionCard(section, px + section.currentX, sy + section.currentY, section.currentW, secH, clipTop, clipBottom, click, held, rightClick, dragSec == section, false)
     end
 
     if dragSec then
