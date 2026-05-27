@@ -67,6 +67,7 @@ local DEFAULT_W = 430
 local DEFAULT_H = 500
 local MINIMIZED_H = 42
 local TAB_MIN_W = 80
+local CONTENT_PAD = 8
 
 local SHADOW_ALPHA = {0.10, 0.07, 0.05, 0.03, 0.015}
 local KEYBIND_MODES = {"Hold", "Toggle", "Always"}
@@ -2767,7 +2768,8 @@ homesick.createWindow = function(title, width, height)
         
         tabWrap.addSection = function(tSelf, secName, column)
             local secWrap = {
-                rawSec = tSelf.rawTab:Section(secName, column)
+                rawSec = tSelf.rawTab:Section(secName, column),
+                type = "Section"
             }
             
             secWrap.addToggle = function(sSelf, id, label, default, callback)
