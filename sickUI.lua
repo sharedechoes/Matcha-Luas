@@ -1,14 +1,7 @@
 local sickUi = {}
 
 local function keyCodeToChar(keyCode, isShiftDown)
-    local name
-    if type(keyCode) == "table" then
-        name = keyCode.Name
-    elseif type(keyCode) == "string" then
-        name = keyCode
-    else
-        return nil
-    end
+    local name = (type(keyCode) == "table" and keyCode.Name) or (type(keyCode) == "string" and keyCode)
     if type(name) ~= "string" then
         return nil
     end
@@ -41,8 +34,7 @@ local function keyCodeToChar(keyCode, isShiftDown)
 end
 
 sickUi.createWindow = function(title, width, height)
-    print("creating window " .. tostring(title) .. " size " .. tostring(width) .. "x" .. tostring(height))
-    print("window width " .. tostring(width) .. " height " .. tostring(height))
+    print("making window " .. tostring(title))
     
     local self = {
         title = title,
@@ -58,97 +50,59 @@ sickUi.createWindow = function(title, width, height)
         dragOffset = Vector2.new(0, 0)
     }
 
-    local player = game:GetService("Players").LocalPlayer
-    local mouse = player and player:GetMouse()
-    local userInputService = game:GetService("UserInputService")
-    local useInputBeganMouse = not (mouse and mouse.Button1Down)
-
-    local function getInputTypeName(input)
-        if not input then return nil end
-        local userType = input.UserInputType
-        if type(userType) == "table" and type(userType.Name) == "string" then
-            return userType.Name
-        end
-        return nil
-    end
-
-    local function getKeyCodeName(input)
-        if not input or not input.KeyCode then return nil end
-        local keyCode = input.KeyCode
-        if type(keyCode) == "table" and type(keyCode.Name) == "string" then
-            return keyCode.Name
-        end
-        return nil
-    end
-
-    local function isShiftDown()
-        if userInputService and userInputService.IsKeyDown and Enum and Enum.KeyCode then
-            return userInputService:IsKeyDown(Enum.KeyCode.LeftShift) or userInputService:IsKeyDown(Enum.KeyCode.RightShift)
-        end
-        return false
-    end
-
     local function isPointInRect(px, py, rx, ry, rw, rh)
         return px >= rx and px <= rx + rw and py >= ry and py <= ry + rh
     end
 
     local function handleMouseClick(mouseX, mouseY)
+        if mouseX >= self.x + self.width - 20 and mouseX <= self.x + self.width - 5 and mouseY >= self.y + 4 and mouseY <= self.y + 18 then
+            self.visible = false
+            self:render()
+            return
+        end
+
         if mouseX >= self.x and mouseX <= self.x + self.width and mouseY >= self.y and mouseY <= self.y + 25 then
             self.dragging = true
             self.dragOffset = Vector2.new(mouseX - self.x, mouseY - self.y)
             return
         end
 
-        local tabX = self.x + 10
-        local tabY = self.y + 30
         local tabOffset = 0
         for i, tab in ipairs(self.tabs) do
-            local tabWidth = tab.drawings.button.TextBounds.X + 20
-            local tabLeft = tabX + tabOffset - 10
-            if isPointInRect(mouseX, mouseY, tabLeft, tabY - 2, tabWidth + 10, 18) then
+            if isPointInRect(mouseX, mouseY, self.x + 10 + tabOffset - 5, self.y + 28, tab.drawings.button.TextBounds.X + 20, 18) then
                 self.activeTab = i
                 self:render()
                 return
             end
-            tabOffset = tabOffset + tabWidth + 10
+            tabOffset = tabOffset + tab.drawings.button.TextBounds.X + 20
         end
 
-        local activeTabObj = self.tabs[self.activeTab]
-        if activeTabObj and activeTabObj.sections then
-            for _, sec in ipairs(activeTabObj.sections) do
+        if self.tabs[self.activeTab] and self.tabs[self.activeTab].sections then
+            for _, sec in ipairs(self.tabs[self.activeTab].sections) do
                 for _, widget in ipairs(sec.widgets) do
                     if widget.type == "Toggle" then
-                        local box = widget.drawings.box
-                        local label = widget.drawings.label
-                        local hitLeft = math.min(box.Position.X - 5, label.Position.X)
-                        local hitRight = math.max(box.Position.X + box.Size.X + 5, label.Position.X + label.TextBounds.X)
-                        if mouseX >= hitLeft and mouseX <= hitRight and mouseY >= label.Position.Y - 2 and mouseY <= label.Position.Y + 16 then
+                        if mouseX >= math.min(widget.drawings.bg.Position.X - 5, widget.drawings.label.Position.X) and mouseX <= math.max(widget.drawings.bg.Position.X + widget.drawings.bg.Size.X + 5, widget.drawings.label.Position.X + widget.drawings.label.TextBounds.X) and mouseY >= widget.drawings.label.Position.Y - 2 and mouseY <= widget.drawings.label.Position.Y + 16 then
                             widget:click()
                             self:render()
                             return
                         end
                     elseif widget.type == "Slider" then
-                        local track = widget.drawings.track
-                        local trackWidth = 80
-                        local trackX = track.From.X
-                        if isPointInRect(mouseX, mouseY, trackX - 5, track.From.Y - 10, trackWidth + 10, 20) then
-                            widget:click(mouseX, trackWidth, trackX)
+                        if isPointInRect(mouseX, mouseY, widget.lastTrackX - 5, widget.drawings.track.From.Y - 10, 90, 20) then
+                            self.activeSlider = widget
+                            widget:click(mouseX)
                             self:render()
                             return
                         end
                     elseif widget.type == "Button" then
-                        local box = widget.drawings.box
-                        if isPointInRect(mouseX, mouseY, box.Position.X - 5, box.Position.Y - 5, box.Size.X + 10, box.Size.Y + 10) then
+                        if isPointInRect(mouseX, mouseY, widget.drawings.box.Position.X - 2, widget.drawings.box.Position.Y - 2, widget.drawings.box.Size.X + 4, widget.drawings.box.Size.Y + 4) then
                             widget:click()
                             self:render()
                             return
                         end
                     elseif widget.type == "InputText" then
-                        local box = widget.drawings.box
-                        if isPointInRect(mouseX, mouseY, box.Position.X - 2, box.Position.Y - 2, box.Size.X + 4, box.Size.Y + 4) then
+                        if isPointInRect(mouseX, mouseY, widget.drawings.box.Position.X - 2, widget.drawings.box.Position.Y - 2, widget.drawings.box.Size.X + 4, widget.drawings.box.Size.Y + 4) then
                             widget:click()
                             self:render()
-                            return
                         else
                             widget.focused = false
                             self:render()
@@ -162,62 +116,27 @@ sickUi.createWindow = function(title, width, height)
     self.drawings.bg = Drawing.new("Square")
     self.drawings.bg.Visible = false
     self.drawings.bg.Filled = true
-    self.drawings.bg.Color = Color3.fromRGB(24, 22, 21)
-    self.drawings.bg.Transparency = 1.0
+    self.drawings.bg.Color = Color3.fromRGB(12, 17, 14)
     self.drawings.bg.ZIndex = 100
 
     self.drawings.border = Drawing.new("Square")
     self.drawings.border.Visible = false
     self.drawings.border.Filled = false
-    self.drawings.border.Color = Color3.fromRGB(45, 41, 38)
+    self.drawings.border.Color = Color3.fromRGB(56, 94, 71)
     self.drawings.border.Thickness = 1.5
-    self.drawings.border.Transparency = 1.0
     self.drawings.border.ZIndex = 101
 
     self.drawings.header = Drawing.new("Square")
     self.drawings.header.Visible = false
     self.drawings.header.Filled = true
-    self.drawings.header.Color = Color3.fromRGB(20, 18, 17)
-    self.drawings.header.Transparency = 1.0
+    self.drawings.header.Color = Color3.fromRGB(8, 12, 10)
     self.drawings.header.ZIndex = 101
-
-    self.drawings.cornerTL = Drawing.new("Circle")
-    self.drawings.cornerTL.Visible = false
-    self.drawings.cornerTL.Filled = true
-    self.drawings.cornerTL.Color = Color3.fromRGB(24, 22, 21)
-    self.drawings.cornerTL.Radius = 6
-    self.drawings.cornerTL.NumSides = 24
-    self.drawings.cornerTL.ZIndex = 105
-
-    self.drawings.cornerTR = Drawing.new("Circle")
-    self.drawings.cornerTR.Visible = false
-    self.drawings.cornerTR.Filled = true
-    self.drawings.cornerTR.Color = Color3.fromRGB(24, 22, 21)
-    self.drawings.cornerTR.Radius = 6
-    self.drawings.cornerTR.NumSides = 24
-    self.drawings.cornerTR.ZIndex = 105
-
-    self.drawings.cornerBL = Drawing.new("Circle")
-    self.drawings.cornerBL.Visible = false
-    self.drawings.cornerBL.Filled = true
-    self.drawings.cornerBL.Color = Color3.fromRGB(24, 22, 21)
-    self.drawings.cornerBL.Radius = 6
-    self.drawings.cornerBL.NumSides = 24
-    self.drawings.cornerBL.ZIndex = 105
-
-    self.drawings.cornerBR = Drawing.new("Circle")
-    self.drawings.cornerBR.Visible = false
-    self.drawings.cornerBR.Filled = true
-    self.drawings.cornerBR.Color = Color3.fromRGB(24, 22, 21)
-    self.drawings.cornerBR.Radius = 6
-    self.drawings.cornerBR.NumSides = 24
-    self.drawings.cornerBR.ZIndex = 105
 
     self.drawings.titleText = Drawing.new("Text")
     self.drawings.titleText.Visible = false
     self.drawings.titleText.Font = Drawing.Fonts.UI
     self.drawings.titleText.Size = 13
-    self.drawings.titleText.Color = Color3.fromRGB(240, 230, 220)
+    self.drawings.titleText.Color = Color3.fromRGB(230, 240, 232)
     self.drawings.titleText.Text = title
     self.drawings.titleText.ZIndex = 102
 
@@ -225,22 +144,29 @@ sickUi.createWindow = function(title, width, height)
     self.drawings.logoText.Visible = false
     self.drawings.logoText.Font = Drawing.Fonts.UI
     self.drawings.logoText.Size = 13
-    self.drawings.logoText.Color = Color3.fromRGB(191, 155, 95)
+    self.drawings.logoText.Color = Color3.fromRGB(88, 196, 120)
     self.drawings.logoText.Text = "matcha"
     self.drawings.logoText.ZIndex = 102
+
+    self.drawings.closeText = Drawing.new("Text")
+    self.drawings.closeText.Visible = false
+    self.drawings.closeText.Font = Drawing.Fonts.UI
+    self.drawings.closeText.Size = 13
+    self.drawings.closeText.Color = Color3.fromRGB(140, 160, 145)
+    self.drawings.closeText.Text = "x"
+    self.drawings.closeText.ZIndex = 102
 
     self.drawings.footer = Drawing.new("Square")
     self.drawings.footer.Visible = false
     self.drawings.footer.Filled = true
-    self.drawings.footer.Color = Color3.fromRGB(20, 18, 17)
-    self.drawings.footer.Transparency = 1.0
+    self.drawings.footer.Color = Color3.fromRGB(8, 12, 10)
     self.drawings.footer.ZIndex = 101
 
     self.drawings.footerText = Drawing.new("Text")
     self.drawings.footerText.Visible = false
     self.drawings.footerText.Font = Drawing.Fonts.UI
     self.drawings.footerText.Size = 11
-    self.drawings.footerText.Color = Color3.fromRGB(191, 155, 95)
+    self.drawings.footerText.Color = Color3.fromRGB(88, 150, 108)
     self.drawings.footerText.Text = "matcha.pink/discord"
     self.drawings.footerText.Center = true
     self.drawings.footerText.ZIndex = 102
@@ -248,31 +174,30 @@ sickUi.createWindow = function(title, width, height)
     self.drawings.tooltipBg = Drawing.new("Square")
     self.drawings.tooltipBg.Visible = false
     self.drawings.tooltipBg.Filled = true
-    self.drawings.tooltipBg.Color = Color3.fromRGB(24, 22, 21)
-    self.drawings.tooltipBg.Transparency = 1.0
+    self.drawings.tooltipBg.Color = Color3.fromRGB(8, 12, 10)
     self.drawings.tooltipBg.ZIndex = 1000
+
+    self.drawings.tooltipBorder = Drawing.new("Square")
+    self.drawings.tooltipBorder.Visible = false
+    self.drawings.tooltipBorder.Filled = false
+    self.drawings.tooltipBorder.Color = Color3.fromRGB(56, 94, 71)
+    self.drawings.tooltipBorder.Thickness = 1
+    self.drawings.tooltipBorder.ZIndex = 1001
 
     self.drawings.tooltipText = Drawing.new("Text")
     self.drawings.tooltipText.Visible = false
     self.drawings.tooltipText.Font = Drawing.Fonts.UI
     self.drawings.tooltipText.Size = 11
-    self.drawings.tooltipText.Color = Color3.fromRGB(240, 230, 220)
-    self.drawings.tooltipText.ZIndex = 1001
+    self.drawings.tooltipText.Color = Color3.fromRGB(230, 240, 232)
+    self.drawings.tooltipText.ZIndex = 1002
 
     self.addTab = function(wSelf, name)
-        print("adding tab " .. tostring(name) .. " to window " .. tostring(wSelf.title))
         local tab = {
             name = name,
             sections = {}
         }
         
         tab.drawings = {}
-        tab.drawings.bg = Drawing.new("Square")
-        tab.drawings.bg.Visible = false
-        tab.drawings.bg.Filled = true
-        tab.drawings.bg.Color = Color3.fromRGB(40, 36, 33)
-        tab.drawings.bg.ZIndex = 102
-        
         tab.drawings.button = Drawing.new("Text")
         tab.drawings.button.Visible = false
         tab.drawings.button.Font = Drawing.Fonts.UI
@@ -281,10 +206,13 @@ sickUi.createWindow = function(title, width, height)
         tab.drawings.button.Text = name
         tab.drawings.button.ZIndex = 103
 
+        tab.drawings.underline = Drawing.new("Line")
+        tab.drawings.underline.Visible = false
+        tab.drawings.underline.Thickness = 2
+        tab.drawings.underline.Color = Color3.fromRGB(88, 196, 120)
+        tab.drawings.underline.ZIndex = 103
+
         tab.addSection = function(tSelf, secName, column)
-            print("adding section " .. tostring(secName) .. " to tab " .. tostring(tSelf.name))
-            print("column is " .. tostring(column) .. " column " .. tostring(column))
-            
             local section = {
                 name = secName,
                 column = column,
@@ -295,44 +223,33 @@ sickUi.createWindow = function(title, width, height)
             section.drawings.bg = Drawing.new("Square")
             section.drawings.bg.Visible = false
             section.drawings.bg.Filled = true
-            section.drawings.bg.Color = Color3.fromRGB(26, 24, 23)
-            section.drawings.bg.Transparency = 1.0
+            section.drawings.bg.Color = Color3.fromRGB(16, 23, 19)
             section.drawings.bg.ZIndex = 101
 
             section.drawings.border = Drawing.new("Square")
             section.drawings.border.Visible = false
             section.drawings.border.Filled = false
-            section.drawings.border.Color = Color3.fromRGB(45, 41, 38)
+            section.drawings.border.Color = Color3.fromRGB(36, 51, 41)
             section.drawings.border.Thickness = 1
             section.drawings.border.ZIndex = 102
             
             section.drawings.titleBg = Drawing.new("Square")
             section.drawings.titleBg.Visible = false
             section.drawings.titleBg.Filled = true
-            section.drawings.titleBg.Color = Color3.fromRGB(24, 22, 21)
+            section.drawings.titleBg.Color = Color3.fromRGB(12, 17, 14)
             section.drawings.titleBg.ZIndex = 103
             
             section.drawings.titleText = Drawing.new("Text")
             section.drawings.titleText.Visible = false
             section.drawings.titleText.Font = Drawing.Fonts.UI
             section.drawings.titleText.Size = 12
-            section.drawings.titleText.Color = Color3.fromRGB(191, 155, 95)
+            section.drawings.titleText.Color = Color3.fromRGB(88, 196, 120)
             section.drawings.titleText.Text = secName
             section.drawings.titleText.ZIndex = 104
             
             table.insert(tSelf.sections, section)
             
-            section.addWidget = function(widget)
-                table.insert(section.widgets, widget)
-                if widget.type then
-                    return widget
-                end
-            end
-
             section.addToggle = function(sSelf, id, label, default, callback)
-                print("adding toggle " .. tostring(id) .. " to section " .. tostring(sSelf.name))
-                print("default is " .. tostring(default) .. " default " .. tostring(default))
-                
                 local widget = {
                     id = id,
                     type = "Toggle",
@@ -346,27 +263,43 @@ sickUi.createWindow = function(title, width, height)
                 widget.drawings.label.Visible = false
                 widget.drawings.label.Font = Drawing.Fonts.UI
                 widget.drawings.label.Size = 12
-                widget.drawings.label.Color = Color3.fromRGB(240, 230, 220)
+                widget.drawings.label.Color = Color3.fromRGB(230, 240, 232)
                 widget.drawings.label.Text = label
                 widget.drawings.label.ZIndex = 103
                 
-                widget.drawings.box = Drawing.new("Square")
-                widget.drawings.box.Visible = false
-                widget.drawings.box.Filled = true
-                widget.drawings.box.Size = Vector2.new(10, 10)
-                widget.drawings.box.ZIndex = 103
+                widget.drawings.bg = Drawing.new("Square")
+                widget.drawings.bg.Visible = false
+                widget.drawings.bg.Filled = true
+                widget.drawings.bg.Size = Vector2.new(18, 8)
+                widget.drawings.bg.ZIndex = 103
                 
+                widget.drawings.knob = Drawing.new("Circle")
+                widget.drawings.knob.Visible = false
+                widget.drawings.knob.Filled = true
+                widget.drawings.knob.Radius = 5
+                widget.drawings.knob.Color = Color3.fromRGB(255, 255, 255)
+                widget.drawings.knob.NumSides = 12
+                widget.drawings.knob.ZIndex = 104
+
                 widget.position = function(wSelf, wx, wy, ww)
-                    if wSelf then
-                        wSelf.drawings.label.Position = Vector2.new(wx, wy)
-                        wSelf.drawings.box.Position = Vector2.new(wx + ww - 12, wy + 2)
+                    wSelf.drawings.label.Position = Vector2.new(wx, wy)
+                    wSelf.drawings.bg.Position = Vector2.new(wx + ww - 20, wy + 3)
+                    if wSelf.value then
+                        wSelf.drawings.knob.Position = Vector2.new(wx + ww - 20 + 13, wy + 7)
+                    else
+                        wSelf.drawings.knob.Position = Vector2.new(wx + ww - 20 + 5, wy + 7)
                     end
                 end
                 
                 widget.show = function(wSelf, visible)
                     wSelf.drawings.label.Visible = visible
-                    wSelf.drawings.box.Visible = visible
-                    wSelf.drawings.box.Color = wSelf.value and Color3.fromRGB(191, 155, 95) or Color3.fromRGB(40, 36, 33)
+                    wSelf.drawings.bg.Visible = visible
+                    wSelf.drawings.knob.Visible = visible
+                    if wSelf.value then
+                        wSelf.drawings.bg.Color = Color3.fromRGB(88, 196, 120)
+                    else
+                        wSelf.drawings.bg.Color = Color3.fromRGB(40, 56, 46)
+                    end
                 end
                 
                 widget.click = function(wSelf)
@@ -378,20 +311,14 @@ sickUi.createWindow = function(title, width, height)
 
                 widget.addTooltip = function(wSelf, text)
                     wSelf.desc = text
-                    print("adding tooltip " .. tostring(text) .. " to " .. tostring(wSelf.id))
                     return wSelf
                 end
                 
-                if sSelf and sSelf.widgets then
-                    return sSelf.addWidget(widget)
-                end
+                table.insert(sSelf.widgets, widget)
+                return widget
             end
 
             section.addSlider = function(sSelf, id, label, min, max, default, callback)
-                print("adding slider " .. tostring(id) .. " to section " .. tostring(sSelf.name))
-                print("min is " .. tostring(min) .. " max " .. tostring(max))
-                print("default is " .. tostring(default) .. " default " .. tostring(default))
-                
                 local widget = {
                     id = id,
                     type = "Slider",
@@ -407,39 +334,37 @@ sickUi.createWindow = function(title, width, height)
                 widget.drawings.label.Visible = false
                 widget.drawings.label.Font = Drawing.Fonts.UI
                 widget.drawings.label.Size = 12
-                widget.drawings.label.Color = Color3.fromRGB(240, 230, 220)
-                widget.drawings.label.Text = label
+                widget.drawings.label.Color = Color3.fromRGB(230, 240, 232)
                 widget.drawings.label.ZIndex = 103
                 
                 widget.drawings.track = Drawing.new("Line")
                 widget.drawings.track.Visible = false
                 widget.drawings.track.Thickness = 3
-                widget.drawings.track.Color = Color3.fromRGB(40, 36, 33)
+                widget.drawings.track.Color = Color3.fromRGB(40, 56, 46)
                 widget.drawings.track.ZIndex = 103
                 
                 widget.drawings.fill = Drawing.new("Line")
                 widget.drawings.fill.Visible = false
                 widget.drawings.fill.Thickness = 3
-                widget.drawings.fill.Color = Color3.fromRGB(191, 155, 95)
+                widget.drawings.fill.Color = Color3.fromRGB(88, 196, 120)
                 widget.drawings.fill.ZIndex = 104
                 
-                widget.drawings.knob = Drawing.new("Square")
+                widget.drawings.knob = Drawing.new("Circle")
                 widget.drawings.knob.Visible = false
                 widget.drawings.knob.Filled = true
-                widget.drawings.knob.Size = Vector2.new(6, 10)
-                widget.drawings.knob.Color = Color3.fromRGB(240, 230, 220)
+                widget.drawings.knob.Radius = 4
+                widget.drawings.knob.Color = Color3.fromRGB(255, 255, 255)
+                widget.drawings.knob.NumSides = 12
                 widget.drawings.knob.ZIndex = 105
                 
                 widget.position = function(wSelf, wx, wy, ww)
                     wSelf.drawings.label.Position = Vector2.new(wx, wy)
-                    local trackWidth = 80
-                    local trackX = wx + ww - trackWidth
-                    local pct = (wSelf.value - wSelf.min) / (wSelf.max - wSelf.min)
-                    wSelf.drawings.track.From = Vector2.new(trackX, wy + 6)
-                    wSelf.drawings.track.To = Vector2.new(trackX + trackWidth, wy + 6)
-                    wSelf.drawings.fill.From = Vector2.new(trackX, wy + 6)
-                    wSelf.drawings.fill.To = Vector2.new(trackX + trackWidth * pct, wy + 6)
-                    wSelf.drawings.knob.Position = Vector2.new(trackX + trackWidth * pct - 3, wy + 1)
+                    wSelf.lastTrackX = wx + ww - 80
+                    wSelf.drawings.track.From = Vector2.new(wx + ww - 80, wy + 6)
+                    wSelf.drawings.track.To = Vector2.new(wx + ww, wy + 6)
+                    wSelf.drawings.fill.From = Vector2.new(wx + ww - 80, wy + 6)
+                    wSelf.drawings.fill.To = Vector2.new(wx + ww - 80 + 80 * ((wSelf.value - wSelf.min) / (wSelf.max - wSelf.min)), wy + 6)
+                    wSelf.drawings.knob.Position = Vector2.new(wx + ww - 80 + 80 * ((wSelf.value - wSelf.min) / (wSelf.max - wSelf.min)), wy + 6)
                 end
                 
                 widget.show = function(wSelf, visible)
@@ -450,31 +375,23 @@ sickUi.createWindow = function(title, width, height)
                     wSelf.drawings.label.Text = wSelf.label .. " (" .. string.format("%.2f", wSelf.value) .. ")"
                 end
                 
-                widget.click = function(wSelf, mouseX, ww, wx)
-                    local trackWidth = 80
-                    if ww and wx and ww == ww and wx == wx then
-                        local pct = math.clamp((mouseX - (wx + ww - trackWidth)) / trackWidth, 0, 1)
-                        wSelf.value = wSelf.min + pct * (wSelf.max - wSelf.min)
-                        if wSelf.callback then
-                            pcall(wSelf.callback, wSelf.value)
-                        end
+                widget.click = function(wSelf, mouseX)
+                    wSelf.value = wSelf.min + math.clamp((mouseX - wSelf.lastTrackX) / 80, 0, 1) * (wSelf.max - wSelf.min)
+                    if wSelf.callback then
+                        pcall(wSelf.callback, wSelf.value)
                     end
                 end
 
                 widget.addTooltip = function(wSelf, text)
                     wSelf.desc = text
-                    print("adding tooltip " .. tostring(text) .. " to " .. tostring(wSelf.id))
                     return wSelf
                 end
                 
-                if sSelf and sSelf.widgets then
-                    return sSelf.addWidget(widget)
-                end
+                table.insert(sSelf.widgets, widget)
+                return widget
             end
 
             section.addButton = function(sSelf, btnLabel, callback)
-                print("adding button " .. tostring(btnLabel) .. " to section " .. tostring(sSelf.name))
-                
                 local widget = {
                     type = "Button",
                     label = btnLabel,
@@ -485,13 +402,13 @@ sickUi.createWindow = function(title, width, height)
                 widget.drawings.box = Drawing.new("Square")
                 widget.drawings.box.Visible = false
                 widget.drawings.box.Filled = true
-                widget.drawings.box.Color = Color3.fromRGB(40, 36, 33)
+                widget.drawings.box.Color = Color3.fromRGB(36, 51, 41)
                 widget.drawings.box.ZIndex = 103
                 
                 widget.drawings.border = Drawing.new("Square")
                 widget.drawings.border.Visible = false
                 widget.drawings.border.Filled = false
-                widget.drawings.border.Color = Color3.fromRGB(45, 41, 38)
+                widget.drawings.border.Color = Color3.fromRGB(56, 94, 71)
                 widget.drawings.border.Thickness = 1
                 widget.drawings.border.ZIndex = 104
                 
@@ -499,7 +416,7 @@ sickUi.createWindow = function(title, width, height)
                 widget.drawings.label.Visible = false
                 widget.drawings.label.Font = Drawing.Fonts.UI
                 widget.drawings.label.Size = 12
-                widget.drawings.label.Color = Color3.fromRGB(240, 230, 220)
+                widget.drawings.label.Color = Color3.fromRGB(230, 240, 232)
                 widget.drawings.label.Text = btnLabel
                 widget.drawings.label.Center = true
                 widget.drawings.label.ZIndex = 105
@@ -519,20 +436,18 @@ sickUi.createWindow = function(title, width, height)
                 end
                 
                 widget.click = function(wSelf)
-                    if wSelf and wSelf.callback then
+                    if wSelf.callback then
                         pcall(wSelf.callback)
                     end
                 end
 
                 widget.addTooltip = function(wSelf, text)
                     wSelf.desc = text
-                    print("adding tooltip " .. tostring(text) .. " to button " .. tostring(wSelf.label))
                     return wSelf
                 end
                 
-                if sSelf and sSelf.widgets then
-                    return sSelf.addWidget(widget)
-                end
+                table.insert(sSelf.widgets, widget)
+                return widget
             end
 
             section.addSeparator = function(sSelf)
@@ -544,32 +459,22 @@ sickUi.createWindow = function(title, width, height)
                 widget.drawings.line = Drawing.new("Line")
                 widget.drawings.line.Visible = false
                 widget.drawings.line.Thickness = 1
-                widget.drawings.line.Color = Color3.fromRGB(35, 43, 51)
+                widget.drawings.line.Color = Color3.fromRGB(28, 40, 32)
                 widget.drawings.line.ZIndex = 103
                 
                 widget.position = function(wSelf, wx, wy, ww)
-                    if wSelf then
-                        wSelf.drawings.line.From = Vector2.new(wx, wy + 8)
-                        wSelf.drawings.line.To = Vector2.new(wx + ww, wy + 8)
-                    end
+                    wSelf.drawings.line.From = Vector2.new(wx, wy + 8)
+                    wSelf.drawings.line.To = Vector2.new(wx + ww, wy + 8)
                 end
                 
                 widget.show = function(wSelf, visible)
-                    if wSelf and wSelf.drawings then
-                        wSelf.drawings.line.Visible = visible
-                    end
+                    wSelf.drawings.line.Visible = visible
                 end
                 
-                widget.click = function(wSelf)
-                    if wSelf and wSelf.type then
-                        local _ = wSelf.type
-                    end
-                end
+                widget.click = function() end
                 
-                print("adding separator to section " .. tostring(sSelf.name))
-                if sSelf and sSelf.widgets then
-                    return sSelf.addWidget(widget)
-                end
+                table.insert(sSelf.widgets, widget)
+                return widget
             end
 
             section.addText = function(sSelf, text)
@@ -583,37 +488,25 @@ sickUi.createWindow = function(title, width, height)
                 widget.drawings.label.Visible = false
                 widget.drawings.label.Font = Drawing.Fonts.UI
                 widget.drawings.label.Size = 12
-                widget.drawings.label.Color = Color3.fromRGB(140, 130, 120)
+                widget.drawings.label.Color = Color3.fromRGB(140, 160, 145)
                 widget.drawings.label.Text = text
                 widget.drawings.label.ZIndex = 103
                 
                 widget.position = function(wSelf, wx, wy, ww)
-                    if wSelf and wSelf.drawings then
-                        wSelf.drawings.label.Position = Vector2.new(wx, wy)
-                    end
+                    wSelf.drawings.label.Position = Vector2.new(wx, wy)
                 end
                 
                 widget.show = function(wSelf, visible)
-                    if wSelf and wSelf.drawings then
-                        wSelf.drawings.label.Visible = visible
-                    end
+                    wSelf.drawings.label.Visible = visible
                 end
                 
-                widget.click = function(wSelf)
-                    if wSelf and wSelf.type then
-                        local _ = wSelf.type
-                    end
-                end
+                widget.click = function() end
                 
-                print("adding text " .. tostring(text) .. " to section " .. tostring(sSelf.name))
-                if sSelf and sSelf.widgets then
-                    return sSelf.addWidget(widget)
-                end
+                table.insert(sSelf.widgets, widget)
+                return widget
             end
 
             section.addInput = function(sSelf, id, label, default, callback)
-                print("adding input " .. tostring(id) .. " to section " .. tostring(sSelf.name))
-                
                 local widget = {
                     id = id,
                     type = "InputText",
@@ -628,20 +521,20 @@ sickUi.createWindow = function(title, width, height)
                 widget.drawings.label.Visible = false
                 widget.drawings.label.Font = Drawing.Fonts.UI
                 widget.drawings.label.Size = 12
-                widget.drawings.label.Color = Color3.fromRGB(240, 230, 220)
+                widget.drawings.label.Color = Color3.fromRGB(230, 240, 232)
                 widget.drawings.label.Text = label
                 widget.drawings.label.ZIndex = 103
                 
                 widget.drawings.box = Drawing.new("Square")
                 widget.drawings.box.Visible = false
                 widget.drawings.box.Filled = true
-                widget.drawings.box.Color = Color3.fromRGB(40, 36, 33)
+                widget.drawings.box.Color = Color3.fromRGB(20, 28, 23)
                 widget.drawings.box.ZIndex = 103
                 
                 widget.drawings.border = Drawing.new("Square")
                 widget.drawings.border.Visible = false
                 widget.drawings.border.Filled = false
-                widget.drawings.border.Color = Color3.fromRGB(45, 41, 38)
+                widget.drawings.border.Color = Color3.fromRGB(36, 51, 41)
                 widget.drawings.border.Thickness = 1
                 widget.drawings.border.ZIndex = 104
                 
@@ -649,18 +542,16 @@ sickUi.createWindow = function(title, width, height)
                 widget.drawings.valueText.Visible = false
                 widget.drawings.valueText.Font = Drawing.Fonts.UI
                 widget.drawings.valueText.Size = 12
-                widget.drawings.valueText.Color = Color3.fromRGB(240, 230, 220)
+                widget.drawings.valueText.Color = Color3.fromRGB(230, 240, 232)
                 widget.drawings.valueText.ZIndex = 105
                 
                 widget.position = function(wSelf, wx, wy, ww)
                     wSelf.drawings.label.Position = Vector2.new(wx, wy)
-                    local boxWidth = 80
-                    local boxX = wx + ww - boxWidth
-                    wSelf.drawings.box.Position = Vector2.new(boxX, wy)
-                    wSelf.drawings.box.Size = Vector2.new(boxWidth, 16)
-                    wSelf.drawings.border.Position = Vector2.new(boxX, wy)
-                    wSelf.drawings.border.Size = Vector2.new(boxWidth, 16)
-                    wSelf.drawings.valueText.Position = Vector2.new(boxX + 5, wy + 1)
+                    wSelf.drawings.box.Position = Vector2.new(wx + ww - 80, wy)
+                    wSelf.drawings.box.Size = Vector2.new(80, 16)
+                    wSelf.drawings.border.Position = Vector2.new(wx + ww - 80, wy)
+                    wSelf.drawings.border.Size = Vector2.new(80, 16)
+                    wSelf.drawings.valueText.Position = Vector2.new(wx + ww - 75, wy + 1)
                 end
                 
                 widget.show = function(wSelf, visible)
@@ -668,15 +559,21 @@ sickUi.createWindow = function(title, width, height)
                     wSelf.drawings.box.Visible = visible
                     wSelf.drawings.border.Visible = visible
                     wSelf.drawings.valueText.Visible = visible
-                    wSelf.drawings.valueText.Text = wSelf.value .. (wSelf.focused and "|" or "")
-                    wSelf.drawings.border.Color = wSelf.focused and Color3.fromRGB(191, 155, 95) or Color3.fromRGB(45, 41, 38)
+                    if wSelf.focused then
+                        if tick() % 1 < 0.5 then
+                            wSelf.drawings.valueText.Text = wSelf.value .. "|"
+                        else
+                            wSelf.drawings.valueText.Text = wSelf.value
+                        end
+                        wSelf.drawings.border.Color = Color3.fromRGB(88, 196, 120)
+                    else
+                        wSelf.drawings.valueText.Text = wSelf.value
+                        wSelf.drawings.border.Color = Color3.fromRGB(36, 51, 41)
+                    end
                 end
                 
                 widget.click = function(wSelf)
-                    if wSelf then
-                        wSelf.focused = true
-                        local _ = wSelf.type
-                    end
+                    wSelf.focused = true
                 end
                 
                 widget.key = function(wSelf, keyName, isShiftDown)
@@ -702,108 +599,96 @@ sickUi.createWindow = function(title, width, height)
 
                 widget.addTooltip = function(wSelf, text)
                     wSelf.desc = text
-                    print("adding tooltip " .. tostring(text) .. " to input " .. tostring(wSelf.label))
                     return wSelf
                 end
                 
-                if sSelf and sSelf.widgets then
-                    return sSelf.addWidget(widget)
-                end
+                table.insert(sSelf.widgets, widget)
+                return widget
             end
 
-            if section.name then
-                return section
-            end
+            return section
         end
 
         table.insert(wSelf.tabs, tab)
-        if tab.name then
-            return tab
-        end
+        return tab
     end
 
     self.render = function()
-        local x = self.x
-        local y = self.y
-        local w = self.width
-        local h = self.height
-        local visible = self.visible
+        self.drawings.bg.Position = Vector2.new(self.x, self.y)
+        self.drawings.bg.Size = Vector2.new(self.width, self.height)
+        self.drawings.bg.Visible = self.visible
         
-local inset = 6
-        self.drawings.bg.Position = Vector2.new(x + inset, y + inset)
-        self.drawings.bg.Size = Vector2.new(math.max(0, w - inset * 2), math.max(0, h - inset * 2))
-        self.drawings.bg.Visible = visible
+        self.drawings.border.Position = Vector2.new(self.x, self.y)
+        self.drawings.border.Size = Vector2.new(self.width, self.height)
+        self.drawings.border.Visible = self.visible
         
-        self.drawings.border.Position = Vector2.new(x, y)
-        self.drawings.border.Size = Vector2.new(w, h)
-        self.drawings.border.Visible = visible
+        self.drawings.header.Position = Vector2.new(self.x, self.y)
+        self.drawings.header.Size = Vector2.new(self.width, 25)
+        self.drawings.header.Visible = self.visible
         
-        self.drawings.header.Position = Vector2.new(x, y)
-        self.drawings.header.Size = Vector2.new(w, 25)
-        self.drawings.header.Visible = visible
+        self.drawings.logoText.Position = Vector2.new(self.x + 10, self.y + 6)
+        self.drawings.logoText.Visible = self.visible
         
-        self.drawings.logoText.Position = Vector2.new(x + 10, y + 6)
-        self.drawings.logoText.Visible = visible
-        
-        self.drawings.titleText.Position = Vector2.new(x + 60, y + 6)
-        self.drawings.titleText.Visible = visible
-        
-        self.drawings.cornerTL.Position = Vector2.new(x + 6, y + 6)
-        self.drawings.cornerTR.Position = Vector2.new(x + w - 6, y + 6)
-        self.drawings.cornerBL.Position = Vector2.new(x + 6, y + h - 6)
-        self.drawings.cornerBR.Position = Vector2.new(x + w - 6, y + h - 6)
-        self.drawings.cornerTL.Visible = visible
-        self.drawings.cornerTR.Visible = visible
-        self.drawings.cornerBL.Visible = visible
-        self.drawings.cornerBR.Visible = visible
+        self.drawings.titleText.Position = Vector2.new(self.x + 60, self.y + 6)
+        self.drawings.titleText.Visible = self.visible
 
+        self.drawings.closeText.Position = Vector2.new(self.x + self.width - 16, self.y + 6)
+        self.drawings.closeText.Visible = self.visible
         
-        local tabX = x + 10
-        local tabY = y + 30
+        self.drawings.footer.Position = Vector2.new(self.x, self.y + self.height - 18)
+        self.drawings.footer.Size = Vector2.new(self.width, 18)
+        self.drawings.footer.Visible = self.visible
+        
+        self.drawings.footerText.Position = Vector2.new(self.x + self.width / 2, self.y + self.height - 15)
+        self.drawings.footerText.Visible = self.visible
+        
+        local tabX = self.x + 10
         local tabOffset = 0
         for i, tab in ipairs(self.tabs) do
             local tabWidth = tab.drawings.button.TextBounds.X + 20
             local isActive = (i == self.activeTab)
-            tab.drawings.bg.Visible = visible and isActive
+            tab.drawings.underline.Visible = self.visible and isActive
             if isActive then
-                tab.drawings.bg.Position = Vector2.new(tabX + tabOffset - 5, tabY - 2)
-                tab.drawings.bg.Size = Vector2.new(tabWidth + 10, 18)
-                tab.drawings.button.Color = Color3.fromRGB(191, 155, 95)
+                tab.drawings.underline.From = Vector2.new(tabX + tabOffset, self.y + 46)
+                tab.drawings.underline.To = Vector2.new(tabX + tabOffset + tabWidth - 10, self.y + 46)
+                tab.drawings.button.Color = Color3.fromRGB(88, 196, 120)
             else
-                tab.drawings.button.Color = Color3.fromRGB(140, 130, 120)
+                tab.drawings.button.Color = Color3.fromRGB(120, 140, 125)
             end
-            tab.drawings.button.Position = Vector2.new(tabX + tabOffset + tabWidth / 2, tabY)
-            tab.drawings.button.Visible = visible
-            tabOffset = tabOffset + tabWidth + 10
+            tab.drawings.button.Position = Vector2.new(tabX + tabOffset + tabWidth / 2 - 5, self.y + 30)
+            tab.drawings.button.Visible = self.visible
+            tabOffset = tabOffset + tabWidth
         end
         
-        local contentY = y + 55
-        local leftY = contentY
-        local rightY = contentY
-        local columnWidth = w / 2 - 15
+        local leftY = self.y + 55
+        local rightY = self.y + 55
+        local columnWidth = self.width / 2 - 15
         
-        local activeTabObj = self.tabs[self.activeTab]
-        if activeTabObj and activeTabObj.sections then
-            for _, sec in ipairs(activeTabObj.sections) do
-                local secX = sec.column == "Left" and (x + 10) or (x + w / 2 + 5)
+        if self.tabs[self.activeTab] and self.tabs[self.activeTab].sections then
+            for _, sec in ipairs(self.tabs[self.activeTab].sections) do
+                local secX = sec.column == "Left" and (self.x + 10) or (self.x + self.width / 2 + 5)
                 local secY = sec.column == "Left" and leftY or rightY
                 local secHeight = 25 + #sec.widgets * 25
                 
+                sec.drawings.bg.Position = Vector2.new(secX, secY)
+                sec.drawings.bg.Size = Vector2.new(columnWidth, secHeight)
+                sec.drawings.bg.Visible = self.visible
+                
                 sec.drawings.border.Position = Vector2.new(secX, secY)
                 sec.drawings.border.Size = Vector2.new(columnWidth, secHeight)
-                sec.drawings.border.Visible = visible
+                sec.drawings.border.Visible = self.visible
                 
                 sec.drawings.titleBg.Position = Vector2.new(secX + 8, secY - 6)
                 sec.drawings.titleBg.Size = Vector2.new(sec.drawings.titleText.TextBounds.X + 8, 12)
-                sec.drawings.titleBg.Visible = visible
+                sec.drawings.titleBg.Visible = self.visible
                 
                 sec.drawings.titleText.Position = Vector2.new(secX + 12, secY - 6)
-                sec.drawings.titleText.Visible = visible
+                sec.drawings.titleText.Visible = self.visible
                 
                 local widgetY = secY + 15
                 for _, widget in ipairs(sec.widgets) do
                     widget:position(secX + 10, widgetY, columnWidth - 20)
-                    widget:show(visible)
+                    widget:show(self.visible)
                     widgetY = widgetY + 25
                 end
                 
@@ -816,85 +701,75 @@ local inset = 6
         end
     end
 
-    self.inputBeganConnection = userInputService.InputBegan:Connect(function(input)
-        local inputTypeName = getInputTypeName(input)
-        local keyName = getKeyCodeName(input)
-
-        if inputTypeName == "Keyboard" and keyName == "P" then
-            self.visible = not self.visible
-            self:render()
-            return
-        end
-
-        if not self.visible then return end
-
-        if inputTypeName == "Keyboard" then
-            local activeTabObj = self.tabs[self.activeTab]
-            if activeTabObj and activeTabObj.sections then
-                for _, sec in ipairs(activeTabObj.sections) do
-                    for _, widget in ipairs(sec.widgets) do
-                        if widget.type == "InputText" and widget.focused and keyName then
-                            widget:key(keyName, isShiftDown())
-                            self:render()
+    self.inputBeganConnection = game:GetService("UserInputService").InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            if input.KeyCode == Enum.KeyCode.P then
+                self.visible = not self.visible
+                self:render()
+                return
+            end
+            if self.visible then
+                if self.tabs[self.activeTab] and self.tabs[self.activeTab].sections then
+                    for _, sec in ipairs(self.tabs[self.activeTab].sections) do
+                        for _, widget in ipairs(sec.widgets) do
+                            if widget.type == "InputText" and widget.focused then
+                                widget:key(input.KeyCode.Name, game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftShift) or game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.RightShift))
+                                self:render()
+                            end
                         end
                     end
                 end
             end
-        elseif useInputBeganMouse and inputTypeName == "MouseButton1" then
-            local mouseX = mouse and mouse.X or game:GetService("Players").LocalPlayer:GetMouse().X
-            local mouseY = mouse and mouse.Y or game:GetService("Players").LocalPlayer:GetMouse().Y
-            handleMouseClick(mouseX, mouseY)
+        elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if self.visible then
+                local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+                handleMouseClick(mouse.X, mouse.Y)
+            end
         end
     end)
 
-    if mouse and mouse.Button1Down then
-        self.mouseButton1Connection = mouse.Button1Down:Connect(function()
-            if not self.visible then return end
-            handleMouseClick(mouse.X, mouse.Y)
-        end)
-    end
-
-    if mouse and mouse.KeyDown then
-        self.mouseKeyDownConnection = mouse.KeyDown:Connect(function(key)
-            if key:lower() == "p" then
-                self.visible = not self.visible
-                self:render()
-            end
-        end)
-    end
-
-    self.inputEndedConnection = userInputService.InputEnded:Connect(function(input)
-        if getInputTypeName(input) == "MouseButton1" then
+    self.inputEndedConnection = game:GetService("UserInputService").InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
             self.dragging = false
+            self.activeSlider = nil
         end
     end)
 
     task.spawn(function()
         while self.visible ~= nil do
             task.wait()
-            if self.visible and self.dragging then
-                self.x = game:GetService("Players").LocalPlayer:GetMouse().X - self.dragOffset.X
-                self.y = game:GetService("Players").LocalPlayer:GetMouse().Y - self.dragOffset.Y
-                self:render()
-            end
-            
             if self.visible then
-                local mouseX = game:GetService("Players").LocalPlayer:GetMouse().X
-                local mouseY = game:GetService("Players").LocalPlayer:GetMouse().Y
+                if not ismouse1pressed() then
+                    self.dragging = false
+                    self.activeSlider = nil
+                end
+                local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+                if self.dragging then
+                    self.x = mouse.X - self.dragOffset.X
+                    self.y = mouse.Y - self.dragOffset.Y
+                    self:render()
+                elseif self.activeSlider then
+                    local val = self.activeSlider.min + math.clamp((mouse.X - self.activeSlider.lastTrackX) / 80, 0, 1) * (self.activeSlider.max - self.activeSlider.min)
+                    self.activeSlider.value = val
+                    pcall(self.activeSlider.callback, val)
+                    self:render()
+                end
+                
                 local hovered = false
-                local activeTabObj = self.tabs[self.activeTab]
-                if activeTabObj and activeTabObj.sections then
-                    for _, sec in ipairs(activeTabObj.sections) do
+                if self.tabs[self.activeTab] and self.tabs[self.activeTab].sections then
+                    for _, sec in ipairs(self.tabs[self.activeTab].sections) do
                         for _, widget in ipairs(sec.widgets) do
-                            if widget.desc then
-                                local label = widget.drawings.label
-                                if label and mouseX >= label.Position.X and mouseX <= label.Position.X + 120 and mouseY >= label.Position.Y and mouseY <= label.Position.Y + 12 then
+                            if widget.desc and widget.drawings.label and widget.drawings.label.Visible then
+                                if mouse.X >= widget.drawings.label.Position.X and mouse.X <= widget.drawings.label.Position.X + 120 and mouse.Y >= widget.drawings.label.Position.Y and mouse.Y <= widget.drawings.label.Position.Y + 14 then
                                     self.drawings.tooltipText.Text = widget.desc
-                                    self.drawings.tooltipText.Position = Vector2.new(mouseX + 12, mouseY + 12)
-                                    self.drawings.tooltipBg.Position = Vector2.new(mouseX + 8, mouseY + 8)
+                                    self.drawings.tooltipText.Position = Vector2.new(mouse.X + 12, mouse.Y + 12)
+                                    self.drawings.tooltipBg.Position = Vector2.new(mouse.X + 8, mouse.Y + 8)
                                     self.drawings.tooltipBg.Size = Vector2.new(self.drawings.tooltipText.TextBounds.X + 8, 16)
+                                    self.drawings.tooltipBorder.Position = Vector2.new(mouse.X + 8, mouse.Y + 8)
+                                    self.drawings.tooltipBorder.Size = Vector2.new(self.drawings.tooltipText.TextBounds.X + 8, 16)
                                     self.drawings.tooltipText.Visible = true
                                     self.drawings.tooltipBg.Visible = true
+                                    self.drawings.tooltipBorder.Visible = true
                                     hovered = true
                                     break
                                 end
@@ -906,6 +781,7 @@ local inset = 6
                 if not hovered then
                     self.drawings.tooltipText.Visible = false
                     self.drawings.tooltipBg.Visible = false
+                    self.drawings.tooltipBorder.Visible = false
                 end
             end
         end
@@ -915,8 +791,6 @@ local inset = 6
         pcall(function()
             if wSelf.inputBeganConnection then wSelf.inputBeganConnection:Disconnect() end
             if wSelf.inputEndedConnection then wSelf.inputEndedConnection:Disconnect() end
-            if wSelf.mouseButton1Connection then wSelf.mouseButton1Connection:Disconnect() end
-            if wSelf.mouseKeyDownConnection then wSelf.mouseKeyDownConnection:Disconnect() end
             for _, drawing in pairs(wSelf.drawings) do
                 if drawing then
                     drawing:Remove()
@@ -946,9 +820,7 @@ local inset = 6
         end)
     end
 
-    if self.title then
-        return self
-    end
+    return self
 end
 
 _G.sickUi = sickUi
