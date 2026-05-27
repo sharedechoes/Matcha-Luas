@@ -2158,8 +2158,10 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil or isFloating
     local z = isFloating and 90 or 30
     local cardTrans = isFloating and (0.75 * (ProjectState.contentFade or 1)) or (ProjectState.contentFade or 1)
-    local renderY = max(sy, isFloating and (ProjectState.y + TITLE_H) or clipTop)
-    local renderH = min(sy + secH, isFloating and (ProjectState.y + ProjectState.h - 24) or clipBottom) - renderY
+    local cardClipTop = isFloating and (ProjectState.y + TITLE_H) or clipTop
+    local cardClipBottom = isFloating and (ProjectState.y + ProjectState.h - 24) or clipBottom
+    local renderY = max(sy, cardClipTop)
+    local renderH = min(sy + secH, cardClipBottom) - renderY
 
     if renderH > 0 then
         if isPlaceholder then
@@ -2206,11 +2208,11 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             end
         end
         
-        if sy + 8 >= (isFloating and (ProjectState.y + TITLE_H) or clipTop) and sy + 22 <= (isFloating and (ProjectState.y + ProjectState.h - 24) or clipBottom) then
+        if sy + 8 >= cardClipTop and sy + 22 <= cardClipBottom then
             txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, cardTrans)
         end
         
-        if sy + 10 >= (isFloating and (ProjectState.y + TITLE_H) or clipTop) and sy + 19 <= (isFloating and (ProjectState.y + ProjectState.h - 24) or clipBottom) then
+        if sy + 10 >= cardClipTop and sy + 19 <= cardClipBottom then
             draw9Dot(colX + colW - 20, sy + 10, Theme.sub, z + 2, cardTrans)
             rect(colX + colW - 36, sy + 14, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, cardTrans)
             if section.locked then
