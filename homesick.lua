@@ -2200,10 +2200,10 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             end
             
             if d_mouse then
-                for i = 1, 12 do
-                    local x1, y1 = getPerimeterPoint(d_mouse - 40 + (i - 1) * 6.666, colX, renderY, colW, renderH)
-                    local x2, y2 = getPerimeterPoint(d_mouse - 40 + i * 6.666, colX, renderY, colW, renderH)
-                    line(x1, y1, x2, y2, Theme.accent, z + 2, 2, clamp(1 - (abs(-40 + (i - 0.5) * 6.666) / 40), 0, 1) * clamp(1 - (math.sqrt((ProjectState.mouseX - cx)^2 + (ProjectState.mouseY - cy)^2) / 80), 0, 1) * cardTrans)
+                for i = 1, 24 do
+                    local x1, y1 = getPerimeterPoint(d_mouse - 40 + (i - 1) * 3.333, colX, renderY, colW, renderH)
+                    local x2, y2 = getPerimeterPoint(d_mouse - 40 + i * 3.333, colX, renderY, colW, renderH)
+                    line(x1, y1, x2, y2, Theme.accent, z + 2, 2, clamp(1 - (abs(-40 + (i - 0.5) * 3.333) / 40), 0, 1) * clamp(1 - (math.sqrt((ProjectState.mouseX - cx)^2 + (ProjectState.mouseY - cy)^2) / 80), 0, 1) * cardTrans)
                 end
             end
         end
@@ -2213,16 +2213,18 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
         end
         
         if sy + 10 >= cardClipTop and sy + 19 <= cardClipBottom then
-            draw9Dot(colX + colW - 20, sy + 10, Theme.sub, z + 2, cardTrans)
-            rect(colX + colW - 36, sy + 14, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, cardTrans)
+            if not section.locked then
+                draw9Dot(colX + colW - 20, sy + 10, Theme.sub, z + 2, cardTrans)
+            end
+            rect(colX + colW - 36, sy + 12, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, cardTrans)
             if section.locked then
-                line(colX + colW - 34, sy + 11, colX + colW - 34, sy + 14, Theme.accent, z + 2, 1, cardTrans)
-                line(colX + colW - 31, sy + 11, colX + colW - 31, sy + 14, Theme.accent, z + 2, 1, cardTrans)
-                line(colX + colW - 34, sy + 11, colX + colW - 31, sy + 11, Theme.accent, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 9, colX + colW - 34, sy + 12, Theme.accent, z + 2, 1, cardTrans)
+                line(colX + colW - 31, sy + 9, colX + colW - 31, sy + 12, Theme.accent, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 9, colX + colW - 31, sy + 9, Theme.accent, z + 2, 1, cardTrans)
             else
-                line(colX + colW - 34, sy + 11, colX + colW - 34, sy + 14, Theme.sub, z + 2, 1, cardTrans)
-                line(colX + colW - 31, sy + 11, colX + colW - 31, sy + 12, Theme.sub, z + 2, 1, cardTrans)
-                line(colX + colW - 34, sy + 11, colX + colW - 31, sy + 11, Theme.sub, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 9, colX + colW - 34, sy + 12, Theme.sub, z + 2, 1, cardTrans)
+                line(colX + colW - 31, sy + 9, colX + colW - 31, sy + 10, Theme.sub, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 9, colX + colW - 31, sy + 9, Theme.sub, z + 2, 1, cardTrans)
             end
         end
         
@@ -2309,13 +2311,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     circle(sx + sw * frac, sy_bar + 2, 5, Theme.knob, z + 14, true, 0, 32, trans)
                     
-                    if item.tooltip and not isFloating then
-                        local qHovered = over(rowX + rowW - 16, rowY + 2, 12, 12)
-                        txt("?", rowX + rowW - 10, rowY + 2, qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
-                        if qHovered and not disabled then
-                            tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
-                        end
-                    end
+
                     
                     if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled then
                         ProjectState.sliderDrag = item
@@ -2661,6 +2657,7 @@ local function renderWindow(click, held, rightClick)
     rect(x, y, w, h, Theme.surface, 5, 12)
     strokeRect(x, y, w, h, Theme.border, 6, 12)
     rect(x + 2, y + 2, w - 4, TITLE_H - 2, Theme.surface2, 7, 10)
+    rect(x + 2, y + 2 + (TITLE_H - 2) / 2, w - 4, (TITLE_H - 2) / 2, Theme.surface2, 7, 0)
     line(x + 2, y + TITLE_H, x + w - 2, y + TITLE_H, Theme.border, 8)
 
     local titleMidY = centerY(y, TITLE_H)
@@ -2742,11 +2739,10 @@ local function renderWindow(click, held, rightClick)
         ProjectState.drag = nil
     end
 
-    txt("homesick", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
-    txt("Interface", x + 85, textTop(y, TITLE_H, 14), Theme.text, 14, FontSystem, 16)
+    txt("example UI", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
     rect(x + 158, textTop(y, TITLE_H, 14) - 1, 30, 16, C3(38, 34, 32), 15, 6)
     strokeRect(x + 158, textTop(y, TITLE_H, 14) - 1, 30, 16, Theme.accent, 16, 6)
-    txt("Pro", x + 173, textTop(y, TITLE_H, 14) + 7, Theme.accent, 10, FontBold, 17, true)
+    txt("homesick", x + 173, textTop(y, TITLE_H, 14) + 7, Theme.accent, 10, FontBold, 17, true)
 
     local userStr = LocalPlayer and LocalPlayer.Name or "kiyomi"
     txt(userStr, x + w - 14 - textWidth(userStr, 13, FontUI), textTop(y, TITLE_H, 13), Theme.text, 13, FontUI, 16)
