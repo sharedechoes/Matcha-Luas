@@ -865,4 +865,5 @@ sickUi.createWindow = function(title, width, height)
     end
 end
 
+_G.sickUi = sickUi
 return sickUi
