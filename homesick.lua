@@ -1,11 +1,11 @@
 if type(identifyexecutor) ~= "function" then
-    error("Waifu UI requires Matcha executor")
+    error("homesick requires Matcha executor")
 end
 
 do
     local executor = select(1, identifyexecutor())
     if executor ~= "Matcha" then
-        error("Waifu UI requires Matcha executor")
+        error("homesick requires Matcha executor")
     end
 end
 
@@ -48,19 +48,11 @@ local Fonts = (type(Drawing) == "table" and Drawing.Fonts) or {}
 local FontSystem = Fonts.System or Fonts.UI or 0
 local FontBold = Fonts.SystemBold or FontSystem
 local FontUI = Fonts.UI or FontSystem
-local FontMono = Fonts.Monospace or FontUI
-local FontMinecraft = Fonts.Minecraft or FontSystem
-local FontPixel = Fonts.Pixel or FontSystem
-local FontFortnite = Fonts.Fortnite or FontSystem
 
 local FontWidths = {}
 FontWidths[FontSystem] = 0.52
 FontWidths[FontBold] = 0.56
 FontWidths[FontUI] = 0.48
-FontWidths[FontMono] = 0.56
-FontWidths[FontMinecraft] = 0.58
-FontWidths[FontPixel] = 0.55
-FontWidths[FontFortnite] = 0.54
 
 local DRAW_VISIBLE = 1
 local FRAME_WAIT = 1 / 240
@@ -71,8 +63,6 @@ local TITLE_H = 36
 local TAB_H = 30
 local ROW_H = 28
 local CONTROL_H = 22
-local SECTION_HEAD_H = 22
-local CONTENT_PAD = 8
 local DEFAULT_W = 430
 local DEFAULT_H = 500
 local MINIMIZED_H = 42
@@ -112,7 +102,7 @@ local ProjectState = {
     h = DEFAULT_H,
     defaultH = DEFAULT_H,
     minimized = false,
-    title = "Waifu UI",
+    title = "homesick",
     tabs = {},
     activeTab = nil,
     activeIndex = 0,
@@ -135,20 +125,11 @@ local ProjectState = {
     tooltipAt = 0,
     tooltipX = 0,
     tooltipY = 0,
-    showWaifu = false,
-    waifuDrawing = nil,
     lastFrame = clock(),
     lastErrorAt = 0,
-    searchOpen = false,
-    searchQuery = "",
-    searchCacheQuery = nil,
-    searchResults = nil,
-    searchScrollY = 0,
-    searchMaxScroll = 0,
     tabScrollX = 0,
     tabTargetScrollX = 0,
     tabScrollToActive = false,
-    diagnosticsEnabled = false,
     watermarkEnabled = false,
     watermarkTitle = "",
     watermarkX = 20,
@@ -156,13 +137,16 @@ local ProjectState = {
     watermarkDrag = nil,
     activityText = "",
     errorCount = 0,
-    windowControlsStyle = "Windows",
-    customControls = {
-        align = "right",
-        closeColor = C3(255, 95, 87),
-        minColor = C3(255, 189, 46),
-        restoreColor = C3(39, 201, 63)
-    }
+    currentPillX = nil,
+    currentPillW = nil,
+    contentFade = 1,
+    resizeEdge = nil,
+    resizeStart = nil,
+    draggedSection = nil,
+    dragOffset = nil,
+    resizeSection = nil,
+    resizeSectionStartH = nil,
+    resizeSectionStartMouseY = nil,
 }
 
 local Pool = {
@@ -346,7 +330,7 @@ local function safeCallback(callback, ...)
     end
     local ok, result = pcall(callback, ...)
     if not ok then
-        warn("Waifu UI callback error: " .. tostring(result))
+        warn("homesick callback error " .. tostring(result))
         return
     end
     return result
@@ -863,8 +847,6 @@ local function createSection(tab, name, side)
     return sectionApi
 end
 
-local CustomPresets = {}
-
 function UI:SetMenuKey(key)
     if type(key) == "number" or (type(key) == "string" and tonumber(key) ~= nil) then
         local vk = tonumber(key)
@@ -884,13 +866,6 @@ function UI:SetTheme(overrides)
         for k, v in pairs(overrides) do
             if Theme[k] ~= nil then Theme[k] = v end
         end
-    end
-    return self
-end
-
-function UI:AddThemePreset(name, colors)
-    if type(name) == "string" and type(colors) == "table" then
-        CustomPresets[name] = colors
     end
     return self
 end
@@ -958,7 +933,7 @@ function UI:GetDrawing(kind)
 end
 
 function UI:SetTitle(text)
-    ProjectState.title = tostring(text or "Waifu UI")
+    ProjectState.title = tostring(text or "homesick")
     return self
 end
 
@@ -985,20 +960,6 @@ function UI:Center()
     ProjectState.x = floor(vw / 2 - ProjectState.w / 2)
     ProjectState.y = floor(vh / 2 - ProjectState.h / 2)
     clampWindow()
-    return self
-end
-
-function UI:SetControlsStyle(style, options)
-    style = tostring(style or "Windows")
-    if style == "macOS" or style == "Windows" or style == "Linux" or style == "Custom" then
-        ProjectState.windowControlsStyle = style
-    end
-    if style == "Custom" and type(options) == "table" then
-        ProjectState.customControls = ProjectState.customControls or {}
-        for k, v in pairs(options) do
-            ProjectState.customControls[k] = v
-        end
-    end
     return self
 end
 
@@ -1041,159 +1002,6 @@ function UI:RegisterActivity(callback)
     }
 end
 
-function UI:CreateSettingsTab(name)
-    local tab = self:Tab(name or "Settings")
-    local menuSec = tab:Section("Menu Settings")
-
-    local menuKey = menuSec:Toggle("Menu Keybind", true)
-    menuKey:AddKeybind(MENU_KEY or "f1", "Toggle", true, function(keyId, mode)
-        if keyId then
-            UI:SetMenuKey(keyId)
-        end
-    end)
-
-    menuSec:Textbox("Menu Title", ProjectState.title or "Waifu UI", function(val)
-        UI:SetTitle(val)
-    end)
-
-    menuSec:Button("Center Window", function()
-        UI:Center()
-    end)
-
-    menuSec:Toggle("Watermark Enabled", ProjectState.watermarkEnabled, function(val)
-        ProjectState.watermarkEnabled = val
-    end)
-
-    menuSec:Toggle("Diagnostics Overlay", ProjectState.diagnosticsEnabled, function(val)
-        ProjectState.diagnosticsEnabled = val
-    end)
-
-    menuSec:Divider("Window Settings")
-
-    menuSec:Dropdown("Controls Style", {ProjectState.windowControlsStyle or "Windows"}, {"macOS", "Windows", "Linux", "Custom"}, false, function(selected)
-        local style = selected[1]
-        UI:SetControlsStyle(style)
-    end)
-
-    local customAlign = menuSec:Toggle("Custom Controls Align Right", true, function(val)
-        ProjectState.customControls = ProjectState.customControls or {}
-        ProjectState.customControls.align = val and "right" or "left"
-    end)
-
-    local customClose = menuSec:Toggle("Custom Close Color", false)
-    customClose:AddColorpicker("Color", C3(255, 95, 87), false, function(c)
-        ProjectState.customControls = ProjectState.customControls or {}
-        ProjectState.customControls.closeColor = c
-    end)
-    
-    local customMin = menuSec:Toggle("Custom Minimize Color", false)
-    customMin:AddColorpicker("Color", C3(255, 189, 46), false, function(c)
-        ProjectState.customControls = ProjectState.customControls or {}
-        ProjectState.customControls.minColor = c
-    end)
-    
-    local customRestore = menuSec:Toggle("Custom Restore Color", false)
-    customRestore:AddColorpicker("Color", C3(39, 201, 63), false, function(c)
-        ProjectState.customControls = ProjectState.customControls or {}
-        ProjectState.customControls.restoreColor = c
-    end)
-
-    menuSec:Divider("Theme Options")
-
-    local themes = {"Matcha Waifu", "Apple Blue", "Gamesense", "Cyberpunk", "Sakura", "Monochrome"}
-    for k, _ in pairs(CustomPresets) do
-        themes[#themes + 1] = k
-    end
-
-    menuSec:Dropdown("Theme Preset", {"Matcha Waifu"}, themes, false, function(selected)
-        local themeName = selected[1]
-        ProjectState.showWaifu = (themeName == "Matcha Waifu")
-        if CustomPresets[themeName] then
-            UI:SetTheme(CustomPresets[themeName])
-        elseif themeName == "Apple Blue" then
-            UI:SetTheme({
-                bg = C3(18, 18, 22),
-                surface = C3(28, 28, 34),
-                surface2 = C3(38, 38, 44),
-                surface3 = C3(48, 48, 56),
-                text = C3(245, 245, 247),
-                sub = C3(142, 142, 147),
-                accent = C3(0, 122, 255),
-                border = C3(58, 58, 66),
-                toggleOn = C3(48, 209, 88),
-                toggleOff = C3(85, 85, 92),
-            })
-        elseif themeName == "Gamesense" then
-            UI:SetTheme({
-                bg = C3(10, 10, 10),
-                surface = C3(18, 18, 18),
-                surface2 = C3(26, 26, 26),
-                surface3 = C3(34, 34, 34),
-                text = C3(220, 220, 220),
-                sub = C3(115, 115, 115),
-                accent = C3(114, 178, 21),
-                border = C3(48, 48, 48),
-                toggleOn = C3(114, 178, 21),
-                toggleOff = C3(50, 50, 50),
-            })
-        elseif themeName == "Cyberpunk" then
-            UI:SetTheme({
-                bg = C3(16, 16, 18),
-                surface = C3(24, 24, 28),
-                surface2 = C3(32, 32, 38),
-                surface3 = C3(44, 44, 52),
-                text = C3(255, 255, 255),
-                sub = C3(160, 160, 160),
-                accent = C3(254, 215, 0),
-                border = C3(64, 64, 72),
-                toggleOn = C3(254, 215, 0),
-                toggleOff = C3(72, 72, 80),
-            })
-        elseif themeName == "Sakura" then
-            UI:SetTheme({
-                bg = C3(18, 15, 20),
-                surface = C3(26, 22, 30),
-                surface2 = C3(36, 30, 42),
-                surface3 = C3(46, 38, 54),
-                text = C3(255, 240, 245),
-                sub = C3(180, 140, 170),
-                accent = C3(255, 105, 180),
-                border = C3(66, 52, 76),
-                toggleOn = C3(255, 105, 180),
-                toggleOff = C3(86, 72, 96),
-            })
-        elseif themeName == "Monochrome" then
-            UI:SetTheme({
-                bg = C3(15, 15, 15),
-                surface = C3(24, 24, 24),
-                surface2 = C3(35, 35, 35),
-                surface3 = C3(50, 50, 50),
-                text = C3(240, 240, 240),
-                sub = C3(140, 140, 140),
-                accent = C3(255, 255, 255),
-                border = C3(60, 60, 60),
-                toggleOn = C3(220, 220, 220),
-                toggleOff = C3(75, 75, 75),
-            })
-        elseif themeName == "Matcha Waifu" then
-            UI:SetTheme({
-                bg = C3(30, 27, 26),
-                surface = C3(24, 21, 20),
-                surface2 = C3(38, 34, 32),
-                surface3 = C3(46, 42, 39),
-                text = C3(240, 240, 240),
-                sub = C3(130, 120, 115),
-                accent = C3(222, 196, 151),
-                border = C3(54, 49, 47),
-                toggleOn = C3(222, 196, 151),
-                toggleOff = C3(54, 49, 47),
-            })
-        end
-    end)
-
-    return tab
-end
-
 local stepConnection
 
 local function finalDestroy()
@@ -1217,13 +1025,6 @@ local function finalDestroy()
     setrobloxinput(true)
     ProjectState.inputState = true
 
-    if ProjectState.waifuDrawing then
-        pcall(function()
-            ProjectState.waifuDrawing.Visible = false
-            ProjectState.waifuDrawing:Remove()
-        end)
-        ProjectState.waifuDrawing = nil
-    end
     removeAllDrawings()
 end
 
@@ -1332,30 +1133,6 @@ local function smoothValue(current, target, speed)
     return current + (target - current) * (1 - math.exp(-(speed or 15) * dtValue))
 end
 
-local function rebuildSearchResults()
-    local query = string.lower(ProjectState.searchQuery or "")
-    if ProjectState.searchCacheQuery == query and ProjectState.searchResults then
-        return ProjectState.searchResults
-    end
-
-    local results = {}
-    if query ~= "" then
-        for _, t in ipairs(ProjectState.tabs) do
-            for _, s in ipairs(t.sections) do
-                for _, item in ipairs(s.items) do
-                    if item.type ~= "divider" and item.type ~= "label" and string.find(string.lower(item.label), query, 1, true) then
-                        results[#results + 1] = item
-                    end
-                end
-            end
-        end
-    end
-
-    ProjectState.searchCacheQuery = query
-    ProjectState.searchResults = results
-    return results
-end
-
 local toHsv
 
 local function toHex(color)
@@ -1378,18 +1155,7 @@ end
 
 local function getFocusableItems()
     local list = {}
-    if ProjectState.searchOpen then
-        list[#list + 1] = "search"
-    end
-    if ProjectState.searchOpen and ProjectState.searchQuery ~= "" then
-        local results = rebuildSearchResults()
-        for i = 1, #results do
-            local item = results[i]
-            if (item.type == "textbox" or item.type == "slider") and not isItemDisabled(item) then
-                list[#list + 1] = item
-            end
-        end
-    elseif ProjectState.activeTab then
+    if ProjectState.activeTab then
         for _, s in ipairs(ProjectState.activeTab.sections) do
             if not s.collapsed then
                 for _, item in ipairs(s.items) do
@@ -1444,77 +1210,6 @@ local function processTextInput()
 
     local item = ProjectState.focus
     if not item then
-        return
-    end
-
-    if item == "search" then
-        if Input.enter.click or Input.esc.click then
-            ProjectState.focus = nil
-            ProjectState.searchOpen = false
-            ProjectState.searchQuery = ""
-            ProjectState.searchCacheQuery = nil
-            ProjectState.searchResults = nil
-            return
-        end
-        local value = ProjectState.searchQuery or ""
-        local changed = false
-        local shifted = Input.shift.held or Input.lshift.held or Input.rshift.held
-        local now = clock()
-        local any_held = false
-        
-        if Input.delete.click then
-            value = ""
-            changed = true
-        end
-
-        for i = 1, #InputOrder do
-            local name = InputOrder[i]
-            local input = Input[name]
-            
-            if input.click and input.char then
-                local char = shifted and input.shifted or input.char
-                value = value .. char
-                changed = true
-                ProjectState.repeatKey = name
-                ProjectState.repeatAt = now + 0.4
-                any_held = true
-                break
-            elseif input.held and input.char and ProjectState.repeatKey == name then
-                any_held = true
-                if now >= (ProjectState.repeatAt or 0) then
-                    local char = shifted and input.shifted or input.char
-                    value = value .. char
-                    changed = true
-                    ProjectState.repeatAt = now + 0.035
-                end
-                break
-            elseif input.click and (name == "backspace" or name == "unbound") then
-                value = string.sub(value, 1, max(0, #value - 1))
-                changed = true
-                ProjectState.repeatKey = name
-                ProjectState.repeatAt = now + 0.4
-                any_held = true
-                break
-            elseif input.held and (name == "backspace" or name == "unbound") and ProjectState.repeatKey == name then
-                any_held = true
-                if now >= (ProjectState.repeatAt or 0) then
-                    value = string.sub(value, 1, max(0, #value - 1))
-                    changed = true
-                    ProjectState.repeatAt = now + 0.035
-                end
-                break
-            end
-        end
-        
-        if not any_held then
-            ProjectState.repeatKey = nil
-        end
-
-        if changed then
-            ProjectState.searchQuery = value
-            ProjectState.searchCacheQuery = nil
-            ProjectState.searchResults = nil
-        end
         return
     end
 
@@ -1761,14 +1456,14 @@ local function spawnDropdown(kind, x, y, w, choices, value, multi, callback, ite
 end
 
 local PRESET_SWATCHES = {
-    C3(0, 122, 255),   -- Apple Blue
-    C3(114, 178, 21),  -- Gamesense
-    C3(255, 69, 58),   -- Red
-    C3(255, 204, 0),   -- Yellow
-    C3(255, 105, 180), -- Pink
-    C3(160, 32, 240),  -- Purple
-    C3(255, 255, 255), -- White
-    C3(0, 0, 0)        -- Black
+    C3(0, 122, 255),
+    C3(114, 178, 21),
+    C3(255, 69, 58),
+    C3(255, 204, 0),
+    C3(255, 105, 180),
+    C3(160, 32, 240),
+    C3(255, 255, 255),
+    C3(0, 0, 0)
 }
 
 local function spawnColorpicker(x, y, picker)
@@ -2104,7 +1799,7 @@ local function renderWatermark(click, held)
         return
     end
     
-    local title = ProjectState.watermarkTitle ~= "" and ProjectState.watermarkTitle or ProjectState.title or "Waifu UI"
+    local title = ProjectState.watermarkTitle ~= "" and ProjectState.watermarkTitle or ProjectState.title or "homesick"
     local text = ProjectState.activityText ~= "" and (title .. " | " .. ProjectState.activityText) or title
     
     local w = textWidth(text, 12, FontUI) + 20
@@ -2134,33 +1829,6 @@ local function renderWatermark(click, held)
     rect(x, y, w, h, Theme.surface, 150, 6, 0.85)
     strokeRect(x, y, w, h, Theme.accent, 151, 6)
     txt(text, x + 10, textTop(y, h, 12), Theme.text, 12, FontUI, 152, false, false)
-end
-
-local function renderDiagnostics()
-    if not ProjectState.diagnosticsEnabled then
-        return
-    end
-    
-    local vw, vh = viewportSize()
-    local w = 180
-    local kinds = {"sq", "tx", "ln", "ci", "tr", "im"}
-    local h = 32 + #kinds * 16
-    local x = vw - w - 20
-    local y = 50
-    
-    rect(x, y, w, h, Theme.surface, 130, 8, 0.85)
-    strokeRect(x, y, w, h, Theme.border, 131, 8)
-    
-    txt("DIAGNOSTICS", x + 10, y + 8, Theme.accent, 11, FontBold, 132)
-    
-    local dy = y + 24
-    for _, k in ipairs(kinds) do
-        local label = TypeMap[k] or k
-        local active = PoolIndex[k] or 0
-        local high = PoolHighWater[k] or 0
-        txt(string.format("%s Pool: %d / %d", label, active, high), x + 10, dy, Theme.sub, 10, FontUI, 132)
-        dy = dy + 16
-    end
 end
 
 local function renderTabs(click, px, py, pw)
@@ -2225,6 +1893,9 @@ local function renderTabs(click, px, py, pw)
         ProjectState.tabScrollToActive = false
     end
 
+    local targetPillX = nil
+    local targetPillW = nil
+
     for i = 1, count do
         local tab = ProjectState.tabs[i]
         local tx = contentX + tabW * (i - 1) - scrollX
@@ -2232,7 +1903,8 @@ local function renderTabs(click, px, py, pw)
         if visible then
             local active = ProjectState.activeTab == tab
             if active then
-                strokeRect(tx + 4, py + 3, tabW - 8, TAB_H - 6, Theme.accent, 22, 10)
+                targetPillX = tx + 4
+                targetPillW = tabW - 8
                 txt(tab.name, tx + tabW / 2, centerY(py, TAB_H), Theme.text, 13, FontBold, 25, true, false, tabW - 12)
             else
                 local hovered = over(tx, py, tabW, TAB_H)
@@ -2248,6 +1920,21 @@ local function renderTabs(click, px, py, pw)
                 end
             end
         end
+    end
+
+    if targetPillX and targetPillW then
+        if not ProjectState.currentPillX then
+            ProjectState.currentPillX = targetPillX
+            ProjectState.currentPillW = targetPillW
+        else
+            ProjectState.currentPillX = smoothValue(ProjectState.currentPillX, targetPillX, 18)
+            ProjectState.currentPillW = smoothValue(ProjectState.currentPillW, targetPillW, 18)
+        end
+    end
+
+    if ProjectState.currentPillX and ProjectState.currentPillW then
+        rect(ProjectState.currentPillX, py + 3, ProjectState.currentPillW, TAB_H - 6, Theme.accent, 21, 10, 0.08)
+        strokeRect(ProjectState.currentPillX, py + 3, ProjectState.currentPillW, TAB_H - 6, Theme.accent, 22, 10)
     end
 
     return click
@@ -2326,7 +2013,7 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
                         picker.value = ProjectState.copiedColor
                         safeCallback(picker.callback, picker.value)
                     else
-                        warn("Color clipboard is empty")
+                        warn("color clipboard empty lol")
                     end
                 end
             end, nil, nil)
@@ -2348,15 +2035,43 @@ local function getItemHeight(item)
     return 28
 end
 
+local function draw9Dot(x, y, color, z, trans)
+    for row = 0, 2 do
+        for col = 0, 2 do
+            circle(x + col * 3, y + row * 3, 1, color, z, true, 0, 8, trans)
+        end
+    end
+end
+
 local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBottom, click, held, rightClick)
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
     local z = 30
     
+    local fade = ProjectState.contentFade or 1
+    local cardTrans = fade
+    
     if sy + secH >= clipTop and sy <= clipBottom then
-        rect(colX, sy, colW, secH, Theme.surface2, z, 8)
-        strokeRect(colX, sy, colW, secH, Theme.border, z + 1, 8)
+        rect(colX, sy, colW, secH, Theme.surface2, z, 8, cardTrans)
+        strokeRect(colX, sy, colW, secH, Theme.border, z + 1, 8, cardTrans)
         
-        txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2)
+        txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, cardTrans)
+        
+        draw9Dot(colX + colW - 20, sy + 10, Theme.sub, z + 2, cardTrans)
+        
+        local handleHovered = over(colX + colW - 22, sy + 8, 14, 14)
+        if click and handleHovered and not popupBlocking then
+            ProjectState.draggedSection = section
+            ProjectState.dragOffset = {ProjectState.mouseX - colX, ProjectState.mouseY - sy}
+            click = false
+        end
+        
+        local bottomHovered = over(colX, sy + secH - 4, colW, 8)
+        if click and bottomHovered and not popupBlocking then
+            ProjectState.resizeSection = section
+            ProjectState.resizeSectionStartH = secH
+            ProjectState.resizeSectionStartMouseY = ProjectState.mouseY
+            click = false
+        end
         
         local rowY = sy + 28
         local rowW = colW - 24
@@ -2368,14 +2083,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             
             if rowY >= clipTop and rowY + itemH <= clipBottom then
                 local disabled = isItemDisabled(item)
-                local trans = disabled and 0.4 or nil
-                
-                if over(rowX, rowY, rowW, itemH - 2) and item.type ~= "divider" then
-                    rect(rowX - 4, rowY, rowW + 8, itemH - 2, C3(42, 42, 49), z + 3, 5, trans)
-                    if item.tooltip and not disabled then
-                        tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
-                    end
-                end
+                local trans = (disabled and 0.4 or 1) * cardTrans
                 
                 if item.type == "label" then
                     txt(item.label, rowX, textTop(rowY, itemH - 2, 13), item.color or Theme.text, 13, FontSystem, z + 12, false, false, rowW, trans)
@@ -2389,13 +2097,19 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
                     
                     if item.tooltip then
-                        txt("?", rowX + rowW - 12, textTop(rowY, itemH - 2, 13), Theme.sub, 13, FontSystem, z + 12, true)
+                        local qHovered = over(rowX + rowW - 16, rowY + 6, 12, 12)
+                        txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
+                        if qHovered and not disabled then
+                            tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
+                        end
                     end
                     
                     if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled then
                         local onKeybind = item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)
                         local onColor = item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)
-                        if not onKeybind and not onColor then
+                        local onQ = item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)
+                        local on9Dot = over(colX + colW - 22, sy + 8, 14, 14)
+                        if not onKeybind and not onColor and not onQ and not on9Dot then
                             setItemValue(item, not item.value, true)
                             click = false
                         end
@@ -2419,7 +2133,11 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     circle(sx + sw * frac, sy_bar + 2, 5, Theme.knob, z + 14, true, 0, 32, trans)
                     
                     if item.tooltip then
-                        txt("?", rowX + rowW - 12, rowY + 2, Theme.sub, 13, FontSystem, z + 12, true)
+                        local qHovered = over(rowX + rowW - 16, rowY + 2, 12, 12)
+                        txt("?", rowX + rowW - 10, rowY + 2, qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
+                        if qHovered and not disabled then
+                            tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
+                        end
                     end
                     
                     if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled then
@@ -2449,7 +2167,11 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
                     
                     if item.tooltip then
-                        txt("?", rowX + rowW - 12, rowY + 2, Theme.sub, 13, FontSystem, z + 12, true)
+                        local qHovered = over(rowX + rowW - 16, rowY + 2, 12, 12)
+                        txt("?", rowX + rowW - 10, rowY + 2, qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
+                        if qHovered and not disabled then
+                            tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
+                        end
                     end
                     
                     if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled then
@@ -2517,13 +2239,6 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     end
 
     local sectionsToRender = tab.sections
-    if ProjectState.searchOpen and ProjectState.searchQuery ~= "" then
-        sectionsToRender = {{
-            name = "Search Results (" .. #rebuildSearchResults() .. ")",
-            items = rebuildSearchResults(),
-            collapsed = false,
-        }}
-    end
 
     local leftSecs = {}
     local rightSecs = {}
@@ -2539,11 +2254,13 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     local leftTotal = 0
     for i = 1, #leftSecs do
         local sec = leftSecs[i]
-        local secH = 28
-        for ii = 1, #sec.items do
-            secH = secH + getItemHeight(sec.items[ii])
+        local secH = sec.customHeight or 28
+        if not sec.customHeight then
+            for ii = 1, #sec.items do
+                secH = secH + getItemHeight(sec.items[ii])
+            end
+            secH = secH + 6
         end
-        secH = secH + 6
         sec.calculatedHeight = secH
         leftTotal = leftTotal + secH + 10
     end
@@ -2551,11 +2268,13 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     local rightTotal = 0
     for i = 1, #rightSecs do
         local sec = rightSecs[i]
-        local secH = 28
-        for ii = 1, #sec.items do
-            secH = secH + getItemHeight(sec.items[ii])
+        local secH = sec.customHeight or 28
+        if not sec.customHeight then
+            for ii = 1, #sec.items do
+                secH = secH + getItemHeight(sec.items[ii])
+            end
+            secH = secH + 6
         end
-        secH = secH + 6
         sec.calculatedHeight = secH
         rightTotal = rightTotal + secH + 10
     end
@@ -2601,18 +2320,69 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     local leftX = px
     local rightX = px + colW + 10
 
-    local leftY = sy
-    for i = 1, #leftSecs do
-        local section = leftSecs[i]
-        click, held, rightClick = renderSectionCard(section, leftX, leftY, colW, section.calculatedHeight, clipTop, clipBottom, click, held, rightClick)
-        leftY = leftY + section.calculatedHeight + 10
+    local dragSec = ProjectState.draggedSection
+    if held and dragSec then
+        local dragIdx = nil
+        for idx, sec in ipairs(tab.sections) do
+            if sec == dragSec then
+                dragIdx = idx
+                break
+            end
+        end
+        if dragIdx then
+            if dragIdx > 1 then
+                local prevSec = tab.sections[dragIdx - 1]
+                if ProjectState.mouseY < (prevSec.lastRenderY or 0) + (prevSec.calculatedHeight or 0) / 2 then
+                    tab.sections[dragIdx], tab.sections[dragIdx - 1] = tab.sections[dragIdx - 1], tab.sections[dragIdx]
+                end
+            end
+            if dragIdx < #tab.sections then
+                local nextSec = tab.sections[dragIdx + 1]
+                if ProjectState.mouseY > (nextSec.lastRenderY or 0) + (nextSec.calculatedHeight or 0) / 2 then
+                    tab.sections[dragIdx], tab.sections[dragIdx + 1] = tab.sections[dragIdx + 1], tab.sections[dragIdx]
+                end
+            end
+
+            local mouseFrac = (ProjectState.mouseX - px) / pw
+            if mouseFrac < 0.35 then
+                dragSec.side = "Left"
+            elseif mouseFrac > 0.65 then
+                dragSec.side = "Right"
+            else
+                dragSec.side = "Full"
+            end
+        end
+    else
+        ProjectState.draggedSection = nil
     end
 
+    if held and ProjectState.resizeSection then
+        local dy = ProjectState.mouseY - ProjectState.resizeSectionStartMouseY
+        ProjectState.resizeSection.customHeight = max(40, ProjectState.resizeSectionStartH + dy)
+    else
+        ProjectState.resizeSection = nil
+    end
+
+    local leftY = sy
     local rightY = sy
-    for i = 1, #rightSecs do
-        local section = rightSecs[i]
-        click, held, rightClick = renderSectionCard(section, rightX, rightY, colW, section.calculatedHeight, clipTop, clipBottom, click, held, rightClick)
-        rightY = rightY + section.calculatedHeight + 10
+
+    for i = 1, #sectionsToRender do
+        local section = sectionsToRender[i]
+        local secH = section.calculatedHeight
+        section.lastRenderY = (section.side == "Right") and rightY or (section.side == "Full") and max(leftY, rightY) or leftY
+
+        if section.side == "Full" then
+            local startY = max(leftY, rightY)
+            click, held, rightClick = renderSectionCard(section, px, startY, pw, secH, clipTop, clipBottom, click, held, rightClick)
+            leftY = startY + secH + 10
+            rightY = leftY
+        elseif section.side == "Right" then
+            click, held, rightClick = renderSectionCard(section, rightX, rightY, colW, secH, clipTop, clipBottom, click, held, rightClick)
+            rightY = rightY + secH + 10
+        else
+            click, held, rightClick = renderSectionCard(section, leftX, leftY, colW, secH, clipTop, clipBottom, click, held, rightClick)
+            leftY = leftY + secH + 10
+        end
     end
 
     if tab.maxScroll > 0 then
@@ -2643,6 +2413,21 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     return click, held, rightClick
 end
 
+local onlineCount = 7517 + math.random(-25, 25)
+task.spawn(function()
+    local ok, res = pcall(function()
+        return game:HttpGet("https://api.counterapi.dev/v1/homesick/users/increment")
+    end)
+    if ok and res then
+        local ok2, data = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(res)
+        end)
+        if ok2 and data and data.value then
+            onlineCount = data.value
+        end
+    end
+end)
+
 local function renderWindow(click, held, rightClick)
     local x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
     local popupOpen = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
@@ -2662,27 +2447,80 @@ local function renderWindow(click, held, rightClick)
 
     local titleMidY = centerY(y, TITLE_H)
 
+    local edgeSize = 6
+    local mx, my = ProjectState.mouseX, ProjectState.mouseY
+    local nearL = mx >= x - edgeSize and mx <= x + edgeSize and my >= y and my <= y + h
+    local nearR = mx >= x + w - edgeSize and mx <= x + w + edgeSize and my >= y and my <= y + h
+    local nearT = my >= y - edgeSize and my <= y + edgeSize and mx >= x and mx <= x + w
+    local nearB = my >= y + h - edgeSize and my <= y + h + edgeSize and mx >= x and mx <= x + w
+
     if baseClick then
-        if over(x, y, w, TITLE_H) then
+        local edge = nil
+        if nearL and nearT then edge = "topleft"
+        elseif nearR and nearT then edge = "topright"
+        elseif nearL and nearB then edge = "bottomleft"
+        elseif nearR and nearB then edge = "bottomright"
+        elseif nearL then edge = "left"
+        elseif nearR then edge = "right"
+        elseif nearT then edge = "top"
+        elseif nearB then edge = "bottom"
+        end
+
+        if edge then
+            ProjectState.resizeEdge = edge
+            ProjectState.resizeStart = {x = x, y = y, w = w, h = h, mouseX = mx, mouseY = my}
+            baseClick = false
+        elseif over(x, y, w, TITLE_H) then
             ProjectState.drag = {ProjectState.mouseX - x, ProjectState.mouseY - y}
             baseClick = false
         end
     end
 
-    if baseHeld and ProjectState.drag then
-        ProjectState.x = ProjectState.mouseX - ProjectState.drag[1]
-        ProjectState.y = ProjectState.mouseY - ProjectState.drag[2]
+    local drag = ProjectState.resizeEdge
+    if held and drag and ProjectState.resizeStart then
+        local start = ProjectState.resizeStart
+        local dx = mx - start.mouseX
+        local dy = my - start.mouseY
+        local newX, newY, newW, newH = start.x, start.y, start.w, start.h
+
+        if drag == "left" or drag == "topleft" or drag == "bottomleft" then
+            local targetW = start.w - dx
+            if targetW >= 300 then
+                newW = targetW
+                newX = start.x + dx
+            end
+        end
+        if drag == "right" or drag == "topright" or drag == "bottomright" then
+            newW = max(300, start.w + dx)
+        end
+        if drag == "top" or drag == "topleft" or drag == "topright" then
+            local targetH = start.h - dy
+            if targetH >= 120 then
+                newH = targetH
+                newY = start.y + dy
+            end
+        end
+        if drag == "bottom" or drag == "bottomleft" or drag == "bottomright" then
+            newH = max(120, start.h + dy)
+        end
+
+        ProjectState.x = newX
+        ProjectState.y = newY
+        ProjectState.w = newW
+        ProjectState.h = newH
+        ProjectState.defaultH = newH
         clampWindow()
-        x, y = ProjectState.x, ProjectState.y
+        x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
     elseif not held then
-        ProjectState.drag = nil
+        ProjectState.resizeEdge = nil
+        ProjectState.resizeStart = nil
     end
 
-    txt("Matcha", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
-    txt("Interface", x + 67, textTop(y, TITLE_H, 14), Theme.text, 14, FontSystem, 16)
-    rect(x + 140, textTop(y, TITLE_H, 14) - 1, 30, 16, C3(38, 34, 32), 15, 6)
-    strokeRect(x + 140, textTop(y, TITLE_H, 14) - 1, 30, 16, Theme.accent, 16, 6)
-    txt("Pro", x + 155, textTop(y, TITLE_H, 14) + 7, Theme.accent, 10, FontBold, 17, true)
+    txt("homesick", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
+    txt("Interface", x + 85, textTop(y, TITLE_H, 14), Theme.text, 14, FontSystem, 16)
+    rect(x + 158, textTop(y, TITLE_H, 14) - 1, 30, 16, C3(38, 34, 32), 15, 6)
+    strokeRect(x + 158, textTop(y, TITLE_H, 14) - 1, 30, 16, Theme.accent, 16, 6)
+    txt("Pro", x + 173, textTop(y, TITLE_H, 14) + 7, Theme.accent, 10, FontBold, 17, true)
 
     local userStr = LocalPlayer and LocalPlayer.Name or "kiyomi"
     txt(userStr, x + w - 14 - textWidth(userStr, 13, FontUI), textTop(y, TITLE_H, 13), Theme.text, 13, FontUI, 16)
@@ -2702,6 +2540,12 @@ local function renderWindow(click, held, rightClick)
     local contY = py + TAB_H + 8
     local contH = ph - TAB_H - 8
 
+    local fade = ProjectState.contentFade or 1
+    if fade < 1 then
+        fade = smoothValue(fade, 1, 16)
+        ProjectState.contentFade = fade
+    end
+
     baseClick, baseHeld, baseRightClick = renderSections(ProjectState.activeTab, baseClick, baseHeld, baseRightClick, px, contY, pw, contH)
 
     if ProjectState.focus and baseClick and not over(px, contY, pw, contH) then
@@ -2713,81 +2557,10 @@ local function renderWindow(click, held, rightClick)
     local botH = 24
     line(x + 2, botY, x + w - 2, botY, Theme.border, 8)
     circle(x + 14, botY + 12, 3, C3(52, 199, 89), 10)
-    txt("7517 online", x + 24, textTop(botY, botH, 11), Theme.text, 11, FontUI, 10)
-    txt("matcha.pink/discord", x + w / 2, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10, true)
+    txt(tostring(onlineCount) .. " online", x + 24, textTop(botY, botH, 11), Theme.text, 11, FontUI, 10)
     txt("Build: May 19 2026", x + w - 14 - textWidth("Build: May 19 2026", 11, FontUI), textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
 
     return popupOpen and click or baseClick, popupOpen and held or baseHeld, popupOpen and rightClick or baseRightClick
-end
-
-local loadedData = nil
-
-local function loadWaifuData()
-    if loadedData then return end
-    local url = "https://raw.githubusercontent.com/nvqren/Matcha-Waifu/refs/heads/main/waifu.png"
-    local response = game:HttpGet(url)
-    if response then
-        loadedData = response
-    end
-end
-
-local function updateWaifuImage()
-    if not ProjectState.alive or ProjectState.destroyed then
-        if ProjectState.waifuDrawing then
-            pcall(function()
-                ProjectState.waifuDrawing.Visible = false
-                ProjectState.waifuDrawing:Remove()
-            end)
-            ProjectState.waifuDrawing = nil
-        end
-        return
-    end
-
-    if ProjectState.showWaifu and ProjectState.open and ProjectState.focusedWindow and not ProjectState.minimized then
-        loadWaifuData()
-        if not loadedData then
-            if ProjectState.waifuDrawing then
-                ProjectState.waifuDrawing.Visible = false
-            end
-            return
-        end
-
-        local aspect = 288 / 512
-        local w_new, h_new
-        if ProjectState.w / ProjectState.h > aspect then
-            h_new = ProjectState.h
-            w_new = ProjectState.h * aspect
-        else
-            w_new = ProjectState.w
-            h_new = ProjectState.w / aspect
-        end
-        local pos_x = ProjectState.x + (ProjectState.w - w_new) / 2
-        local pos_y = ProjectState.y + (ProjectState.h - h_new) / 2
-
-        if not ProjectState.waifuDrawing then
-            local ok, img = pcall(DrawingNew, "Image")
-            if ok and img then
-                img.Size = V2(w_new, h_new)
-                img.Position = V2(pos_x, pos_y)
-                img.ZIndex = 6
-                img.Transparency = 0.7
-                local dataOk = pcall(function()
-                    img.Data = loadedData
-                end)
-                if dataOk then
-                    img.Visible = true
-                    ProjectState.waifuDrawing = img
-                end
-            end
-        else
-            ProjectState.waifuDrawing.Position = V2(pos_x, pos_y)
-            ProjectState.waifuDrawing.Size = V2(w_new, h_new)
-        end
-    else
-        if ProjectState.waifuDrawing then
-            ProjectState.waifuDrawing.Visible = false
-        end
-    end
 end
 
 local function step()
@@ -2816,20 +2589,22 @@ local function step()
             ProjectState.activeTab = ProjectState.tabs[idx]
             ProjectState.activeIndex = idx
             ProjectState.tabScrollToActive = true
+            ProjectState.contentFade = 0
         elseif Input.right.click then
             local idx = min(#ProjectState.tabs, (ProjectState.activeIndex or 1) + 1)
             ProjectState.activeTab = ProjectState.tabs[idx]
             ProjectState.activeIndex = idx
             ProjectState.tabScrollToActive = true
+            ProjectState.contentFade = 0
         end
     end
 
     if Input.m1.released then
         ProjectState.sliderDrag = nil
         ProjectState.scrollDrag = nil
+        ProjectState.resizeSection = nil
+        ProjectState.draggedSection = nil
     end
-
-    updateWaifuImage()
 
     local click = Input.m1.click
     local held = Input.m1.held
@@ -2837,14 +2612,12 @@ local function step()
 
     if not ProjectState.open or not ProjectState.focusedWindow or #ProjectState.tabs == 0 then
         renderWatermark(click, held)
-        renderDiagnostics()
         hideUnused()
         return
     end
 
     if not ProjectState.hasMouse then
         renderWatermark(click, held)
-        renderDiagnostics()
         hideUnused()
         return
     end
@@ -2861,7 +2634,6 @@ local function step()
     end
 
     renderWatermark(click, held)
-    renderDiagnostics()
 
     hideUnused()
 end
@@ -2872,14 +2644,14 @@ function UI:Demo()
     end
 
     ProjectState.demoLoaded = true
-    self:SetTitle("Waifu UI")
+    self:SetTitle("homesick")
     self:SetSize(400, 500)
     self:Center()
 
     local playground = self:Tab("Playground")
     local controls = playground:Section("Section 1")
 
-    controls:Label("Waifu UI Test", Theme.accent)
+    controls:Label("homesick Test", Theme.accent)
     local toggleOne = controls:Toggle("Toggle #1", false, nil, true, "This feature has a tooltip")
     local key = toggleOne:AddKeybind(nil, "Hold", true)
     local toggleTwo = controls:Toggle("Toggle #2", false)
@@ -2922,12 +2694,6 @@ function UI:Demo()
     self:Tab("Another tab")
     self:Tab("Tabs")
 
-    local settings = self:CreateSettingsTab("Settings")
-    local extraSec = settings:Section("Extra Utilities")
-    extraSec:Button("Unload", function()
-        UI:Destroy()
-    end)
-
     applyInputState(true)
 
     return self
@@ -2954,7 +2720,7 @@ local function runStepSafe()
         ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
         if now - ProjectState.lastErrorAt > 1 then
             ProjectState.lastErrorAt = now
-            warn("Waifu UI step error: " .. tostring(err))
+            warn("homesick step error " .. tostring(err))
         end
         setrobloxinput(true)
         ProjectState.inputState = true
@@ -2981,13 +2747,12 @@ else
     end)
 end
 
-_G.UI = UI
-_G.WaifuUI = UI
+_G.homesick = UI
+_G.homesickUI = UI
 
+local homesick = {}
 
-local sickUi = {}
-
-sickUi.createWindow = function(title, width, height)
+homesick.createWindow = function(title, width, height)
     UI:SetTitle(title)
     UI:SetSize(width, height)
     UI:Center()
@@ -3123,5 +2888,5 @@ sickUi.createWindow = function(title, width, height)
     return windowWrap
 end
 
-_G.sickUi = sickUi
-return sickUi
+_G.homesick = homesick
+return homesick
