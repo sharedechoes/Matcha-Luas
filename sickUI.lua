@@ -64,7 +64,7 @@ FontWidths[FontFortnite] = 0.54
 
 local DRAW_VISIBLE = 1
 local FRAME_WAIT = 1 / 240
-local MENU_KEY = "f1"
+local MENU_KEY = "p"
 
 local PAD = 10
 local TITLE_H = 36
@@ -82,20 +82,20 @@ local SHADOW_ALPHA = {0.10, 0.07, 0.05, 0.03, 0.015}
 local KEYBIND_MODES = {"Hold", "Toggle", "Always"}
 
 local Theme = {
-    bg = C3(16, 22, 18),
-    surface = C3(24, 32, 26),
-    surface2 = C3(34, 44, 36),
-    surface3 = C3(44, 56, 46),
-    text = C3(235, 245, 235),
-    sub = C3(130, 160, 130),
-    accent = C3(88, 196, 120),
+    bg = C3(30, 27, 26),
+    surface = C3(24, 21, 20),
+    surface2 = C3(38, 34, 32),
+    surface3 = C3(46, 42, 39),
+    text = C3(240, 240, 240),
+    sub = C3(130, 120, 115),
+    accent = C3(222, 196, 151),
     green = C3(52, 199, 89),
     red = C3(255, 69, 58),
     yellow = C3(255, 204, 0),
     unsafe = C3(255, 226, 84),
-    border = C3(48, 62, 52),
-    toggleOn = C3(88, 196, 120),
-    toggleOff = C3(65, 85, 68),
+    border = C3(54, 49, 47),
+    toggleOn = C3(222, 196, 151),
+    toggleOff = C3(54, 49, 47),
     knob = C3(255, 255, 255),
     white = C3(255, 255, 255),
     black = C3(0, 0, 0),
@@ -356,7 +356,7 @@ local function applyInputState(force)
     local desired = not ProjectState.open
     if force or ProjectState.inputState ~= desired then
         ProjectState.inputState = desired
-        setrobloxinput(desired)
+        setrobloxinput(true)
     end
 end
 
@@ -1176,16 +1176,16 @@ function UI:CreateSettingsTab(name)
             })
         elseif themeName == "Matcha Waifu" then
             UI:SetTheme({
-                bg = C3(16, 22, 18),
-                surface = C3(24, 32, 26),
-                surface2 = C3(34, 44, 36),
-                surface3 = C3(44, 56, 46),
-                text = C3(240, 248, 242),
-                sub = C3(150, 175, 158),
-                accent = C3(106, 218, 142),
-                border = C3(50, 68, 56),
-                toggleOn = C3(106, 218, 142),
-                toggleOff = C3(70, 85, 75),
+                bg = C3(30, 27, 26),
+                surface = C3(24, 21, 20),
+                surface2 = C3(38, 34, 32),
+                surface3 = C3(46, 42, 39),
+                text = C3(240, 240, 240),
+                sub = C3(130, 120, 115),
+                accent = C3(222, 196, 151),
+                border = C3(54, 49, 47),
+                toggleOn = C3(222, 196, 151),
+                toggleOff = C3(54, 49, 47),
             })
         end
     end)
@@ -3195,7 +3195,8 @@ sickUi.createWindow = function(title, width, height)
     
     windowWrap.addTab = function(wSelf, tabName)
         local tabWrap = {
-            rawTab = UI:Tab(tabName)
+            rawTab = UI:Tab(tabName),
+            name = tabName
         }
         
         tabWrap.addSection = function(tSelf, secName, column)
