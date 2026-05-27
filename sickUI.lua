@@ -66,7 +66,7 @@ sickUi.createWindow = function(title, width, height)
     local function getInputTypeName(input)
         if not input then return nil end
         local userType = input.UserInputType
-        if userType and type(userType.Name) == "string" then
+        if type(userType) == "table" and type(userType.Name) == "string" then
             return userType.Name
         end
         return nil
@@ -75,7 +75,7 @@ sickUi.createWindow = function(title, width, height)
     local function getKeyCodeName(input)
         if not input or not input.KeyCode then return nil end
         local keyCode = input.KeyCode
-        if type(keyCode.Name) == "string" then
+        if type(keyCode) == "table" and type(keyCode.Name) == "string" then
             return keyCode.Name
         end
         return nil
@@ -101,14 +101,16 @@ sickUi.createWindow = function(title, width, height)
 
         local tabX = self.x + 10
         local tabY = self.y + 30
+        local tabOffset = 0
         for i, tab in ipairs(self.tabs) do
             local tabWidth = tab.drawings.button.TextBounds.X + 20
-            local tabLeft = tabX + (i - 1) * 60 - 10
-            if isPointInRect(mouseX, mouseY, tabLeft, tabY - 2, tabWidth, 18) then
+            local tabLeft = tabX + tabOffset - 10
+            if isPointInRect(mouseX, mouseY, tabLeft, tabY - 2, tabWidth + 10, 18) then
                 self.activeTab = i
                 self:render()
                 return
             end
+            tabOffset = tabOffset + tabWidth + 10
         end
 
         local activeTabObj = self.tabs[self.activeTab]
@@ -178,6 +180,38 @@ sickUi.createWindow = function(title, width, height)
     self.drawings.header.Color = Color3.fromRGB(20, 18, 17)
     self.drawings.header.Transparency = 1.0
     self.drawings.header.ZIndex = 101
+
+    self.drawings.cornerTL = Drawing.new("Circle")
+    self.drawings.cornerTL.Visible = false
+    self.drawings.cornerTL.Filled = true
+    self.drawings.cornerTL.Color = Color3.fromRGB(24, 22, 21)
+    self.drawings.cornerTL.Radius = 6
+    self.drawings.cornerTL.NumSides = 24
+    self.drawings.cornerTL.ZIndex = 105
+
+    self.drawings.cornerTR = Drawing.new("Circle")
+    self.drawings.cornerTR.Visible = false
+    self.drawings.cornerTR.Filled = true
+    self.drawings.cornerTR.Color = Color3.fromRGB(24, 22, 21)
+    self.drawings.cornerTR.Radius = 6
+    self.drawings.cornerTR.NumSides = 24
+    self.drawings.cornerTR.ZIndex = 105
+
+    self.drawings.cornerBL = Drawing.new("Circle")
+    self.drawings.cornerBL.Visible = false
+    self.drawings.cornerBL.Filled = true
+    self.drawings.cornerBL.Color = Color3.fromRGB(24, 22, 21)
+    self.drawings.cornerBL.Radius = 6
+    self.drawings.cornerBL.NumSides = 24
+    self.drawings.cornerBL.ZIndex = 105
+
+    self.drawings.cornerBR = Drawing.new("Circle")
+    self.drawings.cornerBR.Visible = false
+    self.drawings.cornerBR.Filled = true
+    self.drawings.cornerBR.Color = Color3.fromRGB(24, 22, 21)
+    self.drawings.cornerBR.Radius = 6
+    self.drawings.cornerBR.NumSides = 24
+    self.drawings.cornerBR.ZIndex = 105
 
     self.drawings.titleText = Drawing.new("Text")
     self.drawings.titleText.Visible = false
@@ -258,6 +292,13 @@ sickUi.createWindow = function(title, width, height)
                 drawings = {}
             }
             
+            section.drawings.bg = Drawing.new("Square")
+            section.drawings.bg.Visible = false
+            section.drawings.bg.Filled = true
+            section.drawings.bg.Color = Color3.fromRGB(26, 24, 23)
+            section.drawings.bg.Transparency = 1.0
+            section.drawings.bg.ZIndex = 101
+
             section.drawings.border = Drawing.new("Square")
             section.drawings.border.Visible = false
             section.drawings.border.Filled = false
@@ -688,8 +729,9 @@ sickUi.createWindow = function(title, width, height)
         local h = self.height
         local visible = self.visible
         
-        self.drawings.bg.Position = Vector2.new(x, y)
-        self.drawings.bg.Size = Vector2.new(w, h)
+local inset = 6
+        self.drawings.bg.Position = Vector2.new(x + inset, y + inset)
+        self.drawings.bg.Size = Vector2.new(math.max(0, w - inset * 2), math.max(0, h - inset * 2))
         self.drawings.bg.Visible = visible
         
         self.drawings.border.Position = Vector2.new(x, y)
@@ -706,12 +748,15 @@ sickUi.createWindow = function(title, width, height)
         self.drawings.titleText.Position = Vector2.new(x + 60, y + 6)
         self.drawings.titleText.Visible = visible
         
-        self.drawings.footer.Position = Vector2.new(x, y + h - 20)
-        self.drawings.footer.Size = Vector2.new(w, 20)
-        self.drawings.footer.Visible = visible
-        
-        self.drawings.footerText.Position = Vector2.new(x + w / 2, y + h - 16)
-        self.drawings.footerText.Visible = visible
+        self.drawings.cornerTL.Position = Vector2.new(x + 6, y + 6)
+        self.drawings.cornerTR.Position = Vector2.new(x + w - 6, y + 6)
+        self.drawings.cornerBL.Position = Vector2.new(x + 6, y + h - 6)
+        self.drawings.cornerBR.Position = Vector2.new(x + w - 6, y + h - 6)
+        self.drawings.cornerTL.Visible = visible
+        self.drawings.cornerTR.Visible = visible
+        self.drawings.cornerBL.Visible = visible
+        self.drawings.cornerBR.Visible = visible
+
         
         local tabX = x + 10
         local tabY = y + 30
