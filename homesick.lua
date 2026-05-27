@@ -44,6 +44,13 @@ local Workspace = workspace
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 
+local mouseScroll = 0
+game:GetService("UserInputService").InputChanged:Connect(function(input, processed)
+    if input.UserInputType == Enum.UserInputType.MouseWheel then
+        mouseScroll = mouseScroll + input.Position.Z
+    end
+end)
+
 local Fonts = (type(Drawing) == "table" and Drawing.Fonts) or {}
 local FontSystem = Fonts.System or Fonts.UI or 0
 local FontBold = Fonts.SystemBold or FontSystem
@@ -1043,6 +1050,8 @@ function UI:Unload()
 end
 
 local function updateInput()
+    ProjectState.mouseScroll = mouseScroll
+    mouseScroll = 0
     local active = true
     if type(isrbxactive) == "function" then
         active = isrbxactive() == true
@@ -1530,6 +1539,9 @@ local function renderDropdown(click)
 
     local isHoveredDropdown = over(dd.x - 4, dd.y - 4, dd.w + 8, dd.h + 8)
     if isHoveredDropdown then
+        if ProjectState.mouseScroll ~= 0 then
+            dd.scrollOffset = clamp(dd.scrollOffset - ProjectState.mouseScroll, 0, max(0, #dd.choices - maxRows))
+        end
         if Input.down.click then
             dd.scrollOffset = min(#dd.choices - maxRows, dd.scrollOffset + 1)
         elseif Input.up.click then
@@ -1894,31 +1906,83 @@ local function renderTabs(click, px, py, pw)
         ProjectState.tabScrollToActive = false
     end
 
+    if Input.m1.released then
+        ProjectState.draggedTab = nil
+    end
+
+    for i = 1, count do
+        local tab = ProjectState.tabs[i]
+        local tx = contentX + tabW * (i - 1) - scrollX
+        tab.targetX = tx
+        if not tab.currentX then
+            tab.currentX = tx
+        end
+
+        local active = ProjectState.activeTab == tab
+        local hovered = over(tab.currentX, py, tabW, TAB_H)
+
+        if click and hovered and not ProjectState.draggedTab then
+            ProjectState.activeTab = tab
+            ProjectState.activeIndex = i
+            ProjectState.dropdown = nil
+            ProjectState.colorpicker = nil
+            ProjectState.focus = nil
+            ProjectState.draggedTab = tab
+            ProjectState.draggedTabOffset = ProjectState.mouseX - tab.currentX
+            click = false
+            ProjectState.tabScrollToActive = true
+        end
+
+        if ProjectState.draggedTab == tab then
+            local dragX = ProjectState.mouseX - ProjectState.draggedTabOffset
+            dragX = clamp(dragX, contentX - scrollX, contentX + totalW - tabW - scrollX)
+            tab.currentX = dragX
+
+            local idx = i
+            if idx > 1 then
+                local prevTab = ProjectState.tabs[idx - 1]
+                if tab.currentX + tabW / 2 < prevTab.currentX + tabW / 2 then
+                    ProjectState.tabs[idx], ProjectState.tabs[idx - 1] = ProjectState.tabs[idx - 1], ProjectState.tabs[idx]
+                    if ProjectState.activeIndex == idx then
+                        ProjectState.activeIndex = idx - 1
+                    elseif ProjectState.activeIndex == idx - 1 then
+                        ProjectState.activeIndex = idx
+                    end
+                end
+            end
+            if idx < count then
+                local nextTab = ProjectState.tabs[idx + 1]
+                if tab.currentX + tabW / 2 > nextTab.currentX + tabW / 2 then
+                    ProjectState.tabs[idx], ProjectState.tabs[idx + 1] = ProjectState.tabs[idx + 1], ProjectState.tabs[idx]
+                    if ProjectState.activeIndex == idx then
+                        ProjectState.activeIndex = idx + 1
+                    elseif ProjectState.activeIndex == idx + 1 then
+                        ProjectState.activeIndex = idx
+                    end
+                end
+            end
+        else
+            tab.currentX = smoothValue(tab.currentX, tx, 18)
+        end
+    end
+
     local targetPillX = nil
     local targetPillW = nil
 
     for i = 1, count do
         local tab = ProjectState.tabs[i]
-        local tx = contentX + tabW * (i - 1) - scrollX
+        local tx = tab.currentX
         local visible = tx + tabW >= contentX and tx <= contentX + contentW
         if visible then
             local active = ProjectState.activeTab == tab
+            local hovered = over(tx, py, tabW, TAB_H)
+            
             if active then
                 targetPillX = tx + 4
                 targetPillW = tabW - 8
                 txt(tab.name, tx + tabW / 2, centerY(py, TAB_H), Theme.text, 13, FontBold, 25, true, false, tabW - 12)
             else
-                local hovered = over(tx, py, tabW, TAB_H)
                 txt(tab.name, tx + tabW / 2, centerY(py, TAB_H), hovered and Theme.text or Theme.sub, 13, FontSystem, 25, true, false, tabW - 12)
-                if click and hovered then
-                    ProjectState.activeTab = tab
-                    ProjectState.activeIndex = i
-                    ProjectState.dropdown = nil
-                    ProjectState.colorpicker = nil
-                    ProjectState.focus = nil
-                    click = false
-                    ProjectState.tabScrollToActive = true
-                end
             end
         end
     end
@@ -2044,34 +2108,52 @@ local function draw9Dot(x, y, color, z, trans)
     end
 end
 
-local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBottom, click, held, rightClick)
-    local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
-    local z = 30
+local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBottom, click, held, rightClick, isPlaceholder, isFloating)
+    local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil or isFloating
+    local z = isFloating and 90 or 30
     
     local fade = ProjectState.contentFade or 1
-    local cardTrans = fade
+    local cardTrans = isFloating and (0.75 * fade) or fade
     
-    if sy + secH >= clipTop and sy <= clipBottom then
-        rect(colX, sy, colW, secH, Theme.surface2, z, 8, cardTrans)
-        strokeRect(colX, sy, colW, secH, Theme.border, z + 1, 8, cardTrans)
+    local cardClipTop = isFloating and (ProjectState.y + TITLE_H) or clipTop
+    local cardClipBottom = isFloating and (ProjectState.y + ProjectState.h - 24) or clipBottom
+
+    local renderY = max(sy, cardClipTop)
+    local renderH = min(sy + secH, cardClipBottom) - renderY
+
+    if renderH > 0 then
+        if isPlaceholder then
+            rect(colX, renderY, colW, renderH, Theme.surface, z, 8, 0.25 * cardTrans)
+            strokeRect(colX, renderY, colW, renderH, Theme.border, z + 1, 8, 0.4 * cardTrans)
+            return click, held, rightClick
+        end
+
+        rect(colX, renderY, colW, renderH, Theme.surface2, z, 8, cardTrans)
+        strokeRect(colX, renderY, colW, renderH, Theme.border, z + 1, 8, cardTrans)
         
-        txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, cardTrans)
-        
-        draw9Dot(colX + colW - 20, sy + 10, Theme.sub, z + 2, cardTrans)
-        
-        local handleHovered = over(colX + colW - 22, sy + 8, 14, 14)
-        if click and handleHovered and not popupBlocking then
-            ProjectState.draggedSection = section
-            ProjectState.dragOffset = {ProjectState.mouseX - colX, ProjectState.mouseY - sy}
-            click = false
+        if sy + 8 >= cardClipTop and sy + 22 <= cardClipBottom then
+            txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, cardTrans)
         end
         
-        local bottomHovered = over(colX, sy + secH - 4, colW, 8)
-        if click and bottomHovered and not popupBlocking then
-            ProjectState.resizeSection = section
-            ProjectState.resizeSectionStartH = secH
-            ProjectState.resizeSectionStartMouseY = ProjectState.mouseY
-            click = false
+        if sy + 10 >= cardClipTop and sy + 19 <= cardClipBottom then
+            draw9Dot(colX + colW - 20, sy + 10, Theme.sub, z + 2, cardTrans)
+        end
+        
+        if not isFloating then
+            local handleHovered = over(colX + colW - 22, sy + 8, 14, 14)
+            if click and handleHovered and not popupBlocking then
+                ProjectState.draggedSection = section
+                ProjectState.dragOffset = {ProjectState.mouseX - colX, ProjectState.mouseY - sy}
+                click = false
+            end
+            
+            local bottomHovered = over(colX, sy + secH - 4, colW, 8)
+            if click and bottomHovered and not popupBlocking then
+                ProjectState.resizeSection = section
+                ProjectState.resizeSectionStartH = secH
+                ProjectState.resizeSectionStartMouseY = ProjectState.mouseY
+                click = false
+            end
         end
         
         local rowY = sy + 28
@@ -2082,7 +2164,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             local item = section.items[ii]
             local itemH = getItemHeight(item)
             
-            if rowY >= clipTop and rowY + itemH <= clipBottom then
+            if rowY >= max(cardClipTop, sy + 26) and rowY + itemH <= min(cardClipBottom, sy + secH - 4) then
                 local disabled = isItemDisabled(item)
                 local trans = (disabled and 0.4 or 1) * cardTrans
                 
@@ -2095,9 +2177,11 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 120, trans)
                     
-                    click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
+                    if not isFloating then
+                        click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
+                    end
                     
-                    if item.tooltip then
+                    if item.tooltip and not isFloating then
                         local qHovered = over(rowX + rowW - 16, rowY + 6, 12, 12)
                         txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
                         if qHovered and not disabled then
@@ -2133,7 +2217,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     circle(sx + sw * frac, sy_bar + 2, 5, Theme.knob, z + 14, true, 0, 32, trans)
                     
-                    if item.tooltip then
+                    if item.tooltip and not isFloating then
                         local qHovered = over(rowX + rowW - 16, rowY + 2, 12, 12)
                         txt("?", rowX + rowW - 10, rowY + 2, qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
                         if qHovered and not disabled then
@@ -2167,7 +2251,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 14, false, false, dw - 28, trans)
                     drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
                     
-                    if item.tooltip then
+                    if item.tooltip and not isFloating then
                         local qHovered = over(rowX + rowW - 16, rowY + 2, 12, 12)
                         txt("?", rowX + rowW - 10, rowY + 2, qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
                         if qHovered and not disabled then
@@ -2218,11 +2302,11 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         local textW = textWidth(item.label, 11, FontSystem)
                         local lineW = max(4, (rowW - textW - 16) / 2)
                         local lineY = centerY(rowY, itemH)
-                        rect(rowX, lineY, lineW, 1, Theme.border, z + 12, 1)
-                        txt(item.label, rowX + lineW + 8, textTop(rowY, itemH, 11), Theme.sub, 11, FontSystem, z + 13, false, false, textW + 4)
-                        rect(rowX + lineW + textW + 16, lineY, lineW, 1, Theme.border, z + 12, 1)
+                        rect(rowX, lineY, lineW, 1, Theme.border, z + 12, 1, trans)
+                        txt(item.label, rowX + lineW + 8, textTop(rowY, itemH, 11), Theme.sub, 11, FontSystem, z + 13, false, false, textW + 4, trans)
+                        rect(rowX + lineW + textW + 16, lineY, lineW, 1, Theme.border, z + 12, 1, trans)
                     else
-                        rect(rowX, centerY(rowY, itemH), rowW, 1, Theme.border, z + 12, 1)
+                        rect(rowX, centerY(rowY, itemH), rowW, 1, Theme.border, z + 12, 1, trans)
                     end
                 end
             end
@@ -2288,6 +2372,9 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
 
     if tab.maxScroll > 0 and not popupBlocking and not ProjectState.focus then
+        if ProjectState.mouseScroll ~= 0 and over(px, contY, pw, contH) then
+            tab.targetScrollY = clamp(tab.targetScrollY - ProjectState.mouseScroll * 28, 0, tab.maxScroll)
+        end
         if Input.up.held then
             tab.targetScrollY = max(0, tab.targetScrollY - 12)
         end
@@ -2373,17 +2460,33 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
         section.lastRenderY = (section.side == "Right") and rightY or (section.side == "Full") and max(leftY, rightY) or leftY
 
         if section.side == "Full" then
-            local startY = max(leftY, rightY)
-            click, held, rightClick = renderSectionCard(section, px, startY, pw, secH, clipTop, clipBottom, click, held, rightClick)
-            leftY = startY + secH + 10
+            click, held, rightClick = renderSectionCard(section, px, max(leftY, rightY), pw, secH, clipTop, clipBottom, click, held, rightClick, dragSec == section, false)
+            leftY = max(leftY, rightY) + secH + 10
             rightY = leftY
         elseif section.side == "Right" then
-            click, held, rightClick = renderSectionCard(section, rightX, rightY, colW, secH, clipTop, clipBottom, click, held, rightClick)
+            click, held, rightClick = renderSectionCard(section, rightX, rightY, colW, secH, clipTop, clipBottom, click, held, rightClick, dragSec == section, false)
             rightY = rightY + secH + 10
         else
-            click, held, rightClick = renderSectionCard(section, leftX, leftY, colW, secH, clipTop, clipBottom, click, held, rightClick)
+            click, held, rightClick = renderSectionCard(section, leftX, leftY, colW, secH, clipTop, clipBottom, click, held, rightClick, dragSec == section, false)
             leftY = leftY + secH + 10
         end
+    end
+
+    if dragSec then
+        renderSectionCard(
+            dragSec,
+            ProjectState.mouseX - ProjectState.dragOffset[1],
+            ProjectState.mouseY - ProjectState.dragOffset[2],
+            (dragSec.side == "Full") and pw or colW,
+            dragSec.calculatedHeight,
+            clipTop,
+            clipBottom,
+            false,
+            false,
+            false,
+            false,
+            true
+        )
     end
 
     if tab.maxScroll > 0 then
@@ -2512,9 +2615,15 @@ local function renderWindow(click, held, rightClick)
         ProjectState.defaultH = newH
         clampWindow()
         x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
+    elseif held and ProjectState.drag then
+        ProjectState.x = ProjectState.mouseX - ProjectState.drag[1]
+        ProjectState.y = ProjectState.mouseY - ProjectState.drag[2]
+        clampWindow()
+        x, y = ProjectState.x, ProjectState.y
     elseif not held then
         ProjectState.resizeEdge = nil
         ProjectState.resizeStart = nil
+        ProjectState.drag = nil
     end
 
     txt("homesick", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
@@ -2605,6 +2714,8 @@ local function step()
         ProjectState.scrollDrag = nil
         ProjectState.resizeSection = nil
         ProjectState.draggedSection = nil
+        ProjectState.drag = nil
+        ProjectState.draggedTab = nil
     end
 
     local click = Input.m1.click
