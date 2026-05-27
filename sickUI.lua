@@ -1,7 +1,17 @@
 local sickUi = {}
 
 local function keyCodeToChar(keyCode, isShiftDown)
-    local name = keyCode.Name
+    local name
+    if type(keyCode) == "table" then
+        name = keyCode.Name
+    elseif type(keyCode) == "string" then
+        name = keyCode
+    else
+        return nil
+    end
+    if type(name) ~= "string" then
+        return nil
+    end
     if #name == 1 then
         if isShiftDown then
             return name:upper()
@@ -629,6 +639,9 @@ sickUi.createWindow = function(title, width, height)
                 end
                 
                 widget.key = function(wSelf, keyName, isShiftDown)
+                    if type(keyName) ~= "string" then
+                        return
+                    end
                     if keyName == "BackSpace" or keyName == "Backspace" then
                         wSelf.value = wSelf.value:sub(1, #wSelf.value - 1)
                     elseif keyName == "Return" or keyName == "Enter" then
@@ -639,7 +652,7 @@ sickUi.createWindow = function(title, width, height)
                     elseif keyName == "Escape" then
                         wSelf.focused = false
                     else
-                        local nameChar = keyCodeToChar({Name = keyName}, isShiftDown)
+                        local nameChar = keyCodeToChar(keyName, isShiftDown)
                         if nameChar then
                             wSelf.value = wSelf.value .. nameChar
                         end
