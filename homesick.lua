@@ -48,8 +48,8 @@ local mouseScroll = 0
 local uis = game:GetService("UserInputService")
 if uis then
     local function onInput(input, processed)
-        if input.UserInputType == Enum.UserInputType.MouseWheel then
-            mouseScroll = mouseScroll + input.Position.Z
+        if input and string.find(tostring(input.UserInputType), "MouseWheel") then
+            mouseScroll = mouseScroll + (input.Position and input.Position.Z or 0)
         end
     end
     if uis.InputChanged then
@@ -373,6 +373,11 @@ local function setOpen(open)
     ProjectState.colorpicker = nil
     ProjectState.focus = nil
     applyInputState(false)
+    if Mouse then
+        pcall(function()
+            Mouse.Icon = open and "http://www.roblox.com/asset/?id=417446600" or ""
+        end)
+    end
 end
 
 local function clampWindow()
@@ -1920,14 +1925,15 @@ local function renderTabs(click, px, py, pw)
 
     for i = 1, count do
         local tab = ProjectState.tabs[i]
-        local tx = contentX + tabW * (i - 1) - scrollX
-        tab.targetX = tx
+        local localTx = tabW * (i - 1) - scrollX
+        tab.targetX = localTx
         if not tab.currentX then
-            tab.currentX = tx
+            tab.currentX = localTx
         end
 
         local active = ProjectState.activeTab == tab
-        local hovered = over(tab.currentX, py, tabW, TAB_H)
+        local screenX = contentX + tab.currentX
+        local hovered = over(screenX, py, tabW, TAB_H)
 
         if click and hovered and not ProjectState.draggedTab then
             ProjectState.activeTab = tab
@@ -1936,20 +1942,20 @@ local function renderTabs(click, px, py, pw)
             ProjectState.colorpicker = nil
             ProjectState.focus = nil
             ProjectState.draggedTab = tab
-            ProjectState.draggedTabOffset = ProjectState.mouseX - tab.currentX
+            ProjectState.draggedTabOffset = ProjectState.mouseX - screenX
             click = false
             ProjectState.tabScrollToActive = true
         end
 
         if ProjectState.draggedTab == tab then
-            local dragX = ProjectState.mouseX - ProjectState.draggedTabOffset
-            dragX = clamp(dragX, contentX - scrollX, contentX + totalW - tabW - scrollX)
+            local dragX = ProjectState.mouseX - ProjectState.draggedTabOffset - contentX
+            dragX = clamp(dragX, -scrollX, totalW - tabW - scrollX)
             tab.currentX = dragX
 
             local idx = i
             if idx > 1 then
                 local prevTab = ProjectState.tabs[idx - 1]
-                if tab.currentX + tabW / 2 < prevTab.currentX + tabW / 2 then
+                if tab.currentX < prevTab.currentX then
                     ProjectState.tabs[idx], ProjectState.tabs[idx - 1] = ProjectState.tabs[idx - 1], ProjectState.tabs[idx]
                     if ProjectState.activeIndex == idx then
                         ProjectState.activeIndex = idx - 1
@@ -1960,7 +1966,7 @@ local function renderTabs(click, px, py, pw)
             end
             if idx < count then
                 local nextTab = ProjectState.tabs[idx + 1]
-                if tab.currentX + tabW / 2 > nextTab.currentX + tabW / 2 then
+                if tab.currentX > nextTab.currentX then
                     ProjectState.tabs[idx], ProjectState.tabs[idx + 1] = ProjectState.tabs[idx + 1], ProjectState.tabs[idx]
                     if ProjectState.activeIndex == idx then
                         ProjectState.activeIndex = idx + 1
@@ -1970,7 +1976,7 @@ local function renderTabs(click, px, py, pw)
                 end
             end
         else
-            tab.currentX = smoothValue(tab.currentX, tx, 18)
+            tab.currentX = smoothValue(tab.currentX, localTx, 18)
         end
     end
 
@@ -1979,7 +1985,7 @@ local function renderTabs(click, px, py, pw)
 
     for i = 1, count do
         local tab = ProjectState.tabs[i]
-        local tx = tab.currentX
+        local tx = contentX + tab.currentX
         local visible = tx + tabW >= contentX and tx <= contentX + contentW
         if visible then
             local active = ProjectState.activeTab == tab
@@ -2152,6 +2158,8 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             if click and handleHovered and not popupBlocking then
                 ProjectState.draggedSection = section
                 ProjectState.dragOffset = {ProjectState.mouseX - colX, ProjectState.mouseY - sy}
+                ProjectState.dragStartMouseX = ProjectState.mouseX
+                ProjectState.draggedSectionOriginalSide = section.side
                 click = false
             end
             
@@ -2439,13 +2447,17 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
                 end
             end
 
-            local mouseFrac = (ProjectState.mouseX - px) / pw
-            if mouseFrac < 0.35 then
-                dragSec.side = "Left"
-            elseif mouseFrac > 0.65 then
-                dragSec.side = "Right"
+            if abs(ProjectState.mouseX - ProjectState.dragStartMouseX) > 40 then
+                local mouseFrac = (ProjectState.mouseX - px) / pw
+                if mouseFrac < 0.35 then
+                    dragSec.side = "Left"
+                elseif mouseFrac > 0.65 then
+                    dragSec.side = "Right"
+                else
+                    dragSec.side = "Full"
+                end
             else
-                dragSec.side = "Full"
+                dragSec.side = ProjectState.draggedSectionOriginalSide
             end
         end
     else
@@ -2465,19 +2477,37 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     for i = 1, #sectionsToRender do
         local section = sectionsToRender[i]
         local secH = section.calculatedHeight
-        section.lastRenderY = (section.side == "Right") and rightY or (section.side == "Full") and max(leftY, rightY) or leftY
 
+        local targetX, targetY, targetW
         if section.side == "Full" then
-            click, held, rightClick = renderSectionCard(section, px, max(leftY, rightY), pw, secH, clipTop, clipBottom, click, held, rightClick, dragSec == section, false)
-            leftY = max(leftY, rightY) + secH + 10
+            targetX = px
+            targetY = max(leftY, rightY)
+            targetW = pw
+            leftY = targetY + secH + 10
             rightY = leftY
         elseif section.side == "Right" then
-            click, held, rightClick = renderSectionCard(section, rightX, rightY, colW, secH, clipTop, clipBottom, click, held, rightClick, dragSec == section, false)
+            targetX = rightX
+            targetY = rightY
+            targetW = colW
             rightY = rightY + secH + 10
         else
-            click, held, rightClick = renderSectionCard(section, leftX, leftY, colW, secH, clipTop, clipBottom, click, held, rightClick, dragSec == section, false)
+            targetX = leftX
+            targetY = leftY
+            targetW = colW
             leftY = leftY + secH + 10
         end
+
+        if not section.currentX then section.currentX = targetX end
+        if not section.currentY then section.currentY = targetY end
+        if not section.currentW then section.currentW = targetW end
+
+        section.currentX = smoothValue(section.currentX, targetX, 16)
+        section.currentY = smoothValue(section.currentY, targetY, 16)
+        section.currentW = smoothValue(section.currentW, targetW, 16)
+
+        section.lastRenderY = section.currentY
+
+        click, held, rightClick = renderSectionCard(section, section.currentX, section.currentY, section.currentW, secH, clipTop, clipBottom, click, held, rightClick, dragSec == section, false)
     end
 
     if dragSec then
