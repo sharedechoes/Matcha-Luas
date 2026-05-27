@@ -45,11 +45,19 @@ local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 
 local mouseScroll = 0
-game:GetService("UserInputService").InputChanged:Connect(function(input, processed)
-    if input.UserInputType == Enum.UserInputType.MouseWheel then
-        mouseScroll = mouseScroll + input.Position.Z
+local uis = game:GetService("UserInputService")
+if uis then
+    local function onInput(input, processed)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            mouseScroll = mouseScroll + input.Position.Z
+        end
     end
-end)
+    if uis.InputChanged then
+        uis.InputChanged:Connect(onInput)
+    elseif uis.InputBegan then
+        uis.InputBegan:Connect(onInput)
+    end
+end
 
 local Fonts = (type(Drawing) == "table" and Drawing.Fonts) or {}
 local FontSystem = Fonts.System or Fonts.UI or 0
