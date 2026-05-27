@@ -31,7 +31,7 @@ local function keyCodeToChar(keyCode, isShiftDown)
 end
 
 sickUi.createWindow = function(title, width, height)
-    print("creating window " .. tostring(title) .. " size " .. tostring(title))
+    print("creating window " .. tostring(title) .. " size " .. tostring(width) .. "x" .. tostring(height))
     print("window width " .. tostring(width) .. " height " .. tostring(height))
     
     local self = {
@@ -52,6 +52,31 @@ sickUi.createWindow = function(title, width, height)
     local mouse = player and player:GetMouse()
     local userInputService = game:GetService("UserInputService")
     local useInputBeganMouse = not (mouse and mouse.Button1Down)
+
+    local function getInputTypeName(input)
+        if not input then return nil end
+        local userType = input.UserInputType
+        if userType and type(userType.Name) == "string" then
+            return userType.Name
+        end
+        return nil
+    end
+
+    local function getKeyCodeName(input)
+        if not input or not input.KeyCode then return nil end
+        local keyCode = input.KeyCode
+        if type(keyCode.Name) == "string" then
+            return keyCode.Name
+        end
+        return nil
+    end
+
+    local function isShiftDown()
+        if userInputService and userInputService.IsKeyDown and Enum and Enum.KeyCode then
+            return userInputService:IsKeyDown(Enum.KeyCode.LeftShift) or userInputService:IsKeyDown(Enum.KeyCode.RightShift)
+        end
+        return false
+    end
 
     local function isPointInRect(px, py, rx, ry, rw, rh)
         return px >= rx and px <= rx + rw and py >= ry and py <= ry + rh
@@ -677,18 +702,21 @@ sickUi.createWindow = function(title, width, height)
         
         local tabX = x + 10
         local tabY = y + 30
+        local tabOffset = 0
         for i, tab in ipairs(self.tabs) do
+            local tabWidth = tab.drawings.button.TextBounds.X + 20
             local isActive = (i == self.activeTab)
             tab.drawings.bg.Visible = visible and isActive
-            if isActive and isActive == true then
-                tab.drawings.bg.Position = Vector2.new(tabX + (i-1) * 60 - 5, tabY - 2)
-                tab.drawings.bg.Size = Vector2.new(50, 18)
+            if isActive then
+                tab.drawings.bg.Position = Vector2.new(tabX + tabOffset - 5, tabY - 2)
+                tab.drawings.bg.Size = Vector2.new(tabWidth + 10, 18)
                 tab.drawings.button.Color = Color3.fromRGB(191, 155, 95)
             else
                 tab.drawings.button.Color = Color3.fromRGB(140, 130, 120)
             end
-            tab.drawings.button.Position = Vector2.new(tabX + (i-1) * 60 + 20, tabY)
+            tab.drawings.button.Position = Vector2.new(tabX + tabOffset + tabWidth / 2, tabY)
             tab.drawings.button.Visible = visible
+            tabOffset = tabOffset + tabWidth + 10
         end
         
         local contentY = y + 55
@@ -731,7 +759,10 @@ sickUi.createWindow = function(title, width, height)
     end
 
     self.inputBeganConnection = userInputService.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.P then
+        local inputTypeName = getInputTypeName(input)
+        local keyName = getKeyCodeName(input)
+
+        if inputTypeName == "Keyboard" and keyName == "P" then
             self.visible = not self.visible
             self:render()
             return
@@ -739,22 +770,19 @@ sickUi.createWindow = function(title, width, height)
 
         if not self.visible then return end
 
-        if input.UserInputType == Enum.UserInputType.Keyboard then
+        if inputTypeName == "Keyboard" then
             local activeTabObj = self.tabs[self.activeTab]
             if activeTabObj and activeTabObj.sections then
                 for _, sec in ipairs(activeTabObj.sections) do
                     for _, widget in ipairs(sec.widgets) do
-                        if widget.type == "InputText" and widget.focused then
-                            local shift = userInputService:IsKeyDown(Enum.KeyCode.LeftShift) or userInputService:IsKeyDown(Enum.KeyCode.RightShift)
-                            if shift or not shift then
-                                widget:key(input.KeyCode.Name, shift)
-                                self:render()
-                            end
+                        if widget.type == "InputText" and widget.focused and keyName then
+                            widget:key(keyName, isShiftDown())
+                            self:render()
                         end
                     end
                 end
             end
-        elseif useInputBeganMouse and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        elseif useInputBeganMouse and inputTypeName == "MouseButton1" then
             local mouseX = mouse and mouse.X or game:GetService("Players").LocalPlayer:GetMouse().X
             local mouseY = mouse and mouse.Y or game:GetService("Players").LocalPlayer:GetMouse().Y
             handleMouseClick(mouseX, mouseY)
@@ -778,7 +806,7 @@ sickUi.createWindow = function(title, width, height)
     end
 
     self.inputEndedConnection = userInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if getInputTypeName(input) == "MouseButton1" then
             self.dragging = false
         end
     end)
