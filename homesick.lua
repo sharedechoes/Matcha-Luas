@@ -656,7 +656,7 @@ local function snapValue(raw, item)
         step = 1
     end
     local steps = floor(((raw - minValue) / step) + 0.5 + 0.0001)
-    return clamp(minValue + steps * step, minValue, maxValue)
+    return floor(clamp(minValue + steps * step, minValue, maxValue) + 0.5)
 end
 
 local function setDropdownValue(item, value, fire)
@@ -1755,13 +1755,12 @@ local function renderColorpicker(click, held)
     local palX, palY = x + 10, y + 28
     local palW, palH = 160, 160
 
-    for gx = palX, palX + palW - 1, 6 do
+    rect(palX, palY, palW, palH, Theme.surface, 112, 8)
+    for gx = palX + 3, palX + palW - 4, 6 do
         local sx = clamp((gx - palX) / palW, 0, 1)
-        local blockW = min(6, palX + palW - gx)
-        for gy = palY, palY + palH - 1, 6 do
+        for gy = palY + 3, palY + palH - 4, 6 do
             local sy = 1 - clamp((gy - palY) / palH, 0, 1)
-            local blockH = min(6, palY + palH - gy)
-            rect(gx, gy, blockW, blockH, HSV(cp.hue, sx, sy), 113, 0)
+            rect(gx, gy, min(6, palX + palW - 3 - gx), min(6, palY + palH - 3 - gy), HSV(cp.hue, sx, sy), 113, 0)
         end
     end
 
@@ -1774,8 +1773,9 @@ local function renderColorpicker(click, held)
 
     local hueX, hueY = x + 178, y + 28
     local hueW, hueH = 12, 160
-    for gy = hueY, hueY + hueH - 1, 4 do
-        rect(hueX, gy, hueW, 4, HSV((gy - hueY) / hueH, 1, 1), 113, 0)
+    rect(hueX, hueY, hueW, hueH, Theme.surface, 112, 6)
+    for gy = hueY + 2, hueY + hueH - 3, 4 do
+        rect(hueX + 2, gy, hueW - 4, min(4, hueY + hueH - 2 - gy), HSV((gy - hueY) / hueH, 1, 1), 113, 0)
     end
 
     if held and over(hueX, hueY, hueW, hueH) then
@@ -1786,19 +1786,20 @@ local function renderColorpicker(click, held)
 
     local alphaX, alphaY = x + 198, y + 28
     local alphaW, alphaH = 12, 160
-    for gy = alphaY, alphaY + alphaH - 1, 6 do
-        local blockH = min(6, alphaY + alphaH - gy)
-        rect(alphaX, gy, 6, blockH, (floor((gy - alphaY) / 6) % 2 == 0) and Theme.white or C3(200, 200, 200), 113, 0)
-        rect(alphaX + 6, gy, 6, blockH, (floor((gy - alphaY) / 6) % 2 == 0) and C3(200, 200, 200) or Theme.white, 113, 0)
+    rect(alphaX, alphaY, alphaW, alphaH, Theme.surface, 112, 6)
+    for gy = alphaY + 2, alphaY + alphaH - 3, 6 do
+        local blockH = min(6, alphaY + alphaH - 2 - gy)
+        rect(alphaX + 2, gy, 4, blockH, (floor((gy - alphaY) / 6) % 2 == 0) and Theme.white or C3(200, 200, 200), 113, 0)
+        rect(alphaX + 6, gy, 4, blockH, (floor((gy - alphaY) / 6) % 2 == 0) and C3(200, 200, 200) or Theme.white, 113, 0)
     end
 
-    for gy = alphaY, alphaY + alphaH - 1, 4 do
-        rect(alphaX, gy, alphaW, 4, cp.value, 114, 0, 1 - ((gy - alphaY) / alphaH))
+    for gy = alphaY + 2, alphaY + alphaH - 3, 4 do
+        rect(alphaX + 2, gy, alphaW - 4, min(4, alphaY + alphaH - 2 - gy), cp.value, 114, 0, 1 - ((gy - alphaY) / alphaH))
     end
 
-    strokeRect(palX, palY, palW, palH, Theme.border, 114, 4)
-    strokeRect(hueX, hueY, hueW, hueH, Theme.border, 114, 4)
-    strokeRect(alphaX, alphaY, alphaW, alphaH, Theme.border, 115, 4)
+    strokeRect(palX, palY, palW, palH, Theme.border, 115, 8)
+    strokeRect(hueX, hueY, hueW, hueH, Theme.border, 115, 6)
+    strokeRect(alphaX, alphaY, alphaW, alphaH, Theme.border, 115, 6)
 
     if held and over(alphaX, alphaY, alphaW, alphaH) then
         cp.alpha = 1 - clamp((ProjectState.mouseY - alphaY) / alphaH, 0, 1)
@@ -2326,34 +2327,22 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     end
                     
                 elseif item.type == "toggle" then
-                    local tgExtra = 48
+                    rect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
+                    strokeRect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
+                    
+                    local tgExtra = 6
                     if item.colorpicker then tgExtra = tgExtra + 20 end
                     if item.keybind then tgExtra = tgExtra + 64 end
                     if item.tooltip then tgExtra = tgExtra + 18 end
-                    txt(item.label, rowX + 4, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 4 - tgExtra, trans)
-                    
-                    if item.animT == nil then
-                        item.animT = item.value and 1 or 0
-                    end
-                    local targetT = item.value and 1 or 0
-                    if item.animT ~= targetT then
-                        item.animT = smoothValue(item.animT, targetT, 24)
-                        if abs(item.animT - targetT) < 0.001 then
-                            item.animT = targetT
-                        end
-                    end
-                    
-                    local tx, ty = rowX + rowW - 42, rowY + 6
-                    rect(tx, ty, 30, 16, lerpColor(Theme.toggleOff, Theme.toggleOn, item.animT), z + 12, 8, trans)
-                    circle(tx + 6 + 18 * item.animT, ty + 8, 6, Theme.knob, z + 14, true, 0, 32, trans)
+                    txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - tgExtra, trans)
                     
                     if not isFloating then
                         click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
                     end
                     
                     if item.tooltip and not isFloating then
-                        local qHovered = over(rowX + rowW - 60, rowY + 6, 12, 12)
-                        txt("?", rowX + rowW - 54, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
+                        local qHovered = over(rowX + rowW - 16, rowY + 6, 12, 12)
+                        txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
                         if qHovered and not disabled then
                             tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
                         end
@@ -2362,7 +2351,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled then
                         local onKeybind = item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)
                         local onColor = item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)
-                        local onQ = item.tooltip and over(rowX + rowW - 60, rowY + 6, 12, 12)
+                        local onQ = item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)
                         local on9Dot = over(colX + colW - 22, sy + 8, 14, 14)
                         if not onKeybind and not onColor and not onQ and not on9Dot then
                             setItemValue(item, not item.value, true)
@@ -2536,7 +2525,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
 
     if tab.maxScroll > 0 and not popupBlocking and not ProjectState.focus then
-        if ProjectState.mouseScroll ~= 0 and over(px, contY, pw, contH) then
+        if ProjectState.mouseScroll ~= 0 and over(ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h) then
             tab.targetScrollY = clamp(tab.targetScrollY - ProjectState.mouseScroll * 28, 0, tab.maxScroll)
         end
         if Input.up.held then
@@ -2679,11 +2668,12 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
         local trackH = contH - CONTENT_PAD * 2 - 12
         local barH = max(22, (trackH / max(contentH, trackH)) * trackH)
         local barY = contY + CONTENT_PAD + 6 + (tab.scrollY / max(1, tab.maxScroll)) * (trackH - barH)
-        rect(px + pw - 6, contY + CONTENT_PAD + 6, 3, trackH, Theme.surface3, 50, 2)
-        rect(px + pw - 6, barY, 3, barH, Theme.accent, 51, 2)
-        if click and over(px + pw - 11, contY + CONTENT_PAD + 6, 12, trackH) and not popupBlocking then
+        local scrollBarX = ProjectState.x + ProjectState.w - 12
+        rect(scrollBarX, contY + CONTENT_PAD + 6, 3, trackH, Theme.surface3, 50, 2)
+        rect(scrollBarX, barY, 3, barH, Theme.accent, 51, 2)
+        if click and over(scrollBarX - 5, contY + CONTENT_PAD + 6, 14, trackH) and not popupBlocking then
             local grab = barH / 2
-            if over(px + pw - 11, barY, 12, barH) then
+            if over(scrollBarX - 5, barY, 14, barH) then
                 grab = clamp(ProjectState.mouseY - barY, 0, barH)
             end
             ProjectState.scrollDrag = {
@@ -2818,7 +2808,7 @@ local function renderWindow(click, held, rightClick)
     txt(ProjectState.title or "homesick", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
     if ProjectState.badgeText and ProjectState.badgeText ~= "" then
         local badgeW = textWidth(ProjectState.badgeText, 10, FontBold) + 12
-        local badgeX = x + 14 + textWidth(ProjectState.title or "homesick", 14, FontBold) + 8
+        local badgeX = x + 14 + textWidth(ProjectState.title or "homesick", 14, FontBold) + 4
         local badgeY = textTop(y, TITLE_H, 14) - 1
         rect(badgeX, badgeY, badgeW, 16, C3(38, 34, 32), 15, 6)
         strokeRect(badgeX, badgeY, badgeW, 16, Theme.accent, 16, 6)
@@ -2826,7 +2816,7 @@ local function renderWindow(click, held, rightClick)
     end
 
     local userStr = LocalPlayer and LocalPlayer.Name or "NaN"
-    txt(userStr, x + w - 14 - textWidth(userStr, 13, FontUI), textTop(y, TITLE_H, 13), Theme.text, 13, FontUI, 16)
+    txt(userStr, x + w - 14 - textWidth(userStr, 13, FontUI), textTop(y, TITLE_H, 13), Theme.accent, 13, FontUI, 16)
 
     if ProjectState.minimized or h <= MINIMIZED_H then
         return click, held, rightClick
@@ -3136,7 +3126,7 @@ homesick.createWindow = function(title, width, height)
                 local widgetWrap = {
                     id = id,
                     type = "Slider",
-                    rawItem = sSelf.rawSec:Slider(label, default, (max - min) / 100, min, max, "", callback)
+                    rawItem = sSelf.rawSec:Slider(label, default, 1, min, max, "", callback)
                 }
                 
                 widgetWrap.addTooltip = function(wSelf, text)
