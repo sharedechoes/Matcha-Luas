@@ -77,7 +77,7 @@ local FontUI = Fonts.UI or FontSystem
 local FontWidths = {}
 FontWidths[FontSystem] = 0.52
 FontWidths[FontBold] = 0.56
-FontWidths[FontUI] = 0.48
+FontWidths[FontUI] = 0.54
 
 local DRAW_VISIBLE = 1
 local FRAME_WAIT = 1 / 240
@@ -1770,11 +1770,11 @@ local function renderColorpicker(click, held)
     local palW, palH = 160, 160
 
     rect(palX, palY, palW, palH, Theme.surface, 112, 8)
-    for gx = palX + 3, palX + palW - 4, 6 do
+    for gx = palX + 3, palX + palW - 4, 3 do
         local sx = clamp((gx - palX) / palW, 0, 1)
-        for gy = palY + 3, palY + palH - 4, 6 do
+        for gy = palY + 3, palY + palH - 4, 3 do
             local sy = 1 - clamp((gy - palY) / palH, 0, 1)
-            rect(gx, gy, min(6, palX + palW - 3 - gx), min(6, palY + palH - 3 - gy), HSV(cp.hue, sx, sy), 113, 0)
+            rect(gx, gy, min(3, palX + palW - 3 - gx), min(3, palY + palH - 3 - gy), HSV(cp.hue, sx, sy), 113, 0)
         end
     end
 
@@ -2381,12 +2381,13 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     local valBoxY = rowY + 1
                     local hoveredVal = over(valBoxX, valBoxY, boxW, 16) and not popupBlocking and not disabled
                     
-                    rect(valBoxX, valBoxY, boxW, 16, Theme.surface, z + 12, 4, trans)
-                    strokeRect(valBoxX, valBoxY, boxW, 16, isFocusedSlider and Theme.accent or (hoveredVal and Theme.accent or Theme.border), z + 13, 4, trans)
-                    txt(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), valBoxX + boxW / 2, valBoxY + 8, Theme.text, 12, FontUI, z + 14, true, false, boxW - 4, trans)
-
                     if isFocusedSlider then
-                        txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, FontUI) / 2, valBoxY + 8, Theme.text, 12, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+                        rect(valBoxX, valBoxY, boxW, 16, Theme.surface, z + 12, 4, trans)
+                        strokeRect(valBoxX, valBoxY, boxW, 16, Theme.accent, z + 13, 4, trans)
+                    end
+                    txt(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), valBoxX + boxW / 2, rowY + 2, Theme.text, 12, FontUI, z + 14, true, false, boxW - 4, trans)
+                    if isFocusedSlider then
+                        txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, FontUI) / 2, rowY + 2, Theme.text, 12, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
                     end
 
                     if click and hoveredVal then
@@ -2459,7 +2460,31 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     rect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 12, 6, trans * (0.1 + 0.15 * item._hoverFactor))
                     strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 13, 6, trans * (0.4 + 0.6 * item._hoverFactor))
                     
-                    line((rowX + rowW / 2) - (((rowW - 8) * item._hoverFactor) / 2), controlY + itemH - 4, (rowX + rowW / 2) + (((rowW - 8) * item._hoverFactor) / 2), controlY + itemH - 4, Theme.accent, z + 15, 1.5, trans * item._hoverFactor)
+                    local leftX = (rowX + rowW / 2) - (((rowW - 8) * item._hoverFactor) / 2)
+                    local rightX = (rowX + rowW / 2) + (((rowW - 8) * item._hoverFactor) / 2)
+                    line(math.max(leftX, rowX + 10), controlY + itemH - 4, math.min(rightX, rowX + rowW - 10), controlY + itemH - 4, Theme.accent, z + 15, 1.5, trans * item._hoverFactor)
+                    if leftX < rowX + 10 then
+                        local prevX, prevY = rowX + 10, controlY + itemH - 4
+                        for dist = 2, (rowX + 10) - leftX + 1.9, 2 do
+                            local theta = 1.570796 + math.min(dist, (rowX + 10) - leftX) / 6
+                            if theta > 3.141592 then theta = 3.141592 end
+                            local curX = rowX + 10 + 6 * math.cos(theta)
+                            local curY = controlY + itemH - 10 + 6 * math.sin(theta)
+                            line(prevX, prevY, curX, curY, Theme.accent, z + 15, 1.5, trans * item._hoverFactor)
+                            prevX, prevY = curX, curY
+                        end
+                    end
+                    if rightX > rowX + rowW - 10 then
+                        local prevX, prevY = rowX + rowW - 10, controlY + itemH - 4
+                        for dist = 2, rightX - (rowX + rowW - 10) + 1.9, 2 do
+                            local theta = 1.570796 - math.min(dist, rightX - (rowX + rowW - 10)) / 6
+                            if theta < 0 then theta = 0 end
+                            local curX = rowX + rowW - 10 + 6 * math.cos(theta)
+                            local curY = controlY + itemH - 10 + 6 * math.sin(theta)
+                            line(prevX, prevY, curX, curY, Theme.accent, z + 15, 1.5, trans * item._hoverFactor)
+                            prevX, prevY = curX, curY
+                        end
+                    end
                     
                     txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), Theme.accent, 13, FontBold, z + 14, true, false, rowW - 24, trans)
                     
