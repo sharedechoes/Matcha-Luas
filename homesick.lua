@@ -54,14 +54,14 @@ if uis then
     end)
     pcall(function()
         uis.InputChanged:Connect(function(input)
-            if input and (input.UserInputType == Enum.UserInputType.MouseWheel or string.find(tostring(input.UserInputType), "MouseWheel")) then
+            if input and string.find(tostring(input.UserInputType), "MouseWheel") then
                 mouseScroll = mouseScroll + (input.Position and input.Position.Z or 0)
             end
         end)
     end)
     pcall(function()
         uis.InputBegan:Connect(function(input)
-            if input and (input.UserInputType == Enum.UserInputType.MouseWheel or string.find(tostring(input.UserInputType), "MouseWheel")) then
+            if input and string.find(tostring(input.UserInputType), "MouseWheel") then
                 mouseScroll = mouseScroll + (input.Position and input.Position.Z or 0)
             end
         end)
@@ -1084,6 +1084,23 @@ local function finalDestroy()
         stepConnection = nil
     end
 
+    if ProjectState.zoomLocked and LocalPlayer then
+        pcall(function()
+            LocalPlayer.CameraMinZoomDistance = ProjectState.origMinZoom or 0.5
+            LocalPlayer.CameraMaxZoomDistance = ProjectState.origMaxZoom or 400
+        end)
+    end
+
+    if ProjectState.cpPaletteSquares then
+        for i = 1, #ProjectState.cpPaletteSquares do
+            pcall(function()
+                ProjectState.cpPaletteSquares[i].obj.Visible = false
+                ProjectState.cpPaletteSquares[i].obj:Remove()
+            end)
+        end
+        ProjectState.cpPaletteSquares = nil
+    end
+
     setrobloxinput(true)
     ProjectState.inputState = true
 
@@ -1770,12 +1787,41 @@ local function renderColorpicker(click, held)
     local palW, palH = 160, 160
 
     rect(palX, palY, palW, palH, Theme.surface, 112, 8)
-    for gx = palX + 3, palX + palW - 4, 3 do
-        local sx = clamp((gx - palX) / palW, 0, 1)
-        for gy = palY + 3, palY + palH - 4, 3 do
-            local sy = 1 - clamp((gy - palY) / palH, 0, 1)
-            rect(gx, gy, min(3, palX + palW - 3 - gx), min(3, palY + palH - 3 - gy), HSV(cp.hue, sx, sy), 113, 0)
+    local cpSquares = ProjectState.cpPaletteSquares
+    if not cpSquares then
+        cpSquares = {}
+        ProjectState.cpPaletteSquares = cpSquares
+    end
+    local hueChanged = (ProjectState.cpLastHue ~= cp.hue)
+    ProjectState.cpLastHue = cp.hue
+    if #cpSquares == 0 then
+        for gx = 3, palW - 4, 4 do
+            for gy = 3, palH - 4, 4 do
+                local sq = DrawingNew("Square")
+                sq.Size = V2(math.min(4, palW - 3 - gx), math.min(4, palH - 3 - gy))
+                sq.Filled = true
+                sq.Corner = 0
+                sq.ZIndex = 113
+                sq.Transparency = 1
+                sq.Visible = false
+                cpSquares[#cpSquares + 1] = {
+                    obj = sq,
+                    relX = gx,
+                    relY = gy,
+                    sx = clamp(gx / palW, 0, 1),
+                    sy = 1 - clamp(gy / palH, 0, 1)
+                }
+            end
         end
+    end
+    for i = 1, #cpSquares do
+        local cell = cpSquares[i]
+        cell.obj.Position = V2(palX + cell.relX, palY + cell.relY)
+        if hueChanged or not cell.initialized then
+            cell.obj.Color = HSV(cp.hue, cell.sx, cell.sy)
+            cell.initialized = true
+        end
+        cell.obj.Visible = true
     end
 
     if held and over(palX, palY, palW, palH) then
@@ -2321,7 +2367,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     if item.tooltip and not isFloating then
                         local qHovered = over(rowX + rowW - 16, rowY + 6, 12, 12)
-                        txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
+                        txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
                         if qHovered and not disabled then
                             tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
                         end
@@ -2354,7 +2400,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     if item.tooltip and not isFloating then
                         local qHovered = over(rowX + rowW - 16, rowY + 6, 12, 12)
-                        txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
+                        txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
                         if qHovered and not disabled then
                             tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
                         end
@@ -2385,9 +2431,9 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         rect(valBoxX, valBoxY, boxW, 16, Theme.surface, z + 12, 4, trans)
                         strokeRect(valBoxX, valBoxY, boxW, 16, Theme.accent, z + 13, 4, trans)
                     end
-                    txt(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), valBoxX + boxW / 2, rowY + 2, Theme.text, 12, FontUI, z + 14, true, false, boxW - 4, trans)
+                    txt(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), valBoxX + boxW / 2, rowY + 9, Theme.text, 12, FontUI, z + 14, true, false, boxW - 4, trans)
                     if isFocusedSlider then
-                        txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, FontUI) / 2, rowY + 2, Theme.text, 12, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+                        txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, FontUI) / 2, rowY + 9, Theme.text, 12, FontUI, z + 15, true, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
                     end
 
                     if click and hoveredVal then
@@ -2442,7 +2488,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     if item.tooltip and not isFloating then
                         local qHovered = over(rowX + rowW - 16, rowY + 2, 12, 12)
-                        txt("?", rowX + rowW - 10, rowY + 2, qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
+                        txt("?", rowX + rowW - 10, rowY + 2, qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
                         if qHovered and not disabled then
                             tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
                         end
@@ -2459,32 +2505,6 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     rect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 12, 6, trans * (0.1 + 0.15 * item._hoverFactor))
                     strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 13, 6, trans * (0.4 + 0.6 * item._hoverFactor))
-                    
-                    local leftX = (rowX + rowW / 2) - (((rowW - 8) * item._hoverFactor) / 2)
-                    local rightX = (rowX + rowW / 2) + (((rowW - 8) * item._hoverFactor) / 2)
-                    line(math.max(leftX, rowX + 10), controlY + itemH - 4, math.min(rightX, rowX + rowW - 10), controlY + itemH - 4, Theme.accent, z + 15, 1.5, trans * item._hoverFactor)
-                    if leftX < rowX + 10 then
-                        local prevX, prevY = rowX + 10, controlY + itemH - 4
-                        for dist = 2, (rowX + 10) - leftX + 1.9, 2 do
-                            local theta = 1.570796 + math.min(dist, (rowX + 10) - leftX) / 6
-                            if theta > 3.141592 then theta = 3.141592 end
-                            local curX = rowX + 10 + 6 * math.cos(theta)
-                            local curY = controlY + itemH - 10 + 6 * math.sin(theta)
-                            line(prevX, prevY, curX, curY, Theme.accent, z + 15, 1.5, trans * item._hoverFactor)
-                            prevX, prevY = curX, curY
-                        end
-                    end
-                    if rightX > rowX + rowW - 10 then
-                        local prevX, prevY = rowX + rowW - 10, controlY + itemH - 4
-                        for dist = 2, rightX - (rowX + rowW - 10) + 1.9, 2 do
-                            local theta = 1.570796 - math.min(dist, rightX - (rowX + rowW - 10)) / 6
-                            if theta < 0 then theta = 0 end
-                            local curX = rowX + rowW - 10 + 6 * math.cos(theta)
-                            local curY = controlY + itemH - 10 + 6 * math.sin(theta)
-                            line(prevX, prevY, curX, curY, Theme.accent, z + 15, 1.5, trans * item._hoverFactor)
-                            prevX, prevY = curX, curY
-                        end
-                    end
                     
                     txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), Theme.accent, 13, FontBold, z + 14, true, false, rowW - 24, trans)
                     
@@ -2930,8 +2950,40 @@ end
 
 local function step()
     local prevFocus = ProjectState.focus
+    local zoomLocked = ProjectState.zoomLocked
+    if ProjectState.open then
+        if not zoomLocked and LocalPlayer then
+            ProjectState.origMinZoom = LocalPlayer.CameraMinZoomDistance
+            ProjectState.origMaxZoom = LocalPlayer.CameraMaxZoomDistance
+            ProjectState.zoomLocked = true
+        end
+        if LocalPlayer then
+            local currentZoom = 10
+            pcall(function()
+                local head = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head")
+                if head then
+                    currentZoom = (Workspace.CurrentCamera.CFrame.p - head.Position).Magnitude
+                end
+            end)
+            LocalPlayer.CameraMinZoomDistance = currentZoom
+            LocalPlayer.CameraMaxZoomDistance = currentZoom
+        end
+    else
+        if zoomLocked and LocalPlayer then
+            pcall(function()
+                LocalPlayer.CameraMinZoomDistance = ProjectState.origMinZoom or 0.5
+                LocalPlayer.CameraMaxZoomDistance = ProjectState.origMaxZoom or 400
+            end)
+            ProjectState.zoomLocked = nil
+        end
+    end
     resetPool()
     ProjectState.tooltipText = nil
+    if (not ProjectState.open or not ProjectState.colorpicker) and ProjectState.cpPaletteSquares then
+        for i = 1, #ProjectState.cpPaletteSquares do
+            ProjectState.cpPaletteSquares[i].obj.Visible = false
+        end
+    end
 
     local now = clock()
     local dt = now - ProjectState.lastFrame
