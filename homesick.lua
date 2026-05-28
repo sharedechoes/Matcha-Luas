@@ -2223,17 +2223,17 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, cardTrans)
         end
         
-        if sy + 10 >= cardClipTop and sy + 19 <= cardClipBottom then
+        if sy + 10 >= cardClipTop and sy + 20 <= cardClipBottom then
             draw9Dot(colX + colW - 20, sy + 10, section.locked and C3(80, 75, 73) or Theme.sub, z + 2, cardTrans)
-            rect(colX + colW - 36, sy + 10, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, cardTrans)
+            rect(colX + colW - 36, sy + 11, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, cardTrans)
             if section.locked then
-                line(colX + colW - 34, sy + 7, colX + colW - 34, sy + 10, Theme.accent, z + 2, 1, cardTrans)
-                line(colX + colW - 31, sy + 7, colX + colW - 31, sy + 10, Theme.accent, z + 2, 1, cardTrans)
-                line(colX + colW - 34, sy + 7, colX + colW - 31, sy + 7, Theme.accent, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.accent, z + 2, 1, cardTrans)
+                line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 11, Theme.accent, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.accent, z + 2, 1, cardTrans)
             else
-                line(colX + colW - 34, sy + 7, colX + colW - 34, sy + 10, Theme.sub, z + 2, 1, cardTrans)
-                line(colX + colW - 31, sy + 7, colX + colW - 31, sy + 8, Theme.sub, z + 2, 1, cardTrans)
-                line(colX + colW - 34, sy + 7, colX + colW - 31, sy + 7, Theme.sub, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.sub, z + 2, 1, cardTrans)
+                line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 9, Theme.sub, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.sub, z + 2, 1, cardTrans)
             end
         end
         
@@ -2748,12 +2748,17 @@ local function renderWindow(click, held, rightClick)
         ProjectState.drag = nil
     end
 
-    txt("example UI", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
-    rect(x + 158, textTop(y, TITLE_H, 14) - 1, 30, 16, C3(38, 34, 32), 15, 6)
-    strokeRect(x + 158, textTop(y, TITLE_H, 14) - 1, 30, 16, Theme.accent, 16, 6)
-    txt("homesick", x + 173, textTop(y, TITLE_H, 14) + 7, Theme.accent, 10, FontBold, 17, true)
+    txt(ProjectState.title or "homesick", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
+    if ProjectState.badgeText and ProjectState.badgeText ~= "" then
+        local badgeW = textWidth(ProjectState.badgeText, 10, FontBold) + 12
+        local badgeX = x + 14 + textWidth(ProjectState.title or "dev", 14, FontBold) + 8
+        local badgeY = textTop(y, TITLE_H, 14) - 1
+        rect(badgeX, badgeY, badgeW, 16, C3(38, 34, 32), 15, 6)
+        strokeRect(badgeX, badgeY, badgeW, 16, Theme.accent, 16, 6)
+        txt(ProjectState.badgeText, badgeX + badgeW / 2, badgeY + 8, Theme.accent, 10, FontBold, 17, true)
+    end
 
-    local userStr = LocalPlayer and LocalPlayer.Name or "kiyomi"
+    local userStr = LocalPlayer and LocalPlayer.Name or "NaN"
     txt(userStr, x + w - 14 - textWidth(userStr, 13, FontUI), textTop(y, TITLE_H, 13), Theme.text, 13, FontUI, 16)
 
     if ProjectState.minimized or h <= MINIMIZED_H then
@@ -2992,6 +2997,11 @@ homesick.createWindow = function(title, width, height)
     UI:Center()
     
     local windowWrap = {}
+    
+    windowWrap.setBadge = function(wSelf, text)
+        ProjectState.badgeText = text
+        return wSelf
+    end
     
     windowWrap.addTab = function(wSelf, tabName)
         local tabWrap = {
