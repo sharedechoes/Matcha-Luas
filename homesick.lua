@@ -648,6 +648,10 @@ local function drawChevronDown(x, y, color, z)
     triangle(V2(x, y), V2(x + 8, y), V2(x + 4, y + 5), color, z, true)
 end
 
+local function drawChevronUp(x, y, color, z)
+    triangle(V2(x, y + 5), V2(x + 8, y + 5), V2(x + 4, y), color, z, true)
+end
+
 local function snapValue(raw, item)
     local minValue = item.min or 0
     local maxValue = item.max or 100
@@ -1600,8 +1604,8 @@ local function renderDropdown(click)
     end
     dd.scrollOffset = clamp(dd.scrollOffset, 0, max(0, #dd.choices - maxRows))
 
-    rect(dd.x - 1, dd.y - 1, dd.w + 2, dd.h + 2, Theme.border, 110, 6)
-    rect(dd.x, dd.y, dd.w, dd.h, Theme.surface, 111, 6)
+    rect(dd.x - 1, dd.y - 1, dd.w + 2, dd.h + 2, Theme.border, 110, 4)
+    rect(dd.x, dd.y, dd.w, dd.h, Theme.surface, 111, 4)
 
     if isMulti then
         local btnW = (dd.w - 12) / 2
@@ -1682,7 +1686,12 @@ local function renderDropdown(click)
         if hovered then
             rect(dd.x + 2, rowY, dd.w - 4, 22, Theme.surface2, 112, 3)
         end
-        txt(tostring(choice), dd.x + 8, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontUI, 113, false, false, dd.w - 24)
+        local textX = dd.x + 10
+        if selected then
+            textX = dd.x + 20
+            rect(dd.x + 10, rowY + 5, 2, 12, Theme.accent, 114)
+        end
+        txt(tostring(choice), textX, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontUI, 113, false, false, dd.w - 24)
 
         if click and hovered then
             if dd.kind == "keymode" then
@@ -2056,77 +2065,74 @@ local function renderTabs(click, px, py, pw)
 end
 
 local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
+    local currentX = rowX + rowW - 4
+    
+    if item.tooltip then
+        currentX = currentX - 18
+    end
+
     if item.keybind then
-        local keybind = item.keybind
-        local keyText = keybind.listening and "..." or (keybind.value and string.upper(keybind.value) or "-")
-        local keyW = 46
-        local keyX = rowX + rowW - 96
-        local keyY = rowY + 3
-        local keyH = 20
-        local hovered = over(keyX, keyY, keyW, keyH)
+        currentX = currentX - 48
+        local keyX = currentX
+        local hovered = over(keyX, rowY + 3, 46, 20)
 
-        rect(keyX, keyY, keyW, keyH, Theme.surface3, 45, 4, trans)
-        strokeRect(keyX, keyY, keyW, keyH, hovered and Theme.accent or Theme.border, 46, 4, trans)
+        rect(keyX, rowY + 3, 46, 20, Theme.surface3, 45, 4, trans)
+        strokeRect(keyX, rowY + 3, 46, 20, hovered and Theme.accent or Theme.border, 46, 4, trans)
 
-        txt(keyText, keyX + keyW / 2, centerY(keyY, keyH), keybind.value and Theme.text or Theme.sub, 12, FontUI, 52, true, false, keyW - 4, trans)
+        txt(item.keybind.listening and "..." or (item.keybind.value and string.upper(item.keybind.value) or "-"), keyX + 23, centerY(rowY + 3, 20), item.keybind.value and Theme.text or Theme.sub, 12, FontUI, 52, true, false, 42, trans)
 
-        local modeTag = keybind.mode == "Toggle" and "T" or keybind.mode == "Always" and "A" or "H"
-        local modeColor = keybind.mode == "Hold" and Theme.sub or Theme.accent
-        txt(modeTag, rowX + rowW - 108, centerY(rowY, ROW_H - 2), modeColor, 10, FontUI, 52, true, false, nil, trans)
+        txt(item.keybind.mode == "Toggle" and "T" or item.keybind.mode == "Always" and "A" or "H", keyX - 8, centerY(rowY, ROW_H - 2), item.keybind.mode == "Hold" and Theme.sub or Theme.accent, 10, FontUI, 52, true, false, nil, trans)
 
-        if keybind.listening then
+        if item.keybind.listening then
             for i = 1, #InputOrder do
                 local name = InputOrder[i]
                 local input = Input[name]
-                if input.click and (name ~= "m1" or clock() - keybind.listenAt > 0.25) then
+                if input.click and (name ~= "m1" or clock() - item.keybind.listenAt > 0.25) then
                     local newKey = normalizeKey(name)
                     if name == "backspace" or name == "delete" or name == "unbound" or name == "esc" then
                         newKey = nil
                     end
-                    keybind.value = newKey
-                    keybind.listening = false
-                    safeCallback(keybind.callback, newKey and Input[newKey] and Input[newKey].id or nil, keybind.mode)
+                    item.keybind.value = newKey
+                    item.keybind.listening = false
+                    safeCallback(item.keybind.callback, newKey and Input[newKey] and Input[newKey].id or nil, item.keybind.mode)
                     break
                 end
             end
         elseif click and hovered then
-            keybind.listening = true
-            keybind.listenAt = clock()
+            item.keybind.listening = true
+            item.keybind.listenAt = clock()
             click = false
-        elseif rightClick and hovered and keybind.canChange then
-            spawnDropdown("keymode", keyX, rowY + 24, 90, KEYBIND_MODES, nil, false, nil, nil, keybind)
+        elseif rightClick and hovered and item.keybind.canChange then
+            spawnDropdown("keymode", keyX, rowY + 24, 90, KEYBIND_MODES, nil, false, nil, nil, item.keybind)
             rightClick = false
         end
+        currentX = currentX - 14
     end
 
     if item.colorpicker then
-        local picker = item.colorpicker
-        local cpX = rowX + rowW - 124
-        local cpW = 12
-        local cpH = 12
-        local cpY = rowY + 8
-        local hovered = over(cpX - 3, cpY - 3, cpW + 6, cpH + 6)
+        currentX = currentX - 16
+        local cpX = currentX
+        local hovered = over(cpX - 3, rowY + 5, 18, 18)
 
-        rect(cpX, cpY, cpW, cpH, picker.value, 46, 3, trans * (picker.alpha or 1))
-        strokeRect(cpX, cpY, cpW, cpH, Theme.border, 47, 3, trans)
+        rect(cpX, rowY + 8, 12, 12, item.colorpicker.value, 46, 3, trans * (item.colorpicker.alpha or 1))
+        strokeRect(cpX, rowY + 8, 12, 12, Theme.border, 47, 3, trans)
 
         if hovered then
-            strokeRect(cpX - 2, cpY - 2, cpW + 4, cpH + 4, Theme.accent, 48, 4, trans)
+            strokeRect(cpX - 2, rowY + 6, 16, 16, Theme.accent, 48, 4, trans)
         end
 
         if click and hovered then
-            spawnColorpicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, picker)
+            spawnColorpicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item.colorpicker)
             click = false
         elseif rightClick and hovered then
             spawnDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
-                local selected = choice and choice[1]
-                if selected == "Copy" then
-                    ProjectState.copiedColor = picker.value
-                    pcall(setclipboard, "#" .. toHex(picker.value))
-                elseif selected == "Paste" then
-                    if ProjectState.copiedColor and colorChanged(picker.value, ProjectState.copiedColor) then
-                        picker.value = ProjectState.copiedColor
-                        safeCallback(picker.callback, picker.value)
+                if choice and choice[1] == "Copy" then
+                    ProjectState.copiedColor = item.colorpicker.value
+                    pcall(setclipboard, "#" .. toHex(item.colorpicker.value))
+                elseif choice and choice[1] == "Paste" then
+                    if ProjectState.copiedColor and colorChanged(item.colorpicker.value, ProjectState.copiedColor) then
+                        item.colorpicker.value = ProjectState.copiedColor
+                        safeCallback(item.colorpicker.callback, item.colorpicker.value)
                     else
                         warn("color clipboard empty lol")
                     end
@@ -2362,7 +2368,27 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                 elseif item.type == "slider" then
                     txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 80, trans)
                     
-                    txt(tostring(item.value) .. tostring(item.suffix or ""), rowX + rowW - 4 - textWidth(tostring(item.value) .. tostring(item.suffix or ""), 13, FontSystem), rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, 60, trans)
+                    local valStr = tostring(item.value)
+                    if ProjectState.focus == item then
+                        valStr = item._directValue or ""
+                        if floor(clock() * 2) % 2 == 0 then
+                            valStr = valStr .. "|"
+                        end
+                    end
+                    local boxW = max(36, textWidth(valStr, 12, FontUI) + 12)
+                    local valBoxX = rowX + rowW - boxW - 4
+                    local valBoxY = rowY + 1
+                    local hoveredVal = over(valBoxX, valBoxY, boxW, 16) and not popupBlocking and not disabled
+                    
+                    rect(valBoxX, valBoxY, boxW, 16, Theme.surface, z + 12, 4, trans)
+                    strokeRect(valBoxX, valBoxY, boxW, 16, (ProjectState.focus == item) and Theme.accent or (hoveredVal and Theme.accent or Theme.border), z + 13, 4, trans)
+                    txt(valStr, valBoxX + boxW / 2, textTop(valBoxY, 16, 12), Theme.text, 12, FontUI, z + 14, true, false, boxW - 4, trans)
+
+                    if click and hoveredVal then
+                        ProjectState.focus = item
+                        item._directValue = tostring(item.value)
+                        click = false
+                    end
                     
                     local sx, sw = rowX + 4, rowW - 8
                     local sy_bar = rowY + 22
@@ -2374,17 +2400,16 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         rect(sx, sy_bar, sw * frac, 4, Theme.accent, z + 13, 2, trans)
                     end
                     
-                    circle(sx + sw * frac, sy_bar + 2, 5, Theme.knob, z + 14, true, 0, 32, trans)
+                    item._animatedRadius = item._animatedRadius or 5
+                    item._animatedRadius = smoothValue(item._animatedRadius, (hoveredVal or (over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled)) and 7 or 5, 18)
+                    circle(sx + sw * frac, sy_bar + 2, item._animatedRadius, C3(190, 190, 190), z + 14, true, 0, 32, trans)
                     
-
-                    
-                    if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled then
+                    if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled and not hoveredVal then
                         ProjectState.sliderDrag = item
                         click = false
                     end
                     if held and not popupBlocking and not disabled and (ProjectState.sliderDrag == item) then
-                        local raw = (item.min or 0) + denom * clamp((ProjectState.mouseX - sx) / sw, 0, 1)
-                        local snapped = snapValue(raw, item)
+                        local snapped = snapValue((item.min or 0) + denom * clamp((ProjectState.mouseX - sx) / sw, 0, 1), item)
                         if snapped ~= item.value then
                             item.value = snapped
                             safeCallback(item.callback, snapped)
@@ -2402,7 +2427,12 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
                     
                     txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 14, false, false, dw - 28, trans)
-                    drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
+                    
+                    if ProjectState.dropdown and ProjectState.dropdown.item == item then
+                        drawChevronUp(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
+                    else
+                        drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
+                    end
                     
                     if item.tooltip and not isFloating then
                         local qHovered = over(rowX + rowW - 16, rowY + 2, 12, 12)
@@ -2413,7 +2443,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     end
                     
                     if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled then
-                        spawnDropdown("item", dx, dy_box + boxH + 4, dw, item.choices, item.value, item.multi, item.callback, item, nil)
+                        spawnDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
                         click = false
                     end
                     
@@ -2858,6 +2888,7 @@ local function renderWindow(click, held, rightClick)
 end
 
 local function step()
+    local prevFocus = ProjectState.focus
     resetPool()
     ProjectState.tooltipText = nil
 
@@ -2930,6 +2961,11 @@ local function step()
     end
 
     renderWatermark(click, held)
+
+    if prevFocus and prevFocus.type == "slider" and ProjectState.focus ~= prevFocus and prevFocus._directValue then
+        setItemValue(prevFocus, tonumber(prevFocus._directValue) or prevFocus.value or prevFocus.min or 0, true)
+        prevFocus._directValue = nil
+    end
 
     hideUnused()
 end
