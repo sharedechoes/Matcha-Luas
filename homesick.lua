@@ -63,16 +63,7 @@ if uis then
         uis.InputBegan:Connect(onInput)
     end
 end
-if Mouse then
-    pcall(function()
-        Mouse.WheelForward:Connect(function()
-            mouseScroll = mouseScroll + 1
-        end)
-        Mouse.WheelBackward:Connect(function()
-            mouseScroll = mouseScroll - 1
-        end)
-    end)
-end
+
 
 local Fonts = (type(Drawing) == "table" and Drawing.Fonts) or {}
 local FontSystem = Fonts.System or Fonts.UI or 0
@@ -409,6 +400,17 @@ local function getMouse()
         Mouse = LocalPlayer and LocalPlayer:GetMouse()
     end
     if Mouse then
+        if not ProjectState.mouseConnected then
+            ProjectState.mouseConnected = true
+            pcall(function()
+                Mouse.WheelForward:Connect(function()
+                    mouseScroll = mouseScroll + 1
+                end)
+                Mouse.WheelBackward:Connect(function()
+                    mouseScroll = mouseScroll - 1
+                end)
+            end)
+        end
         ProjectState.mouseX = Mouse.X
         ProjectState.mouseY = Mouse.Y
         ProjectState.hasMouse = true
@@ -1956,9 +1958,6 @@ local function renderTabs(click, px, py, pw)
             ProjectState.dropdown = nil
             ProjectState.colorpicker = nil
             ProjectState.focus = nil
-            ProjectState.draggedTab = tab
-            ProjectState.draggedTabOffset = ProjectState.mouseX - screenX
-            ProjectState.dragTabStartMouseX = ProjectState.mouseX
             click = false
             ProjectState.tabScrollToActive = true
         end
@@ -2141,16 +2140,28 @@ local function draw9Dot(x, y, color, z, trans)
 end
 
 local function getPerimeterPoint(d, colX, renderY, colW, renderH)
-    d = d % (2 * (colW + renderH))
-    if d < 0 then d = d + (2 * (colW + renderH)) end
-    if d < colW then
-        return colX + d, renderY
-    elseif d < colW + renderH then
-        return colX + colW, renderY + (d - colW)
-    elseif d < 2 * colW + renderH then
-        return colX + colW - (d - (colW + renderH)), renderY + renderH
+    d = d % (2 * (colW + renderH) - 13.736)
+    if d < 0 then d = d + (2 * (colW + renderH) - 13.736) end
+    if d < colW - 16 then
+        return colX + 8 + d, renderY
+    elseif d < colW - 3.434 then
+        local t = -1.5708 + (d - (colW - 16)) / 12.566 * 1.5708
+        return colX + colW - 8 + math.cos(t) * 8, renderY + 8 + math.sin(t) * 8
+    elseif d < colW + renderH - 19.434 then
+        return colX + colW, renderY + 8 + (d - (colW - 3.434))
+    elseif d < colW + renderH - 6.868 then
+        local t = (d - (colW + renderH - 19.434)) / 12.566 * 1.5708
+        return colX + colW - 8 + math.cos(t) * 8, renderY + renderH - 8 + math.sin(t) * 8
+    elseif d < 2 * colW + renderH - 22.868 then
+        return colX + colW - 8 - (d - (colW + renderH - 6.868)), renderY + renderH
+    elseif d < 2 * colW + renderH - 10.302 then
+        local t = 1.5708 + (d - (2 * colW + renderH - 22.868)) / 12.566 * 1.5708
+        return colX + 8 + math.cos(t) * 8, renderY + renderH - 8 + math.sin(t) * 8
+    elseif d < 2 * colW + 2 * renderH - 26.302 then
+        return colX, renderY + renderH - 8 - (d - (2 * colW + renderH - 10.302))
     else
-        return colX, renderY + renderH - (d - (2 * colW + renderH))
+        local t = 3.1416 + (d - (2 * colW + 2 * renderH - 26.302)) / 12.566 * 1.5708
+        return colX + 8 + math.cos(t) * 8, renderY + 8 + math.sin(t) * 8
     end
 end
 
@@ -2187,23 +2198,23 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             end
         end
 
-        if clamp(1 - (math.sqrt((ProjectState.mouseX - cx)^2 + (ProjectState.mouseY - cy)^2) / 80), 0, 1) > 0 then
+        if cy == renderY + renderH and clamp(1 - (math.sqrt((ProjectState.mouseX - cx)^2 + (ProjectState.mouseY - cy)^2) / 80), 0, 1) > 0 then
             local d_mouse
             if cy == renderY then
-                d_mouse = cx - colX
+                d_mouse = cx - colX - 8
             elseif cx == colX + colW then
-                d_mouse = colW + (cy - renderY)
+                d_mouse = colW - 3.434 + (cy - renderY - 8)
             elseif cy == renderY + renderH then
-                d_mouse = (colW + renderH) + (colX + colW - cx)
+                d_mouse = colW + renderH - 6.868 + (colX + colW - 8 - cx)
             elseif cx == colX then
-                d_mouse = (2 * colW + renderH) + (renderY + renderH - cy)
+                d_mouse = 2 * colW + renderH - 10.302 + (renderY + renderH - 8 - cy)
             end
             
             if d_mouse then
                 for i = 1, 24 do
                     local x1, y1 = getPerimeterPoint(d_mouse - 40 + (i - 1) * 3.333, colX, renderY, colW, renderH)
                     local x2, y2 = getPerimeterPoint(d_mouse - 40 + i * 3.333, colX, renderY, colW, renderH)
-                    line(x1, y1, x2, y2, Theme.accent, z + 2, 2, clamp(1 - (abs(-40 + (i - 0.5) * 3.333) / 40), 0, 1) * clamp(1 - (math.sqrt((ProjectState.mouseX - cx)^2 + (ProjectState.mouseY - cy)^2) / 80), 0, 1) * cardTrans)
+                    line(x1, y1, x2, y2, section.locked and Theme.sub or Theme.accent, z + 2, 2, clamp(1 - (abs(-40 + (i - 0.5) * 3.333) / 40), 0, 1) * clamp(1 - (math.sqrt((ProjectState.mouseX - cx)^2 + (ProjectState.mouseY - cy)^2) / 80), 0, 1) * cardTrans)
                 end
             end
         end
@@ -2213,23 +2224,21 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
         end
         
         if sy + 10 >= cardClipTop and sy + 19 <= cardClipBottom then
-            if not section.locked then
-                draw9Dot(colX + colW - 20, sy + 10, Theme.sub, z + 2, cardTrans)
-            end
-            rect(colX + colW - 36, sy + 12, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, cardTrans)
+            draw9Dot(colX + colW - 20, sy + 10, section.locked and C3(80, 75, 73) or Theme.sub, z + 2, cardTrans)
+            rect(colX + colW - 36, sy + 10, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, cardTrans)
             if section.locked then
-                line(colX + colW - 34, sy + 9, colX + colW - 34, sy + 12, Theme.accent, z + 2, 1, cardTrans)
-                line(colX + colW - 31, sy + 9, colX + colW - 31, sy + 12, Theme.accent, z + 2, 1, cardTrans)
-                line(colX + colW - 34, sy + 9, colX + colW - 31, sy + 9, Theme.accent, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 7, colX + colW - 34, sy + 10, Theme.accent, z + 2, 1, cardTrans)
+                line(colX + colW - 31, sy + 7, colX + colW - 31, sy + 10, Theme.accent, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 7, colX + colW - 31, sy + 7, Theme.accent, z + 2, 1, cardTrans)
             else
-                line(colX + colW - 34, sy + 9, colX + colW - 34, sy + 12, Theme.sub, z + 2, 1, cardTrans)
-                line(colX + colW - 31, sy + 9, colX + colW - 31, sy + 10, Theme.sub, z + 2, 1, cardTrans)
-                line(colX + colW - 34, sy + 9, colX + colW - 31, sy + 9, Theme.sub, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 7, colX + colW - 34, sy + 10, Theme.sub, z + 2, 1, cardTrans)
+                line(colX + colW - 31, sy + 7, colX + colW - 31, sy + 8, Theme.sub, z + 2, 1, cardTrans)
+                line(colX + colW - 34, sy + 7, colX + colW - 31, sy + 7, Theme.sub, z + 2, 1, cardTrans)
             end
         end
         
         if not isFloating then
-            if click and over(colX + colW - 38, sy + 8, 12, 12) and not popupBlocking then
+            if click and over(colX + colW - 38, sy + 6, 12, 12) and not popupBlocking then
                 section.locked = not section.locked
                 click = false
             end
@@ -2600,12 +2609,12 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     end
 
     if tab.maxScroll > 0 then
-        local trackH = contH - CONTENT_PAD * 2
+        local trackH = contH - CONTENT_PAD * 2 - 12
         local barH = max(22, (trackH / max(contentH, trackH)) * trackH)
-        local barY = contY + CONTENT_PAD + (tab.scrollY / max(1, tab.maxScroll)) * (trackH - barH)
-        rect(px + pw - 6, contY + CONTENT_PAD, 3, trackH, C3(45, 45, 52), 50, 2)
-        rect(px + pw - 6, barY, 3, barH, Theme.sub, 51, 2)
-        if click and over(px + pw - 11, contY + CONTENT_PAD, 12, trackH) and not popupBlocking then
+        local barY = contY + CONTENT_PAD + 6 + (tab.scrollY / max(1, tab.maxScroll)) * (trackH - barH)
+        rect(px + pw - 6, contY + CONTENT_PAD + 6, 3, trackH, Theme.surface3, 50, 2)
+        rect(px + pw - 6, barY, 3, barH, Theme.accent, 51, 2)
+        if click and over(px + pw - 11, contY + CONTENT_PAD + 6, 12, trackH) and not popupBlocking then
             local grab = barH / 2
             if over(px + pw - 11, barY, 12, barH) then
                 grab = clamp(ProjectState.mouseY - barY, 0, barH)
@@ -2618,7 +2627,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
         end
         local drag = ProjectState.scrollDrag
         if held and type(drag) == "table" and drag.tab == tab then
-            tab.targetScrollY = clamp((ProjectState.mouseY - (contY + CONTENT_PAD) - drag.grab) / max(1, trackH - barH), 0, 1) * tab.maxScroll
+            tab.targetScrollY = clamp((ProjectState.mouseY - (contY + CONTENT_PAD + 6) - drag.grab) / max(1, trackH - barH), 0, 1) * tab.maxScroll
         end
     elseif type(ProjectState.scrollDrag) == "table" and ProjectState.scrollDrag.tab == tab then
         ProjectState.scrollDrag = nil
