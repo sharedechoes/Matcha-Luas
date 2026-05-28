@@ -94,20 +94,20 @@ local SHADOW_ALPHA = {0.10, 0.07, 0.05, 0.03, 0.015}
 local KEYBIND_MODES = {"Hold", "Toggle", "Always"}
 
 local Theme = {
-    bg = C3(30, 27, 26),
-    surface = C3(24, 21, 20),
-    surface2 = C3(38, 34, 32),
-    surface3 = C3(46, 42, 39),
-    text = C3(240, 240, 240),
-    sub = C3(130, 120, 115),
-    accent = C3(222, 196, 151),
+    bg = C3(36, 33, 31),
+    surface = C3(30, 27, 25),
+    surface2 = C3(44, 40, 37),
+    surface3 = C3(54, 50, 46),
+    text = C3(245, 242, 238),
+    sub = C3(150, 142, 135),
+    accent = C3(232, 208, 162),
     green = C3(52, 199, 89),
     red = C3(255, 69, 58),
     yellow = C3(255, 204, 0),
     unsafe = C3(255, 226, 84),
-    border = C3(54, 49, 47),
-    toggleOn = C3(222, 196, 151),
-    toggleOff = C3(54, 49, 47),
+    border = C3(60, 55, 52),
+    toggleOn = C3(232, 208, 162),
+    toggleOff = C3(60, 55, 52),
     knob = C3(255, 255, 255),
     white = C3(255, 255, 255),
     black = C3(0, 0, 0),
@@ -169,6 +169,7 @@ local ProjectState = {
     resizeSection = nil,
     resizeSectionStartH = nil,
     resizeSectionStartMouseY = nil,
+    lastTooltipText = nil,
 }
 
 local Pool = {
@@ -1550,7 +1551,7 @@ local function tooltip(text, x, y)
     if not text or text == "" then
         return
     end
-    if ProjectState.tooltipText ~= text then
+    if ProjectState.lastTooltipText ~= text then
         ProjectState.tooltipAt = clock()
     end
     ProjectState.tooltipText = text
@@ -1683,15 +1684,15 @@ local function renderDropdown(click)
         end
 
         local hovered = over(dd.x, rowY, dd.w, 22)
-        if hovered then
-            rect(dd.x + 2, rowY, dd.w - 4, 22, Theme.surface2, 112, 3)
+        if selected or hovered then
+            rect(dd.x + 2, rowY, dd.w - 4, 22, hovered and Theme.surface3 or Theme.surface2, 112, 3)
         end
         local textX = dd.x + 10
         if selected then
             textX = dd.x + 20
             rect(dd.x + 10, rowY + 5, 2, 12, Theme.accent, 114)
         end
-        txt(tostring(choice), textX, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontUI, 113, false, false, dd.w - 24)
+        txt(tostring(choice), textX, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontSystem, 113, false, false, dd.w - 24)
 
         if click and hovered then
             if dd.kind == "keymode" then
@@ -1819,11 +1820,12 @@ local function renderColorpicker(click, held)
     rect(x + 10, y + 196, 200, 22, (ProjectState.focus == cp) and Theme.surface or over(x + 10, y + 196, 200, 22) and Theme.surface3 or Theme.surface2, 114, 4)
     strokeRect(x + 10, y + 196, 200, 22, (ProjectState.focus == cp) and Theme.accent or Theme.border, 115, 4)
 
-    local hexText = (ProjectState.focus == cp) and (cp._hexInput or "") or ("#" .. toHex(cp.value))
-    if (ProjectState.focus == cp) and floor(clock() * 2) % 2 == 0 then
-        hexText = hexText .. "|"
-    end
+    local isFocusedCP = ProjectState.focus == cp
+    local hexText = isFocusedCP and (cp._hexInput or "") or ("#" .. toHex(cp.value))
     txt(hexText, x + 16, textTop(y + 196, 22, 12), Theme.text, 12, FontUI, 116, false, false, 188)
+    if isFocusedCP then
+        txt("|", x + 16 + textWidth(hexText, 12, FontUI), textTop(y + 196, 22, 12), Theme.text, 12, FontUI, 117, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+    end
 
     if click and over(x + 10, y + 196, 200, 22) then
         ProjectState.focus = (ProjectState.focus == cp) and nil or cp
@@ -2368,21 +2370,20 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                 elseif item.type == "slider" then
                     txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 80, trans)
                     
-                    local valStr = tostring(item.value)
-                    if ProjectState.focus == item then
-                        valStr = item._directValue or ""
-                        if floor(clock() * 2) % 2 == 0 then
-                            valStr = valStr .. "|"
-                        end
-                    end
-                    local boxW = max(36, textWidth(valStr, 12, FontUI) + 12)
+                    local isFocusedSlider = ProjectState.focus == item
+                    local valStr = isFocusedSlider and (item._directValue or "") or tostring(item.value)
+                    local boxW = max(36, textWidth(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), 12, FontUI) + 12)
                     local valBoxX = rowX + rowW - boxW - 4
                     local valBoxY = rowY + 1
                     local hoveredVal = over(valBoxX, valBoxY, boxW, 16) and not popupBlocking and not disabled
                     
                     rect(valBoxX, valBoxY, boxW, 16, Theme.surface, z + 12, 4, trans)
-                    strokeRect(valBoxX, valBoxY, boxW, 16, (ProjectState.focus == item) and Theme.accent or (hoveredVal and Theme.accent or Theme.border), z + 13, 4, trans)
-                    txt(valStr, valBoxX + boxW / 2, textTop(valBoxY, 16, 12), Theme.text, 12, FontUI, z + 14, true, false, boxW - 4, trans)
+                    strokeRect(valBoxX, valBoxY, boxW, 16, isFocusedSlider and Theme.accent or (hoveredVal and Theme.accent or Theme.border), z + 13, 4, trans)
+                    txt(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), valBoxX + boxW / 2, valBoxY + 4, Theme.text, 12, FontUI, z + 14, true, false, boxW - 4, trans)
+
+                    if isFocusedSlider then
+                        txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, FontUI) / 2, valBoxY + 4, Theme.text, 12, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+                    end
 
                     if click and hoveredVal then
                         ProjectState.focus = item
@@ -2426,7 +2427,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
                     strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
                     
-                    txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 14, false, false, dw - 28, trans)
+                    txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontSystem, z + 14, false, false, dw - 28, trans)
                     
                     if ProjectState.dropdown and ProjectState.dropdown.item == item then
                         drawChevronUp(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
@@ -2449,9 +2450,14 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                 elseif item.type == "button" then
                     local controlY = rowY + 2
-                    rect(rowX + 4, controlY, rowW - 8, itemH - 4, over(rowX + 4, controlY, rowW - 8, itemH - 4) and Theme.accent or Theme.surface2, z + 12, 6, trans)
-                    strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, over(rowX + 4, controlY, rowW - 8, itemH - 4) and Theme.accent or Theme.border, z + 13, 6, trans)
-                    txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), over(rowX + 4, controlY, rowW - 8, itemH - 4) and Theme.bg or Theme.text, 13, FontBold, z + 14, true, false, rowW - 24, trans)
+                    item._hoverFactor = smoothValue(item._hoverFactor or 0, (over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled) and 1 or 0, 18)
+                    
+                    rect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 12, 6, trans * (0.1 + 0.15 * item._hoverFactor))
+                    strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 13, 6, trans * (0.4 + 0.6 * item._hoverFactor))
+                    
+                    line((rowX + rowW / 2) - (((rowW - 8) * item._hoverFactor) / 2), controlY + itemH - 4, (rowX + rowW / 2) + (((rowW - 8) * item._hoverFactor) / 2), controlY + itemH - 4, Theme.accent, z + 15, 1.5, trans * item._hoverFactor)
+                    
+                    txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), Theme.accent, 13, FontBold, z + 14, true, false, rowW - 24, trans)
                     
                     if click and over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled then
                         safeCallback(item.callback)
@@ -2469,11 +2475,15 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     rect(bx, dy_box, bw, boxH, focused and Theme.surface or over(bx, dy_box, bw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
                     strokeRect(bx, dy_box, bw, boxH, focused and Theme.accent or Theme.border, z + 13, 4, trans)
                     
-                    local shown = item.value ~= "" and item.value or item.label
-                    if focused and floor(clock() * 2) % 2 == 0 then
-                        shown = tostring(item.value or "") .. "|"
+                    local is_empty = item.value == ""
+                    txt(is_empty and item.label or item.value, bx + 8, textTop(dy_box, boxH, 13), is_empty and Theme.sub or Theme.text, 13, FontUI, z + 14, false, false, bw - 16, trans)
+                    if focused then
+                        local cursorX = bx + 8
+                        if not is_empty then
+                            cursorX = cursorX + textWidth(item.value, 13, FontUI)
+                        end
+                        txt("|", cursorX, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
                     end
-                    txt(shown, bx + 8, textTop(dy_box, boxH, 13), (item.value ~= "" or focused) and Theme.text or Theme.sub, 13, FontUI, z + 14, false, false, bw - 16, trans)
                     
                     if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled then
                         ProjectState.focus = focused and nil or item
@@ -2955,6 +2965,7 @@ local function step()
     click = renderDropdown(click)
     click = renderColorpicker(click, held)
     renderTooltip()
+    ProjectState.lastTooltipText = ProjectState.tooltipText
 
     if rightClick and ProjectState.dropdown == nil and ProjectState.colorpicker == nil then
         rightClick = false
