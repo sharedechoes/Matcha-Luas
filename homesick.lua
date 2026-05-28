@@ -1424,7 +1424,7 @@ local function processKeybinds()
     for i = 1, #keybindItems do
         local item = keybindItems[i]
         local keybind = item.keybind
-        if item.type == "toggle" and keybind and keybind.value and not keybind.listening and not isItemDisabled(item) then
+        if (item.type == "toggle" or item.type == "checkbox") and keybind and keybind.value and not keybind.listening and not isItemDisabled(item) then
             local input = Input[keybind.value]
             if input then
                 if keybind.mode == "Always" then
@@ -1748,7 +1748,7 @@ local function renderColorpicker(click, held)
     end
 
     local x, y, w, h = cp.x, cp.y, cp.w, cp.h
-    rect(x, y, w, h, C3(35, 35, 40), 110, 8)
+    rect(x, y, w, h, Theme.surface2, 110, 8)
     strokeRect(x, y, w, h, Theme.border, 111, 8)
     txt(cp.picker.label, x + 10, y + 8, Theme.text, 13, FontBold, 112, false, false, w - 20)
 
@@ -1806,7 +1806,7 @@ local function renderColorpicker(click, held)
 
     rect(alphaX - 1, alphaY + (1 - cp.alpha) * alphaH - 2, alphaW + 2, 4, Theme.white, 116, 1)
 
-    rect(x + 10, y + 196, 200, 22, (ProjectState.focus == cp) and C3(25, 25, 30) or over(x + 10, y + 196, 200, 22) and C3(45, 45, 52) or C3(35, 35, 40), 114, 4)
+    rect(x + 10, y + 196, 200, 22, (ProjectState.focus == cp) and Theme.surface or over(x + 10, y + 196, 200, 22) and Theme.surface3 or Theme.surface2, 114, 4)
     strokeRect(x + 10, y + 196, 200, 22, (ProjectState.focus == cp) and Theme.accent or Theme.border, 115, 4)
 
     local hexText = (ProjectState.focus == cp) and (cp._hexInput or "") or ("#" .. toHex(cp.value))
@@ -1821,17 +1821,17 @@ local function renderColorpicker(click, held)
         click = false
     end
 
-    rect(x + 10, y + 228, 60, 22, C3(35, 35, 40), 114, 4)
+    rect(x + 10, y + 228, 60, 22, Theme.surface, 114, 4)
     strokeRect(x + 10, y + 228, 60, 22, Theme.border, 115, 4)
     txt("R", x + 16, textTop(y + 228, 22, 12), C3(255, 69, 58), 12, FontBold, 116)
     txt(tostring(floor(cp.value.R * 255 + 0.5)), x + 64 - textWidth(tostring(floor(cp.value.R * 255 + 0.5)), 12, FontUI), textTop(y + 228, 22, 12), Theme.text, 12, FontUI, 116)
 
-    rect(x + 80, y + 228, 60, 22, C3(35, 35, 40), 114, 4)
+    rect(x + 80, y + 228, 60, 22, Theme.surface, 114, 4)
     strokeRect(x + 80, y + 228, 60, 22, Theme.border, 115, 4)
     txt("G", x + 86, textTop(y + 228, 22, 12), C3(52, 199, 89), 12, FontBold, 116)
     txt(tostring(floor(cp.value.G * 255 + 0.5)), x + 134 - textWidth(tostring(floor(cp.value.G * 255 + 0.5)), 12, FontUI), textTop(y + 228, 22, 12), Theme.text, 12, FontUI, 116)
 
-    rect(x + 150, y + 228, 60, 22, C3(35, 35, 40), 114, 4)
+    rect(x + 150, y + 228, 60, 22, Theme.surface, 114, 4)
     strokeRect(x + 150, y + 228, 60, 22, Theme.border, 115, 4)
     txt("B", x + 156, textTop(y + 228, 22, 12), C3(0, 122, 255), 12, FontBold, 116)
     txt(tostring(floor(cp.value.B * 255 + 0.5)), x + 204 - textWidth(tostring(floor(cp.value.B * 255 + 0.5)), 12, FontUI), textTop(y + 228, 22, 12), Theme.text, 12, FontUI, 116)
@@ -2296,7 +2296,11 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     rect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
                     strokeRect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
                     
-                    txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - (item.colorpicker and 130 or item.keybind and 102 or item.tooltip and 22 or 6), trans)
+                    local cbExtra = 6
+                    if item.colorpicker then cbExtra = cbExtra + 20 end
+                    if item.keybind then cbExtra = cbExtra + 64 end
+                    if item.tooltip then cbExtra = cbExtra + 18 end
+                    txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - cbExtra, trans)
                     
                     if not isFloating then
                         click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
@@ -2322,7 +2326,11 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     end
                     
                 elseif item.type == "toggle" then
-                    txt(item.label, rowX + 4, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 4 - (item.colorpicker and 130 or item.keybind and 102 or item.tooltip and 66 or 48), trans)
+                    local tgExtra = 48
+                    if item.colorpicker then tgExtra = tgExtra + 20 end
+                    if item.keybind then tgExtra = tgExtra + 64 end
+                    if item.tooltip then tgExtra = tgExtra + 18 end
+                    txt(item.label, rowX + 4, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 4 - tgExtra, trans)
                     
                     if item.animT == nil then
                         item.animT = item.value and 1 or 0
@@ -2372,7 +2380,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     local denom = max(0.0001, (item.max or 100) - (item.min or 0))
                     local frac = clamp(((item.value or 0) - (item.min or 0)) / denom, 0, 1)
                     
-                    rect(sx, sy_bar, sw, 4, C3(58, 58, 64), z + 12, 2, trans)
+                    rect(sx, sy_bar, sw, 4, Theme.surface3, z + 12, 2, trans)
                     if frac > 0 then
                         rect(sx, sy_bar, sw * frac, 4, Theme.accent, z + 13, 2, trans)
                     end
@@ -2401,7 +2409,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     local dy_box = rowY + 18
                     local boxH = 22
                     
-                    rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and C3(55, 55, 62) or C3(42, 42, 48), z + 12, 4, trans)
+                    rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
                     strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
                     
                     txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 14, false, false, dw - 28, trans)
@@ -2422,7 +2430,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                 elseif item.type == "button" then
                     local controlY = rowY + 2
-                    rect(rowX + 4, controlY, rowW - 8, itemH - 4, over(rowX + 4, controlY, rowW - 8, itemH - 4) and Theme.accent or C3(42, 42, 48), z + 12, 6, trans)
+                    rect(rowX + 4, controlY, rowW - 8, itemH - 4, over(rowX + 4, controlY, rowW - 8, itemH - 4) and Theme.accent or Theme.surface2, z + 12, 6, trans)
                     strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, over(rowX + 4, controlY, rowW - 8, itemH - 4) and Theme.accent or Theme.border, z + 13, 6, trans)
                     txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), over(rowX + 4, controlY, rowW - 8, itemH - 4) and Theme.bg or Theme.text, 13, FontBold, z + 14, true, false, rowW - 24, trans)
                     
@@ -2439,7 +2447,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     local boxH = 22
                     local focused = ProjectState.focus == item
                     
-                    rect(bx, dy_box, bw, boxH, focused and C3(35, 35, 42) or over(bx, dy_box, bw, boxH) and C3(55, 55, 62) or C3(42, 42, 48), z + 12, 4, trans)
+                    rect(bx, dy_box, bw, boxH, focused and Theme.surface or over(bx, dy_box, bw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
                     strokeRect(bx, dy_box, bw, boxH, focused and Theme.accent or Theme.border, z + 13, 4, trans)
                     
                     local shown = item.value ~= "" and item.value or item.label
