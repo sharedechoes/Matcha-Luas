@@ -2898,8 +2898,22 @@ local function renderWindow(click, held, rightClick)
 
     txt(ProjectState.title or "homesick", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
     if ProjectState.badgeText and ProjectState.badgeText ~= "" then
+        local titleStr = ProjectState.title or "homesick"
+        local titleW = 0
+        for i = 1, #titleStr do
+            local char = string.sub(titleStr, i, i)
+            if char == "i" or char == "l" or char == "j" or char == "f" or char == "t" or char == " " or char == "!" or char == "." or char == "," or char == ";" or char == ":" then
+                titleW = titleW + 0.28
+            elseif char == "m" or char == "w" or char == "M" or char == "W" then
+                titleW = titleW + 0.75
+            elseif char:match("[A-Z]") then
+                titleW = titleW + 0.58
+            else
+                titleW = titleW + 0.48
+            end
+        end
         local badgeW = textWidth(ProjectState.badgeText, 10, FontBold) + 12
-        local badgeX = x + 14 + textWidth(ProjectState.title or "homesick", 14, FontBold) + 4
+        local badgeX = x + 14 + titleW * 14 + 6
         local badgeY = textTop(y, TITLE_H, 14) - 1
         rect(badgeX, badgeY, badgeW, 16, C3(38, 34, 32), 15, 6)
         strokeRect(badgeX, badgeY, badgeW, 16, Theme.accent, 16, 6)
