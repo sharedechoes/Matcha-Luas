@@ -723,7 +723,7 @@ local function makeItem(section, item)
         return self
     end
 
-    if item.type == "toggle" then
+    if item.type == "toggle" or item.type == "checkbox" then
         function handle:AddKeybind(defaultKey, mode, canChange, callback)
             local keybind = {
                 value = normalizeKey(defaultKey),
@@ -748,20 +748,24 @@ local function makeItem(section, item)
             return keyHandle
         end
 
-        function handle:AddColorpicker(label, defaultColor, overwrite, callback)
+        function handle:AddColorpicker(label, defaultColor, overwrite, callback, defaultAlpha)
             local picker = {
                 label = tostring(label or "Color"),
                 value = defaultColor or Theme.accent,
+                alpha = type(overwrite) == "number" and overwrite or defaultAlpha or 1,
                 overwrite = overwrite == true,
                 callback = callback,
             }
             item.colorpicker = picker
 
             local colorHandle = {}
-            function colorHandle:Set(newColor)
-                if newColor and colorChanged(picker.value, newColor) then
+            function colorHandle:Set(newColor, newAlpha)
+                if newColor and (colorChanged(picker.value, newColor) or (newAlpha and newAlpha ~= picker.alpha)) then
                     picker.value = newColor
-                    safeCallback(picker.callback, newColor)
+                    if newAlpha then
+                        picker.alpha = newAlpha
+                    end
+                    safeCallback(picker.callback, newColor, picker.alpha)
                 end
                 return self
             end
@@ -820,6 +824,17 @@ local function createSection(tab, name, side)
         return makeItem(section, {
             type = "toggle",
             label = tostring(label or "Toggle"),
+            value = default == true,
+            callback = callback,
+            unsafe = unsafe == true,
+            tooltip = tooltip,
+        })
+    end
+
+    function sectionApi:Checkbox(label, default, callback, unsafe, tooltip)
+        return makeItem(section, {
+            type = "checkbox",
+            label = tostring(label or "Checkbox"),
             value = default == true,
             callback = callback,
             unsafe = unsafe == true,
@@ -1509,7 +1524,7 @@ local PRESET_SWATCHES = {
 local function spawnColorpicker(x, y, picker)
     local h, s, v = toHsv(picker.value)
     local vw, vh = viewportSize()
-    local w, height = 200, 220
+    local w, height = 220, 260
 
     ProjectState.colorpicker = {
         x = clamp(x, 8, max(8, vw - w - 8)),
@@ -1521,6 +1536,7 @@ local function spawnColorpicker(x, y, picker)
         sat = s,
         val = v,
         value = picker.value,
+        alpha = picker.alpha or 1,
         _hexInput = nil,
     }
     ProjectState.dropdown = nil
@@ -1585,7 +1601,7 @@ local function renderDropdown(click)
     dd.scrollOffset = clamp(dd.scrollOffset, 0, max(0, #dd.choices - maxRows))
 
     rect(dd.x - 1, dd.y - 1, dd.w + 2, dd.h + 2, Theme.border, 110, 6)
-    rect(dd.x, dd.y, dd.w, dd.h, C3(35, 35, 40), 111, 6)
+    rect(dd.x, dd.y, dd.w, dd.h, Theme.surface, 111, 6)
 
     if isMulti then
         local btnW = (dd.w - 12) / 2
@@ -1598,11 +1614,11 @@ local function renderDropdown(click)
         local hoverSelectAll = over(selectAllX, btnY, btnW, btnH)
         local hoverClearAll = over(clearAllX, btnY, btnW, btnH)
 
-        rect(selectAllX, btnY, btnW, btnH, hoverSelectAll and C3(55, 55, 62) or C3(42, 42, 48), 112, 4)
+        rect(selectAllX, btnY, btnW, btnH, hoverSelectAll and Theme.surface3 or Theme.surface2, 112, 4)
         strokeRect(selectAllX, btnY, btnW, btnH, hoverSelectAll and Theme.accent or Theme.border, 113, 4)
         txt("Select All", selectAllX + btnW / 2, centerY(btnY, btnH), Theme.text, 11, FontUI, 113, true)
 
-        rect(clearAllX, btnY, btnW, btnH, hoverClearAll and C3(55, 55, 62) or C3(42, 42, 48), 112, 4)
+        rect(clearAllX, btnY, btnW, btnH, hoverClearAll and Theme.surface3 or Theme.surface2, 112, 4)
         strokeRect(clearAllX, btnY, btnW, btnH, hoverClearAll and Theme.accent or Theme.border, 113, 4)
         txt("Clear All", clearAllX + btnW / 2, centerY(btnY, btnH), Theme.text, 11, FontUI, 113, true)
 
@@ -1664,7 +1680,7 @@ local function renderDropdown(click)
 
         local hovered = over(dd.x, rowY, dd.w, 22)
         if hovered then
-            rect(dd.x + 2, rowY, dd.w - 4, 22, C3(50, 50, 56), 112, 3)
+            rect(dd.x + 2, rowY, dd.w - 4, 22, Theme.surface2, 112, 3)
         end
         txt(tostring(choice), dd.x + 8, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontUI, 113, false, false, dd.w - 24)
 
@@ -1737,14 +1753,15 @@ local function renderColorpicker(click, held)
     txt(cp.picker.label, x + 10, y + 8, Theme.text, 13, FontBold, 112, false, false, w - 20)
 
     local palX, palY = x + 10, y + 28
-    local palW, palH = w - 20, 82
-    local cell = 18
+    local palW, palH = 160, 160
 
-    for gx = palX, palX + palW - 1, cell do
+    for gx = palX, palX + palW - 1, 6 do
         local sx = clamp((gx - palX) / palW, 0, 1)
-        for gy = palY, palY + palH - 1, cell do
+        local blockW = min(6, palX + palW - gx)
+        for gy = palY, palY + palH - 1, 6 do
             local sy = 1 - clamp((gy - palY) / palH, 0, 1)
-            rect(gx, gy, cell, cell, HSV(cp.hue, sx, sy), 113, 0)
+            local blockH = min(6, palY + palH - gy)
+            rect(gx, gy, blockW, blockH, HSV(cp.hue, sx, sy), 113, 0)
         end
     end
 
@@ -1753,77 +1770,78 @@ local function renderColorpicker(click, held)
         cp.val = 1 - clamp((ProjectState.mouseY - palY) / palH, 0, 1)
     end
 
-    local markerX = palX + cp.sat * palW
-    local markerY = palY + (1 - cp.val) * palH
-    circle(markerX, markerY, 4, Theme.white, 116, false, 2, 20)
+    circle(palX + cp.sat * palW, palY + (1 - cp.val) * palH, 4, Theme.white, 116, false, 2, 20)
 
-    local hueX, hueY = x + 10, y + 118
-    local hueW, hueH = w - 20, 10
-    for gx = hueX, hueX + hueW - 1, 12 do
-        rect(gx, hueY, 12, hueH, HSV((gx - hueX) / hueW, 1, 1), 113, 0)
+    local hueX, hueY = x + 178, y + 28
+    local hueW, hueH = 12, 160
+    for gy = hueY, hueY + hueH - 1, 4 do
+        rect(hueX, gy, hueW, 4, HSV((gy - hueY) / hueH, 1, 1), 113, 0)
     end
 
     if held and over(hueX, hueY, hueW, hueH) then
-        cp.hue = clamp((ProjectState.mouseX - hueX) / hueW, 0, 1)
+        cp.hue = clamp((ProjectState.mouseY - hueY) / hueH, 0, 1)
     end
 
-    rect(hueX + cp.hue * hueW - 2, hueY - 1, 4, hueH + 2, Theme.white, 116, 1)
+    rect(hueX - 1, hueY + cp.hue * hueH - 2, hueW + 2, 4, Theme.white, 116, 1)
 
-    local swY = y + 136
-    local swW = 14
-    local swSpacing = (w - 20 - (swW * #PRESET_SWATCHES)) / (#PRESET_SWATCHES - 1)
-    for i = 1, #PRESET_SWATCHES do
-        local swColor = PRESET_SWATCHES[i]
-        local swX = x + 10 + (i - 1) * (swW + swSpacing)
-        local hovered = over(swX, swY, swW, swW)
-        rect(swX, swY, swW, swW, swColor, 114, 2)
-        strokeRect(swX, swY, swW, swW, hovered and Theme.accent or Theme.border, 115, 2)
-
-        if click and hovered then
-            local h_s, s_s, v_s = toHsv(swColor)
-            cp.hue = h_s
-            cp.sat = s_s
-            cp.val = v_s
-            cp.value = swColor
-            click = false
-        end
+    local alphaX, alphaY = x + 198, y + 28
+    local alphaW, alphaH = 12, 160
+    for gy = alphaY, alphaY + alphaH - 1, 6 do
+        local blockH = min(6, alphaY + alphaH - gy)
+        rect(alphaX, gy, 6, blockH, (floor((gy - alphaY) / 6) % 2 == 0) and Theme.white or C3(200, 200, 200), 113, 0)
+        rect(alphaX + 6, gy, 6, blockH, (floor((gy - alphaY) / 6) % 2 == 0) and C3(200, 200, 200) or Theme.white, 113, 0)
     end
 
-    local hexY = y + 158
-    local hexW = w - 20
-    local hexH = 22
-    local hexFocused = ProjectState.focus == cp
-    local hexHovered = over(x + 10, hexY, hexW, hexH)
+    for gy = alphaY, alphaY + alphaH - 1, 4 do
+        rect(alphaX, gy, alphaW, 4, cp.value, 114, 0, 1 - ((gy - alphaY) / alphaH))
+    end
 
-    rect(x + 10, hexY, hexW, hexH, hexFocused and C3(25, 25, 30) or hexHovered and C3(45, 45, 52) or C3(35, 35, 40), 114, 4)
-    strokeRect(x + 10, hexY, hexW, hexH, hexFocused and Theme.accent or Theme.border, 115, 4)
+    strokeRect(palX, palY, palW, palH, Theme.border, 114, 4)
+    strokeRect(hueX, hueY, hueW, hueH, Theme.border, 114, 4)
+    strokeRect(alphaX, alphaY, alphaW, alphaH, Theme.border, 115, 4)
 
-    local hexText = hexFocused and (cp._hexInput or "") or ("#" .. toHex(cp.value))
-    if hexFocused and floor(clock() * 2) % 2 == 0 then
+    if held and over(alphaX, alphaY, alphaW, alphaH) then
+        cp.alpha = 1 - clamp((ProjectState.mouseY - alphaY) / alphaH, 0, 1)
+    end
+
+    rect(alphaX - 1, alphaY + (1 - cp.alpha) * alphaH - 2, alphaW + 2, 4, Theme.white, 116, 1)
+
+    rect(x + 10, y + 196, 200, 22, (ProjectState.focus == cp) and C3(25, 25, 30) or over(x + 10, y + 196, 200, 22) and C3(45, 45, 52) or C3(35, 35, 40), 114, 4)
+    strokeRect(x + 10, y + 196, 200, 22, (ProjectState.focus == cp) and Theme.accent or Theme.border, 115, 4)
+
+    local hexText = (ProjectState.focus == cp) and (cp._hexInput or "") or ("#" .. toHex(cp.value))
+    if (ProjectState.focus == cp) and floor(clock() * 2) % 2 == 0 then
         hexText = hexText .. "|"
     end
-    txt(hexText, x + 16, textTop(hexY, hexH, 12), Theme.text, 12, FontUI, 116, false, false, hexW - 12)
+    txt(hexText, x + 16, textTop(y + 196, 22, 12), Theme.text, 12, FontUI, 116, false, false, 188)
 
-    if click and hexHovered then
-        ProjectState.focus = hexFocused and nil or cp
+    if click and over(x + 10, y + 196, 200, 22) then
+        ProjectState.focus = (ProjectState.focus == cp) and nil or cp
         cp._hexInput = toHex(cp.value)
         click = false
     end
 
-    local r = floor(cp.value.R * 255 + 0.5)
-    local g = floor(cp.value.G * 255 + 0.5)
-    local b = floor(cp.value.B * 255 + 0.5)
-    local rgbText = string.format("R: %d  G: %d  B: %d", r, g, b)
-    txt(rgbText, x + 10, y + 188, Theme.sub, 11, FontUI, 114, false, false, w - 20)
+    rect(x + 10, y + 228, 60, 22, C3(35, 35, 40), 114, 4)
+    strokeRect(x + 10, y + 228, 60, 22, Theme.border, 115, 4)
+    txt("R", x + 16, textTop(y + 228, 22, 12), C3(255, 69, 58), 12, FontBold, 116)
+    txt(tostring(floor(cp.value.R * 255 + 0.5)), x + 64 - textWidth(tostring(floor(cp.value.R * 255 + 0.5)), 12, FontUI), textTop(y + 228, 22, 12), Theme.text, 12, FontUI, 116)
 
-    rect(x + w - 30, y + 186, 20, 14, cp.value, 114, 3)
-    strokeRect(x + w - 30, y + 186, 20, 14, Theme.border, 115, 3)
+    rect(x + 80, y + 228, 60, 22, C3(35, 35, 40), 114, 4)
+    strokeRect(x + 80, y + 228, 60, 22, Theme.border, 115, 4)
+    txt("G", x + 86, textTop(y + 228, 22, 12), C3(52, 199, 89), 12, FontBold, 116)
+    txt(tostring(floor(cp.value.G * 255 + 0.5)), x + 134 - textWidth(tostring(floor(cp.value.G * 255 + 0.5)), 12, FontUI), textTop(y + 228, 22, 12), Theme.text, 12, FontUI, 116)
+
+    rect(x + 150, y + 228, 60, 22, C3(35, 35, 40), 114, 4)
+    strokeRect(x + 150, y + 228, 60, 22, Theme.border, 115, 4)
+    txt("B", x + 156, textTop(y + 228, 22, 12), C3(0, 122, 255), 12, FontBold, 116)
+    txt(tostring(floor(cp.value.B * 255 + 0.5)), x + 204 - textWidth(tostring(floor(cp.value.B * 255 + 0.5)), 12, FontUI), textTop(y + 228, 22, 12), Theme.text, 12, FontUI, 116)
 
     local final = HSV(cp.hue, cp.sat, cp.val)
-    if colorChanged(final, cp.value) then
+    if colorChanged(final, cp.value) or (cp.alpha ~= cp.picker.alpha) then
         cp.value = final
         cp.picker.value = final
-        safeCallback(cp.picker.callback, final)
+        cp.picker.alpha = cp.alpha
+        safeCallback(cp.picker.callback, final, cp.alpha)
     end
 
     if click and not over(x, y, w, h) then
@@ -2036,7 +2054,7 @@ local function renderTabs(click, px, py, pw)
     return click
 end
 
-local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
+local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
     if item.keybind then
         local keybind = item.keybind
         local keyText = keybind.listening and "..." or (keybind.value and string.upper(keybind.value) or "-")
@@ -2046,14 +2064,14 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
         local keyH = 20
         local hovered = over(keyX, keyY, keyW, keyH)
 
-        rect(keyX, keyY, keyW, keyH, Theme.surface3, 45, 4)
-        strokeRect(keyX, keyY, keyW, keyH, hovered and Theme.accent or Theme.border, 46, 4)
+        rect(keyX, keyY, keyW, keyH, Theme.surface3, 45, 4, trans)
+        strokeRect(keyX, keyY, keyW, keyH, hovered and Theme.accent or Theme.border, 46, 4, trans)
 
-        txt(keyText, keyX + keyW / 2, centerY(keyY, keyH), keybind.value and Theme.text or Theme.sub, 12, FontUI, 52, true, false, keyW - 4)
+        txt(keyText, keyX + keyW / 2, centerY(keyY, keyH), keybind.value and Theme.text or Theme.sub, 12, FontUI, 52, true, false, keyW - 4, trans)
 
         local modeTag = keybind.mode == "Toggle" and "T" or keybind.mode == "Always" and "A" or "H"
         local modeColor = keybind.mode == "Hold" and Theme.sub or Theme.accent
-        txt(modeTag, rowX + rowW - 108, centerY(rowY, ROW_H - 2), modeColor, 10, FontUI, 52, true)
+        txt(modeTag, rowX + rowW - 108, centerY(rowY, ROW_H - 2), modeColor, 10, FontUI, 52, true, false, nil, trans)
 
         if keybind.listening then
             for i = 1, #InputOrder do
@@ -2061,7 +2079,7 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
                 local input = Input[name]
                 if input.click and (name ~= "m1" or clock() - keybind.listenAt > 0.25) then
                     local newKey = normalizeKey(name)
-                    if name == "backspace" or name == "delete" or name == "unbound" then
+                    if name == "backspace" or name == "delete" or name == "unbound" or name == "esc" then
                         newKey = nil
                     end
                     keybind.value = newKey
@@ -2088,11 +2106,11 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
         local cpY = rowY + 8
         local hovered = over(cpX - 3, cpY - 3, cpW + 6, cpH + 6)
 
-        rect(cpX, cpY, cpW, cpH, picker.value, 46, 3)
-        strokeRect(cpX, cpY, cpW, cpH, Theme.border, 47, 3)
+        rect(cpX, cpY, cpW, cpH, picker.value, 46, 3, trans * (picker.alpha or 1))
+        strokeRect(cpX, cpY, cpW, cpH, Theme.border, 47, 3, trans)
 
         if hovered then
-            strokeRect(cpX - 2, cpY - 2, cpW + 4, cpH + 4, Theme.accent, 48, 4)
+            strokeRect(cpX - 2, cpY - 2, cpW + 4, cpH + 4, Theme.accent, 48, 4, trans)
         end
 
         if click and hovered then
@@ -2274,14 +2292,14 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                 if item.type == "label" then
                     txt(item.label, rowX, textTop(rowY, itemH - 2, 13), item.color or Theme.text, 13, FontSystem, z + 12, false, false, rowW, trans)
                     
-                elseif item.type == "toggle" then
+                elseif item.type == "checkbox" then
                     rect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
                     strokeRect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
                     
-                    txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - (item.colorpicker and 130 or item.keybind and 112 or item.tooltip and 22 or 6), trans)
+                    txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - (item.colorpicker and 130 or item.keybind and 102 or item.tooltip and 22 or 6), trans)
                     
                     if not isFloating then
-                        click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
+                        click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
                     end
                     
                     if item.tooltip and not isFloating then
@@ -2296,6 +2314,47 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         local onKeybind = item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)
                         local onColor = item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)
                         local onQ = item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)
+                        local on9Dot = over(colX + colW - 22, sy + 8, 14, 14)
+                        if not onKeybind and not onColor and not onQ and not on9Dot then
+                            setItemValue(item, not item.value, true)
+                            click = false
+                        end
+                    end
+                    
+                elseif item.type == "toggle" then
+                    txt(item.label, rowX + 4, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 4 - (item.colorpicker and 130 or item.keybind and 102 or item.tooltip and 66 or 48), trans)
+                    
+                    if item.animT == nil then
+                        item.animT = item.value and 1 or 0
+                    end
+                    local targetT = item.value and 1 or 0
+                    if item.animT ~= targetT then
+                        item.animT = smoothValue(item.animT, targetT, 24)
+                        if abs(item.animT - targetT) < 0.001 then
+                            item.animT = targetT
+                        end
+                    end
+                    
+                    local tx, ty = rowX + rowW - 42, rowY + 6
+                    rect(tx, ty, 30, 16, lerpColor(Theme.toggleOff, Theme.toggleOn, item.animT), z + 12, 8, trans)
+                    circle(tx + 6 + 18 * item.animT, ty + 8, 6, Theme.knob, z + 14, true, 0, 32, trans)
+                    
+                    if not isFloating then
+                        click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
+                    end
+                    
+                    if item.tooltip and not isFloating then
+                        local qHovered = over(rowX + rowW - 60, rowY + 6, 12, 12)
+                        txt("?", rowX + rowW - 54, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, true, false, nil, trans)
+                        if qHovered and not disabled then
+                            tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
+                        end
+                    end
+                    
+                    if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled then
+                        local onKeybind = item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)
+                        local onColor = item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)
+                        local onQ = item.tooltip and over(rowX + rowW - 60, rowY + 6, 12, 12)
                         local on9Dot = over(colX + colW - 22, sy + 8, 14, 14)
                         if not onKeybind and not onColor and not onQ and not on9Dot then
                             setItemValue(item, not item.value, true)
@@ -2751,7 +2810,7 @@ local function renderWindow(click, held, rightClick)
     txt(ProjectState.title or "homesick", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
     if ProjectState.badgeText and ProjectState.badgeText ~= "" then
         local badgeW = textWidth(ProjectState.badgeText, 10, FontBold) + 12
-        local badgeX = x + 14 + textWidth(ProjectState.title or "dev", 14, FontBold) + 8
+        local badgeX = x + 14 + textWidth(ProjectState.title or "homesick", 14, FontBold) + 8
         local badgeY = textTop(y, TITLE_H, 14) - 1
         rect(badgeX, badgeY, badgeW, 16, C3(38, 34, 32), 15, 6)
         strokeRect(badgeX, badgeY, badgeW, 16, Theme.accent, 16, 6)
@@ -3032,8 +3091,33 @@ homesick.createWindow = function(title, width, height)
                     return wSelf
                 end
                 
-                widgetWrap.addColorpicker = function(wSelf, label, defaultColor, overwrite, callback)
-                    wSelf.rawItem:AddColorpicker(label, defaultColor, overwrite, callback)
+                widgetWrap.addColorpicker = function(wSelf, label, defaultColor, overwrite, callback, defaultAlpha)
+                    wSelf.rawItem:AddColorpicker(label, defaultColor, overwrite, callback, defaultAlpha)
+                    return wSelf
+                end
+                
+                return widgetWrap
+            end
+            
+            secWrap.addCheckbox = function(sSelf, id, label, default, callback)
+                local widgetWrap = {
+                    id = id,
+                    type = "Checkbox",
+                    rawItem = sSelf.rawSec:Checkbox(label, default, callback)
+                }
+                
+                widgetWrap.addTooltip = function(wSelf, text)
+                    wSelf.rawItem.item.tooltip = text
+                    return wSelf
+                end
+                
+                widgetWrap.addKeybind = function(wSelf, defaultKey, mode, canChange, callback)
+                    wSelf.rawItem:AddKeybind(defaultKey, mode, canChange, callback)
+                    return wSelf
+                end
+                
+                widgetWrap.addColorpicker = function(wSelf, label, defaultColor, overwrite, callback, defaultAlpha)
+                    wSelf.rawItem:AddColorpicker(label, defaultColor, overwrite, callback, defaultAlpha)
                     return wSelf
                 end
                 
