@@ -52,16 +52,20 @@ if uis then
             mouseScroll = mouseScroll + wheel
         end)
     end)
-    local function onInput(input, processed)
-        if input and string.find(tostring(input.UserInputType), "MouseWheel") then
-            mouseScroll = mouseScroll + (input.Position and input.Position.Z or 0)
-        end
-    end
-    if uis.InputChanged then
-        uis.InputChanged:Connect(onInput)
-    elseif uis.InputBegan then
-        uis.InputBegan:Connect(onInput)
-    end
+    pcall(function()
+        uis.InputChanged:Connect(function(input)
+            if input and (input.UserInputType == Enum.UserInputType.MouseWheel or string.find(tostring(input.UserInputType), "MouseWheel")) then
+                mouseScroll = mouseScroll + (input.Position and input.Position.Z or 0)
+            end
+        end)
+    end)
+    pcall(function()
+        uis.InputBegan:Connect(function(input)
+            if input and (input.UserInputType == Enum.UserInputType.MouseWheel or string.find(tostring(input.UserInputType), "MouseWheel")) then
+                mouseScroll = mouseScroll + (input.Position and input.Position.Z or 0)
+            end
+        end)
+    end)
 end
 
 
@@ -1591,7 +1595,7 @@ local function renderDropdown(click)
     local isHoveredDropdown = over(dd.x - 4, dd.y - 4, dd.w + 8, dd.h + 8)
     if isHoveredDropdown then
         if ProjectState.mouseScroll ~= 0 then
-            dd.scrollOffset = clamp(dd.scrollOffset - ProjectState.mouseScroll, 0, max(0, #dd.choices - maxRows))
+            dd.scrollOffset = clamp(dd.scrollOffset - (ProjectState.mouseScroll > 0 and 1 or -1), 0, max(0, #dd.choices - maxRows))
         end
         if Input.down.click then
             dd.scrollOffset = min(#dd.choices - maxRows, dd.scrollOffset + 1)
@@ -2379,10 +2383,10 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     rect(valBoxX, valBoxY, boxW, 16, Theme.surface, z + 12, 4, trans)
                     strokeRect(valBoxX, valBoxY, boxW, 16, isFocusedSlider and Theme.accent or (hoveredVal and Theme.accent or Theme.border), z + 13, 4, trans)
-                    txt(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), valBoxX + boxW / 2, valBoxY + 4, Theme.text, 12, FontUI, z + 14, true, false, boxW - 4, trans)
+                    txt(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), valBoxX + boxW / 2, valBoxY + 8, Theme.text, 12, FontUI, z + 14, true, false, boxW - 4, trans)
 
                     if isFocusedSlider then
-                        txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, FontUI) / 2, valBoxY + 4, Theme.text, 12, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+                        txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, FontUI) / 2, valBoxY + 8, Theme.text, 12, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
                     end
 
                     if click and hoveredVal then
@@ -2564,27 +2568,29 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     tab.targetScrollY = clamp(tab.targetScrollY or tab.scrollY, 0, tab.maxScroll)
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
 
-    if tab.maxScroll > 0 and not popupBlocking and not ProjectState.focus then
+    if tab.maxScroll > 0 and not popupBlocking then
         if ProjectState.mouseScroll ~= 0 and over(ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h) then
-            tab.targetScrollY = clamp(tab.targetScrollY - ProjectState.mouseScroll * 28, 0, tab.maxScroll)
+            tab.targetScrollY = clamp(tab.targetScrollY - (ProjectState.mouseScroll > 0 and 1 or -1) * 28, 0, tab.maxScroll)
         end
-        if Input.up.held then
-            tab.targetScrollY = max(0, tab.targetScrollY - 12)
-        end
-        if Input.down.held then
-            tab.targetScrollY = min(tab.maxScroll, tab.targetScrollY + 12)
-        end
-        if Input.pageup.click then
-            tab.targetScrollY = max(0, tab.targetScrollY - viewH)
-        end
-        if Input.pagedown.click then
-            tab.targetScrollY = min(tab.maxScroll, tab.targetScrollY + viewH)
-        end
-        if Input.home.click then
-            tab.targetScrollY = 0
-        end
-        if Input["end"].click then
-            tab.targetScrollY = tab.maxScroll
+        if not ProjectState.focus then
+            if Input.up.held then
+                tab.targetScrollY = max(0, tab.targetScrollY - 12)
+            end
+            if Input.down.held then
+                tab.targetScrollY = min(tab.maxScroll, tab.targetScrollY + 12)
+            end
+            if Input.pageup.click then
+                tab.targetScrollY = max(0, tab.targetScrollY - viewH)
+            end
+            if Input.pagedown.click then
+                tab.targetScrollY = min(tab.maxScroll, tab.targetScrollY + viewH)
+            end
+            if Input.home.click then
+                tab.targetScrollY = 0
+            end
+            if Input["end"].click then
+                tab.targetScrollY = tab.maxScroll
+            end
         end
     end
 
