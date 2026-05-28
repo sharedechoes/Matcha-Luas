@@ -174,6 +174,12 @@ local ProjectState = {
     resizeSectionStartH = nil,
     resizeSectionStartMouseY = nil,
     lastTooltipText = nil,
+    searchBar = {
+        type = "textbox",
+        value = "",
+        active = false,
+        width = 0,
+    },
 }
 
 local Pool = {
@@ -1338,6 +1344,17 @@ local function processTextInput()
 
     if type(item) ~= "table" or (item.type ~= "textbox" and item.type ~= "slider") then
         return
+    end
+
+    if item == ProjectState.searchBar then
+        if Input.enter.click or Input.esc.click then
+            if Input.esc.click then
+                ProjectState.searchBar.active = false
+                ProjectState.searchBar.value = ""
+            end
+            ProjectState.focus = nil
+            return
+        end
     end
 
     if Input.enter.click then
@@ -2784,6 +2801,290 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     return click, held, rightClick
 end
 
+local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightClick, clipTop, clipBottom)
+    local z = 40
+    local trans = 1
+    local disabled = isItemDisabled(item)
+    if disabled then trans = 0.4 end
+    
+    local itemH = getItemHeight(item)
+    local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
+    
+    if item.type == "checkbox" or item.type == "toggle" then
+        rect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
+        strokeRect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
+        
+        txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - (6 + (item.colorpicker and 20 or 0) + (item.keybind and 64 or 0) + (item.tooltip and 18 or 0)), trans)
+        
+        click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
+        
+        if item.tooltip then
+            txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), over(rowX + rowW - 16, rowY + 6, 12, 12) and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
+            if over(rowX + rowW - 16, rowY + 6, 12, 12) and not disabled then
+                tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
+            end
+        end
+        
+        if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled then
+            if not (item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)) and not (item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)) and not (item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)) then
+                setItemValue(item, not item.value, true)
+                click = false
+            end
+        end
+        
+    elseif item.type == "slider" then
+        txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 80, trans)
+        
+        local isFocusedSlider = ProjectState.focus == item
+        local valStr = isFocusedSlider and (item._directValue or "") or tostring(item.value)
+        local boxW = max(36, textWidth(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), 12, FontUI) + 12)
+        local valBoxX = rowX + rowW - boxW - 4
+        local hoveredVal = over(valBoxX, rowY + 1, boxW, 16) and not popupBlocking and not disabled
+        
+        if isFocusedSlider then
+            rect(valBoxX, rowY + 1, boxW, 16, Theme.surface, z + 12, 4, trans)
+            strokeRect(valBoxX, rowY + 1, boxW, 16, Theme.accent, z + 13, 4, trans)
+        end
+        txt(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), valBoxX + boxW / 2, rowY + 9, Theme.text, 12, FontUI, z + 14, true, false, boxW - 4, trans)
+        if isFocusedSlider then
+            txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, FontUI) / 2, rowY + 9, Theme.text, 12, FontUI, z + 15, true, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+        end
+
+        if click and hoveredVal then
+            ProjectState.focus = item
+            item._directValue = tostring(item.value)
+            click = false
+        end
+        
+        local sx, sw = rowX + 4, rowW - 8
+        local sy_bar = rowY + 22
+        local frac = clamp(((item.value or 0) - (item.min or 0)) / max(0.0001, (item.max or 100) - (item.min or 0)), 0, 1)
+        
+        rect(sx, sy_bar, sw, 4, Theme.surface3, z + 12, 2, trans)
+        if frac > 0 then
+            rect(sx, sy_bar, sw * frac, 4, Theme.accent, z + 13, 2, trans)
+        end
+        
+        item._animatedRadius = item._animatedRadius or 5
+        item._animatedRadius = smoothValue(item._animatedRadius, (hoveredVal or (over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled)) and 7 or 5, 18)
+        circle(sx + sw * frac, sy_bar + 2, item._animatedRadius, C3(190, 190, 190), z + 14, true, 0, 32, trans)
+        
+        if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled and not hoveredVal then
+            ProjectState.sliderDrag = item
+            click = false
+        end
+        if held and not popupBlocking and not disabled and (ProjectState.sliderDrag == item) then
+            local snapped = snapValue((item.min or 0) + max(0.0001, (item.max or 100) - (item.min or 0)) * clamp((ProjectState.mouseX - sx) / sw, 0, 1), item)
+            if snapped ~= item.value then
+                item.value = snapped
+                safeCallback(item.callback, snapped)
+            end
+        end
+        
+    elseif item.type == "dropdown" then
+        txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 20, trans)
+        
+        local dx, dw = rowX + 4, rowW - 8
+        local dy_box = rowY + 18
+        local boxH = 22
+        
+        rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
+        strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
+        
+        txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontSystem, z + 14, false, false, dw - 28, trans)
+        
+        if ProjectState.dropdown and ProjectState.dropdown.item == item then
+            drawChevronUp(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
+        else
+            drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
+        end
+        
+        if item.tooltip then
+            txt("?", rowX + rowW - 10, rowY + 2, over(rowX + rowW - 16, rowY + 2, 12, 12) and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
+            if over(rowX + rowW - 16, rowY + 2, 12, 12) and not disabled then
+                tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
+            end
+        end
+        
+        if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled then
+            spawnDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
+            click = false
+        end
+        
+    elseif item.type == "button" then
+        local controlY = rowY + 2
+        item._hoverFactor = smoothValue(item._hoverFactor or 0, (over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled) and 1 or 0, 18)
+        
+        rect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 12, 6, trans * (0.1 + 0.15 * item._hoverFactor))
+        strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 13, 6, trans * (0.4 + 0.6 * item._hoverFactor))
+        
+        txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), Theme.accent, 13, FontBold, z + 14, true, false, rowW - 24, trans)
+        
+        if click and over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled then
+            safeCallback(item.callback)
+            click = false
+        end
+        
+    elseif item.type == "textbox" then
+        txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 20, trans)
+        
+        local bx, bw = rowX + 4, rowW - 8
+        local dy_box = rowY + 18
+        local boxH = 22
+        local focused = ProjectState.focus == item
+        
+        rect(bx, dy_box, bw, boxH, focused and Theme.surface or over(bx, dy_box, bw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
+        strokeRect(bx, dy_box, bw, boxH, focused and Theme.accent or Theme.border, z + 13, 4, trans)
+        
+        txt((item.value == "") and item.label or item.value, bx + 8, textTop(dy_box, boxH, 13), (item.value == "") and Theme.sub or Theme.text, 13, FontUI, z + 14, false, false, bw - 16, trans)
+        if focused then
+            local cursorX = bx + 8
+            if not (item.value == "") then
+                cursorX = cursorX + textWidth(item.value, 13, FontUI)
+            end
+            txt("|", cursorX, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+        end
+        
+        if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled then
+            ProjectState.focus = focused and nil or item
+            click = false
+        end
+    end
+    
+    return click, held, rightClick
+end
+
+local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
+    local matches = {}
+    for _, tab in ipairs(ProjectState.tabs) do
+        for _, sec in ipairs(tab.sections) do
+            for _, item in ipairs(sec.items) do
+                if item.type ~= "divider" and item.type ~= "label" then
+                    if string.find(string.lower(item.label or ""), string.lower(ProjectState.searchBar.value), 1, true) then
+                        matches[#matches + 1] = {
+                            tab = tab,
+                            section = sec,
+                            item = item
+                        }
+                    end
+                end
+            end
+        end
+    end
+
+    local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
+    
+    local dummyY = py + CONTENT_PAD
+    local lastTab = nil
+    local lastSec = nil
+    for i = 1, #matches do
+        local match = matches[i]
+        if match.tab ~= lastTab then
+            dummyY = dummyY + 20
+            lastTab = match.tab
+            lastSec = nil
+        end
+        if match.section ~= lastSec then
+            dummyY = dummyY + 18
+            lastSec = match.section
+        end
+        dummyY = dummyY + getItemHeight(match.item) + 6
+        if i < #matches then
+            dummyY = dummyY + 6
+        end
+    end
+    local searchContentH = dummyY - (py + CONTENT_PAD)
+    
+    ProjectState.searchMaxScroll = max(0, searchContentH - max(1, ph - CONTENT_PAD * 2))
+    ProjectState.searchScrollY = ProjectState.searchScrollY or 0
+    ProjectState.searchTargetScrollY = clamp(ProjectState.searchTargetScrollY or 0, 0, ProjectState.searchMaxScroll)
+    
+    if ProjectState.searchMaxScroll > 0 and not popupBlocking then
+        if ProjectState.mouseScroll ~= 0 and over(ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h) then
+            ProjectState.searchTargetScrollY = clamp(ProjectState.searchTargetScrollY - (ProjectState.mouseScroll > 0 and 1 or -1) * 28, 0, ProjectState.searchMaxScroll)
+        end
+    end
+    
+    local dtValue = ProjectState.dt or 1/60
+    if dtValue <= 0 then dtValue = 1/60 end
+    ProjectState.searchScrollY = ProjectState.searchScrollY + (ProjectState.searchTargetScrollY - ProjectState.searchScrollY) * (1 - math.exp(-15 * dtValue))
+    ProjectState.searchScrollY = clamp(ProjectState.searchScrollY, 0, ProjectState.searchMaxScroll)
+    
+    local currentY = py + CONTENT_PAD - ProjectState.searchScrollY
+    local clipTop = py + 4
+    local clipBottom = py + ph - 4
+    
+    local lastTab = nil
+    local lastSec = nil
+    for i = 1, #matches do
+        local match = matches[i]
+        local tab = match.tab
+        local sec = match.section
+        local item = match.item
+        
+        if tab ~= lastTab then
+            if currentY >= clipTop - 20 and currentY <= clipBottom then
+                txt(tab.name, px + 10, currentY, Theme.accent, 14, FontBold, 30)
+            end
+            currentY = currentY + 20
+            lastTab = tab
+            lastSec = nil
+        end
+        
+        if sec ~= lastSec then
+            if currentY >= clipTop - 18 and currentY <= clipBottom then
+                txt(sec.name, px + 10, currentY, Theme.sub, 12, FontBold, 30)
+                
+                if (px + pw - 20) > (px + 18 + textWidth(sec.name, 12, FontBold)) then
+                    local segmentCount = 20
+                    for seg = 1, segmentCount do
+                        local sx = (px + 18 + textWidth(sec.name, 12, FontBold)) + (seg - 1) * (((px + pw - 20) - (px + 18 + textWidth(sec.name, 12, FontBold))) / segmentCount)
+                        local ex = sx + (((px + pw - 20) - (px + 18 + textWidth(sec.name, 12, FontBold))) / segmentCount)
+                        line(sx, currentY + 6, ex, currentY + 6, Theme.border, 30, 1, 1 - (seg / segmentCount))
+                    end
+                end
+            end
+            currentY = currentY + 18
+            lastSec = sec
+        end
+        
+        local itemH = getItemHeight(item)
+        if currentY >= clipTop - itemH and currentY <= clipBottom then
+            click, held, rightClick = renderSearchFeature(item, px + 10, currentY, pw - 20, click, held, rightClick, clipTop, clipBottom)
+        end
+        currentY = currentY + itemH + 6
+        
+        if i < #matches then
+            if currentY >= clipTop - 6 and currentY <= clipBottom then
+                rect(px + 10, currentY, pw - 20, 1, Theme.border, 30, 0, 0.5)
+            end
+            currentY = currentY + 6
+        end
+    end
+    
+    if ProjectState.searchMaxScroll > 0 then
+        local trackH = ph - CONTENT_PAD * 2 - 12
+        local barH = max(22, (trackH / max(searchContentH, trackH)) * trackH)
+        local barY = py + CONTENT_PAD + 6 + (ProjectState.searchScrollY / max(1, ProjectState.searchMaxScroll)) * (trackH - barH)
+        local scrollBarX = ProjectState.x + ProjectState.w - 12
+        rect(scrollBarX, py + CONTENT_PAD + 6, 3, trackH, Theme.surface3, 50, 2)
+        rect(scrollBarX, barY, 3, barH, Theme.accent, 51, 2)
+        if click and over(scrollBarX - 5, py + CONTENT_PAD + 6, 14, trackH) and not popupBlocking then
+            ProjectState.scrollDrag = {
+                search = true,
+                grab = over(scrollBarX - 5, barY, 14, barH) and clamp(ProjectState.mouseY - barY, 0, barH) or (barH / 2),
+            }
+            click = false
+        end
+        
+        if held and type(ProjectState.scrollDrag) == "table" and ProjectState.scrollDrag.search then
+            ProjectState.searchTargetScrollY = clamp((ProjectState.mouseY - (py + CONTENT_PAD + 6) - ProjectState.scrollDrag.grab) / max(1, trackH - barH), 0, 1) * ProjectState.searchMaxScroll
+        end
+    end
+    
+    return click, held, rightClick
+end
+
 local onlineCount = 7517 + math.random(-25, 25)
 task.spawn(function()
     local ok, res = pcall(function()
@@ -2897,31 +3198,46 @@ local function renderWindow(click, held, rightClick)
     end
 
     txt(ProjectState.title or "homesick", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
-    if ProjectState.badgeText and ProjectState.badgeText ~= "" then
-        local titleStr = ProjectState.title or "homesick"
-        local titleW = 0
-        for i = 1, #titleStr do
-            local char = string.sub(titleStr, i, i)
-            if char == "i" or char == "l" or char == "j" or char == "f" or char == "t" or char == " " or char == "!" or char == "." or char == "," or char == ";" or char == ":" then
-                titleW = titleW + 0.28
-            elseif char == "m" or char == "w" or char == "M" or char == "W" then
-                titleW = titleW + 0.75
-            elseif char:match("[A-Z]") then
-                titleW = titleW + 0.58
-            else
-                titleW = titleW + 0.48
+
+    local iconHovered = over(x + w - 30, y + 6, 20, 24)
+    if click and iconHovered then
+        ProjectState.searchBar.active = not ProjectState.searchBar.active
+        if ProjectState.searchBar.active then
+            ProjectState.focus = ProjectState.searchBar
+            ProjectState.searchBar.value = ""
+        else
+            if ProjectState.focus == ProjectState.searchBar then
+                ProjectState.focus = nil
             end
+            ProjectState.searchBar.value = ""
         end
-        local badgeW = textWidth(ProjectState.badgeText, 10, FontBold) + 12
-        local badgeX = x + 14 + titleW * 14 + 6
-        local badgeY = textTop(y, TITLE_H, 14) - 1
-        rect(badgeX, badgeY, badgeW, 16, C3(38, 34, 32), 15, 6)
-        strokeRect(badgeX, badgeY, badgeW, 16, Theme.accent, 16, 6)
-        txt(ProjectState.badgeText, badgeX + badgeW / 2, badgeY + 8, Theme.accent, 10, FontBold, 17, true)
+        click = false
+        baseClick = false
     end
 
-    local userStr = LocalPlayer and LocalPlayer.Name or "NaN"
-    txt(userStr, x + w - 14 - textWidth(userStr, 13, FontUI), textTop(y, TITLE_H, 13), Theme.accent, 13, FontUI, 16)
+    ProjectState.searchBar.width = smoothValue(ProjectState.searchBar.width or 0, ProjectState.searchBar.active and 140 or 0, 18)
+    if ProjectState.searchBar.width > 2 then
+        local searchW = ProjectState.searchBar.width
+        local searchX = x + w - 34 - searchW
+        rect(searchX, y + 8, searchW, 20, Theme.surface, 15, 6)
+        strokeRect(searchX, y + 8, searchW, 20, (ProjectState.focus == ProjectState.searchBar) and Theme.accent or Theme.border, 16, 6)
+        txt((ProjectState.searchBar.value == "") and "Search..." or ProjectState.searchBar.value, searchX + 8, textTop(y + 8, 20, 12), (ProjectState.searchBar.value == "") and Theme.sub or Theme.text, 12, FontUI, 17, false, false, searchW - 16)
+        if ProjectState.focus == ProjectState.searchBar then
+            local cursorX = searchX + 8
+            if not (ProjectState.searchBar.value == "") then
+                cursorX = cursorX + textWidth(ProjectState.searchBar.value, 12, FontUI)
+            end
+            txt("|", cursorX, textTop(y + 8, 20, 12), Theme.text, 12, FontUI, 18, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+        end
+        if click and over(searchX, y + 8, searchW, 20) then
+            ProjectState.focus = ProjectState.searchBar
+            click = false
+            baseClick = false
+        end
+    end
+
+    circle(x + w - 23, y + 16, 4, iconHovered and Theme.accent or Theme.sub, 20, false, 1.5)
+    line(x + w - 20, y + 19, x + w - 16, y + 23, iconHovered and Theme.accent or Theme.sub, 20, 1.5)
 
     if ProjectState.minimized or h <= MINIMIZED_H then
         return click, held, rightClick
@@ -2933,28 +3249,36 @@ local function renderWindow(click, held, rightClick)
         return click, held, rightClick
     end
 
-    baseClick = renderTabs(baseClick, px, py, pw)
+    if ProjectState.searchBar.active and ProjectState.searchBar.value ~= "" then
+        baseClick, baseHeld, baseRightClick = renderSearchResults(baseClick, baseHeld, baseRightClick, px, py, pw, ph)
+        if ProjectState.focus and baseClick and not over(px, py, pw, ph) and not over(x + w - 34 - ProjectState.searchBar.width, y + 8, ProjectState.searchBar.width, 20) and not over(x + w - 30, y + 6, 20, 24) then
+            ProjectState.focus = nil
+            baseClick = false
+        end
+    else
+        baseClick = renderTabs(baseClick, px, py, pw)
 
-    local contY = py + TAB_H + 8
-    local contH = ph - TAB_H - 8
+        local contY = py + TAB_H + 8
+        local contH = ph - TAB_H - 8
 
-    local fade = ProjectState.contentFade or 1
-    if fade < 1 then
-        fade = smoothValue(fade, 1, 16)
-        ProjectState.contentFade = fade
-    end
+        local fade = ProjectState.contentFade or 1
+        if fade < 1 then
+            fade = smoothValue(fade, 1, 16)
+            ProjectState.contentFade = fade
+        end
 
-    baseClick, baseHeld, baseRightClick = renderSections(ProjectState.activeTab, baseClick, baseHeld, baseRightClick, px, contY, pw, contH)
+        baseClick, baseHeld, baseRightClick = renderSections(ProjectState.activeTab, baseClick, baseHeld, baseRightClick, px, contY, pw, contH)
 
-    if ProjectState.focus and baseClick and not over(px, contY, pw, contH) then
-        ProjectState.focus = nil
-        baseClick = false
+        if ProjectState.focus and baseClick and not over(px, contY, pw, contH) then
+            ProjectState.focus = nil
+            baseClick = false
+        end
     end
 
     local botY = y + h - 24
     local botH = 24
     line(x + 2, botY, x + w - 2, botY, Theme.border, 8)
-    txt("v1.0.0", x + 14, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
+    txt((ProjectState.badgeText and ProjectState.badgeText ~= "") and (ProjectState.badgeText .. " • v1.0.0") or "v1.0.0", x + 14, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
     line(x + w - 13, y + h - 5, x + w - 5, y + h - 13, Theme.sub, 10, 1)
     line(x + w - 10, y + h - 5, x + w - 5, y + h - 10, Theme.sub, 10, 1)
     line(x + w - 7, y + h - 5, x + w - 5, y + h - 7, Theme.sub, 10, 1)
