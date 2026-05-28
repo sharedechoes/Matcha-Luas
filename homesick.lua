@@ -180,6 +180,8 @@ local ProjectState = {
         active = false,
         width = 0,
     },
+    settingsActive = false,
+    settingsTab = nil,
 }
 
 local Pool = {
@@ -1111,6 +1113,9 @@ local function finalDestroy()
     ProjectState.inputState = true
 
     removeAllDrawings()
+    pcall(function()
+        game:GetService("ContextActionService"):UnbindAction("homesickFreezeMovement")
+    end)
 end
 
 function UI:Destroy()
@@ -2801,6 +2806,211 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     return click, held, rightClick
 end
 
+local function saveConfig()
+    pcall(makefolder, "homesick")
+    local configData = {}
+    for _, t in ipairs(ProjectState.tabs) do
+        for _, s in ipairs(t.sections) do
+            for _, item in ipairs(s.items) do
+                if item.type ~= "divider" and item.type ~= "label" and item.type ~= "button" then
+                    local key = t.name .. "." .. s.name .. "." .. item.label
+                    local data = { value = item.value }
+                    if item.keybind then
+                        data.keybind = { value = item.keybind.value, mode = item.keybind.mode }
+                    end
+                    if item.colorpicker then
+                        data.colorpicker = { value = toHex(item.colorpicker.value), alpha = item.colorpicker.alpha }
+                    end
+                    configData[key] = data
+                end
+            end
+        end
+    end
+    local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), configData)
+    if json and json ~= "" then
+        pcall(writefile, "homesick/config.json", json)
+    end
+end
+
+local function loadConfig(json)
+    if not json then
+        local ok, raw = pcall(readfile, "homesick/config.json")
+        if ok and raw then
+            json = raw
+        end
+    end
+    if not json or json == "" then return end
+    local decodeOk, configData = pcall(game:GetService("HttpService").JSONDecode, game:GetService("HttpService"), json)
+    if decodeOk and decodeOk == true and type(configData) == "table" then
+        for _, t in ipairs(ProjectState.tabs) do
+            for _, s in ipairs(t.sections) do
+                for _, item in ipairs(s.items) do
+                    local key = t.name .. "." .. s.name .. "." .. item.label
+                    local data = configData[key]
+                    if data then
+                        setItemValue(item, data.value, true)
+                        if data.keybind and item.keybind then
+                            item.keybind.value = data.keybind.value
+                            item.keybind.mode = data.keybind.mode
+                            safeCallback(item.keybind.callback, item.keybind.value and Input[item.keybind.value] and Input[item.keybind.value].id or nil, item.keybind.mode)
+                        end
+                        if data.colorpicker and item.colorpicker then
+                            item.colorpicker.value = C3HEX("#" .. data.colorpicker.value)
+                            item.colorpicker.alpha = data.colorpicker.alpha
+                            safeCallback(item.colorpicker.callback, item.colorpicker.value, item.colorpicker.alpha)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function exportConfig()
+    local configData = {}
+    for _, t in ipairs(ProjectState.tabs) do
+        for _, s in ipairs(t.sections) do
+            for _, item in ipairs(s.items) do
+                if item.type ~= "divider" and item.type ~= "label" and item.type ~= "button" then
+                    local key = t.name .. "." .. s.name .. "." .. item.label
+                    local data = { value = item.value }
+                    if item.keybind then
+                        data.keybind = { value = item.keybind.value, mode = item.keybind.mode }
+                    end
+                    if item.colorpicker then
+                        data.colorpicker = { value = toHex(item.colorpicker.value), alpha = item.colorpicker.alpha }
+                    end
+                    configData[key] = data
+                end
+            end
+        end
+    end
+    local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), configData)
+    if json and json ~= "" then
+        return "homesickCfg_" .. base64encode(json)
+    end
+    return ""
+end
+
+local function importConfig(str)
+    if not str or string.sub(str, 1, 12) ~= "homesickCfg_" then return end
+    local ok, json = pcall(base64decode, string.sub(str, 13))
+    if ok and json and json ~= "" then
+        loadConfig(json)
+    end
+end
+
+local function saveTheme()
+    pcall(makefolder, "homesick")
+    local themeData = {}
+    for k, v in pairs(Theme) do
+        themeData[k] = toHex(v)
+    end
+    local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), themeData)
+    if json and json ~= "" then
+        pcall(writefile, "homesick/theme.json", json)
+    end
+end
+
+local function loadTheme(json)
+    if not json then
+        local ok, raw = pcall(readfile, "homesick/theme.json")
+        if ok and raw then
+            json = raw
+        end
+    end
+    if not json or json == "" then return end
+    local decodeOk, themeData = pcall(game:GetService("HttpService").JSONDecode, game:GetService("HttpService"), json)
+    if decodeOk and decodeOk == true and type(themeData) == "table" then
+        for k, v in pairs(themeData) do
+            if Theme[k] ~= nil then
+                Theme[k] = C3HEX("#" .. v)
+            end
+        end
+    end
+end
+
+local function exportTheme()
+    local themeData = {}
+    for k, v in pairs(Theme) do
+        themeData[k] = toHex(v)
+    end
+    local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), themeData)
+    if json and json ~= "" then
+        return "homesickTheme_" .. base64encode(json)
+    end
+    return ""
+end
+
+local function importTheme(str)
+    if not str or string.sub(str, 1, 14) ~= "homesickTheme_" then return end
+    local ok, json = pcall(base64decode, string.sub(str, 15))
+    if ok and json and json ~= "" then
+        loadTheme(json)
+    end
+end
+
+local function initSettings()
+    local settingsTab = {
+        name = "Settings",
+        sections = {},
+        scrollY = 0,
+        targetScrollY = 0,
+        maxScroll = 0,
+    }
+    ProjectState.settingsTab = settingsTab
+    
+    local configSection = createSection(settingsTab, "Configs", "Left")
+    local themeSection = createSection(settingsTab, "Themes", "Right")
+    local colorsSection = createSection(settingsTab, "Theme Colors", "Right")
+    
+    configSection:Button("Save Current Config", function()
+        saveConfig()
+    end)
+    configSection:Button("Load Config", function()
+        loadConfig()
+    end)
+    
+    local exportBox = configSection:Textbox("Export Code", "")
+    exportBox:Set("")
+    configSection:Button("Generate Export Code", function()
+        exportBox:Set(exportConfig())
+    end)
+    
+    local importBox = configSection:Textbox("Import Code", "")
+    importBox:Set("")
+    configSection:Button("Import Config", function()
+        importConfig(importBox.item.value)
+    end)
+    
+    themeSection:Button("Save Current Theme", function()
+        saveTheme()
+    end)
+    themeSection:Button("Load Theme", function()
+        loadTheme()
+    end)
+    
+    local exportThemeBox = themeSection:Textbox("Export Code", "")
+    exportThemeBox:Set("")
+    themeSection:Button("Generate Theme Export Code", function()
+        exportThemeBox:Set(exportTheme())
+    end)
+    
+    local importThemeBox = themeSection:Textbox("Import Code", "")
+    importThemeBox:Set("")
+    themeSection:Button("Import Theme", function()
+        importTheme(importThemeBox.item.value)
+    end)
+    
+    colorsSection:Label("Customize UI theme colors below:")
+    for _, name in ipairs({"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border"}) do
+        local toggle = colorsSection:Toggle("Customize " .. name, false)
+        toggle:AddColorpicker(name, Theme[name], true, function(color)
+            Theme[name] = color
+        end)
+    end
+end
+
 local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightClick, clipTop, clipBottom)
     local z = 40
     local trans = 1
@@ -3199,10 +3409,22 @@ local function renderWindow(click, held, rightClick)
 
     txt(ProjectState.title or "homesick", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
 
-    local iconHovered = over(x + w - 30, y + 6, 20, 24)
+    local setHovered = over(x + w - 30, y + 6, 20, 24)
+    if click and setHovered then
+        ProjectState.settingsActive = not ProjectState.settingsActive
+        if ProjectState.settingsActive then
+            ProjectState.searchBar.active = false
+            ProjectState.searchBar.value = ""
+        end
+        click = false
+        baseClick = false
+    end
+
+    local iconHovered = over(x + w - 52, y + 6, 20, 24)
     if click and iconHovered then
         ProjectState.searchBar.active = not ProjectState.searchBar.active
         if ProjectState.searchBar.active then
+            ProjectState.settingsActive = false
             ProjectState.focus = ProjectState.searchBar
             ProjectState.searchBar.value = ""
         else
@@ -3218,7 +3440,7 @@ local function renderWindow(click, held, rightClick)
     ProjectState.searchBar.width = smoothValue(ProjectState.searchBar.width or 0, ProjectState.searchBar.active and 140 or 0, 18)
     if ProjectState.searchBar.width > 2 then
         local searchW = ProjectState.searchBar.width
-        local searchX = x + w - 34 - searchW
+        local searchX = x + w - 56 - searchW
         rect(searchX, y + 8, searchW, 20, Theme.surface, 15, 6)
         strokeRect(searchX, y + 8, searchW, 20, (ProjectState.focus == ProjectState.searchBar) and Theme.accent or Theme.border, 16, 6)
         txt((ProjectState.searchBar.value == "") and "Search..." or ProjectState.searchBar.value, searchX + 8, textTop(y + 8, 20, 12), (ProjectState.searchBar.value == "") and Theme.sub or Theme.text, 12, FontUI, 17, false, false, searchW - 16)
@@ -3236,8 +3458,18 @@ local function renderWindow(click, held, rightClick)
         end
     end
 
-    circle(x + w - 23, y + 16, 4, iconHovered and Theme.accent or Theme.sub, 20, false, 1.5)
-    line(x + w - 20, y + 19, x + w - 16, y + 23, iconHovered and Theme.accent or Theme.sub, 20, 1.5)
+    circle(x + w - 45, y + 16, 4, iconHovered and Theme.accent or Theme.sub, 20, false, 1.5)
+    line(x + w - 42, y + 19, x + w - 38, y + 23, iconHovered and Theme.accent or Theme.sub, 20, 1.5)
+
+    local cx_set = x + w - 21
+    local cy = y + 18
+    line(cx_set - 6, cy, cx_set + 6, cy, setHovered and Theme.accent or Theme.sub, 20, 1.5)
+    line(cx_set, cy - 6, cx_set, cy + 6, setHovered and Theme.accent or Theme.sub, 20, 1.5)
+    line(cx_set - 4.5, cy - 4.5, cx_set + 4.5, cy + 4.5, setHovered and Theme.accent or Theme.sub, 20, 1.5)
+    line(cx_set - 4.5, cy + 4.5, cx_set + 4.5, cy - 4.5, setHovered and Theme.accent or Theme.sub, 20, 1.5)
+    circle(cx_set, cy, 4, Theme.surface2, 21, true)
+    circle(cx_set, cy, 4, setHovered and Theme.accent or Theme.sub, 22, false, 1.5)
+    circle(cx_set, cy, 1.5, setHovered and Theme.accent or Theme.sub, 23, true)
 
     if ProjectState.minimized or h <= MINIMIZED_H then
         return click, held, rightClick
@@ -3251,7 +3483,13 @@ local function renderWindow(click, held, rightClick)
 
     if ProjectState.searchBar.active and ProjectState.searchBar.value ~= "" then
         baseClick, baseHeld, baseRightClick = renderSearchResults(baseClick, baseHeld, baseRightClick, px, py, pw, ph)
-        if ProjectState.focus and baseClick and not over(px, py, pw, ph) and not over(x + w - 34 - ProjectState.searchBar.width, y + 8, ProjectState.searchBar.width, 20) and not over(x + w - 30, y + 6, 20, 24) then
+        if ProjectState.focus and baseClick and not over(px, py, pw, ph) and not over(x + w - 56 - ProjectState.searchBar.width, y + 8, ProjectState.searchBar.width, 20) and not over(x + w - 52, y + 6, 20, 24) and not over(x + w - 30, y + 6, 20, 24) then
+            ProjectState.focus = nil
+            baseClick = false
+        end
+    elseif ProjectState.settingsActive then
+        baseClick, baseHeld, baseRightClick = renderSections(ProjectState.settingsTab, baseClick, baseHeld, baseRightClick, px, py, pw, ph)
+        if ProjectState.focus and baseClick and not over(px, py, pw, ph) and not over(x + w - 30, y + 6, 20, 24) then
             ProjectState.focus = nil
             baseClick = false
         end
@@ -3287,6 +3525,27 @@ local function renderWindow(click, held, rightClick)
 end
 
 local function step()
+    local isTyping = ProjectState.focus and (ProjectState.focus.type == "textbox")
+    if isTyping ~= ProjectState.lastIsTyping then
+        ProjectState.lastIsTyping = isTyping
+        if isTyping then
+            pcall(function()
+                game:GetService("ContextActionService"):BindActionAtPriority(
+                    "homesickFreezeMovement",
+                    function() return Enum.ContextActionResult.Sink end,
+                    false,
+                    3000,
+                    Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D, Enum.KeyCode.Space,
+                    Enum.KeyCode.Up, Enum.KeyCode.Down, Enum.KeyCode.Left, Enum.KeyCode.Right
+                )
+            end)
+        else
+            pcall(function()
+                game:GetService("ContextActionService"):UnbindAction("homesickFreezeMovement")
+            end)
+        end
+    end
+
     local prevFocus = ProjectState.focus
     local zoomLocked = ProjectState.zoomLocked
     if ProjectState.open then
@@ -3711,6 +3970,9 @@ homesick.createWindow = function(title, width, height)
         end
     })
     
+    initSettings()
+    pcall(loadTheme)
+
     return windowWrap
 end
 
