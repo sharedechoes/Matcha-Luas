@@ -2953,11 +2953,15 @@ local function step()
     local zoomLocked = ProjectState.zoomLocked
     if ProjectState.open then
         if not zoomLocked and LocalPlayer then
-            ProjectState.origMinZoom = LocalPlayer.CameraMinZoomDistance
-            ProjectState.origMaxZoom = LocalPlayer.CameraMaxZoomDistance
-            ProjectState.zoomLocked = true
+            local ok1, minZ = pcall(function() return LocalPlayer.CameraMinZoomDistance end)
+            local ok2, maxZ = pcall(function() return LocalPlayer.CameraMaxZoomDistance end)
+            if ok1 and ok2 then
+                ProjectState.origMinZoom = minZ
+                ProjectState.origMaxZoom = maxZ
+                ProjectState.zoomLocked = true
+            end
         end
-        if LocalPlayer then
+        if LocalPlayer and ProjectState.zoomLocked then
             local currentZoom = 10
             pcall(function()
                 local head = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head")
@@ -2965,8 +2969,10 @@ local function step()
                     currentZoom = (Workspace.CurrentCamera.CFrame.p - head.Position).Magnitude
                 end
             end)
-            LocalPlayer.CameraMinZoomDistance = currentZoom
-            LocalPlayer.CameraMaxZoomDistance = currentZoom
+            pcall(function()
+                LocalPlayer.CameraMinZoomDistance = currentZoom
+                LocalPlayer.CameraMaxZoomDistance = currentZoom
+            end)
         end
     else
         if zoomLocked and LocalPlayer then
