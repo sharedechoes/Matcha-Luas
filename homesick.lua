@@ -2278,7 +2278,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     rect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
                     strokeRect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
                     
-                    txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 120, trans)
+                    txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - (item.colorpicker and 130 or item.keybind and 112 or item.tooltip and 22 or 6), trans)
                     
                     if not isFloating then
                         click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick)
@@ -3027,6 +3027,16 @@ homesick.createWindow = function(title, width, height)
                     return wSelf
                 end
                 
+                widgetWrap.addKeybind = function(wSelf, defaultKey, mode, canChange, callback)
+                    wSelf.rawItem:AddKeybind(defaultKey, mode, canChange, callback)
+                    return wSelf
+                end
+                
+                widgetWrap.addColorpicker = function(wSelf, label, defaultColor, overwrite, callback)
+                    wSelf.rawItem:AddColorpicker(label, defaultColor, overwrite, callback)
+                    return wSelf
+                end
+                
                 return widgetWrap
             end
             
@@ -3064,6 +3074,21 @@ homesick.createWindow = function(title, width, height)
                     id = id,
                     type = "InputText",
                     rawItem = sSelf.rawSec:Textbox(label, default, callback)
+                }
+                
+                widgetWrap.addTooltip = function(wSelf, text)
+                    wSelf.rawItem.item.tooltip = text
+                    return wSelf
+                end
+                
+                return widgetWrap
+            end
+            
+            secWrap.addDropdown = function(sSelf, id, label, choices, default, callback)
+                local widgetWrap = {
+                    id = id,
+                    type = "Dropdown",
+                    rawItem = sSelf.rawSec:Dropdown(label, default, choices, false, callback)
                 }
                 
                 widgetWrap.addTooltip = function(wSelf, text)
