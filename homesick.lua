@@ -2950,6 +2950,51 @@ local function importTheme(str)
     end
 end
 
+local function getScriptsList()
+    local list = {}
+    if type(listfiles) == "function" then
+        local files = listfiles(".")
+        if files and #files > 0 then
+            for i = 1, #files do
+                local file = files[i]
+                if file and file ~= "" and string.sub(file, -4) == ".lua" then
+                    local name = file
+                    if string.find(name, "[\\/]") then
+                        name = string.match(name, "[^\\/]+$")
+                    end
+                    name = string.sub(name, 1, -5)
+                    list[#list + 1] = name
+                end
+            end
+        end
+    end
+    return list
+end
+
+local function getConfigsList()
+    local list = {}
+    pcall(makefolder, "homesick")
+    if type(listfiles) == "function" then
+        local files = listfiles("homesick")
+        if files and #files > 0 then
+            for i = 1, #files do
+                local file = files[i]
+                if file and file ~= "" and string.sub(file, -5) == ".json" then
+                    local name = file
+                    if string.find(name, "[\\/]") then
+                        name = string.match(name, "[^\\/]+$")
+                    end
+                    name = string.sub(name, 1, -6)
+                    if name ~= "theme" then
+                        list[#list + 1] = name
+                    end
+                end
+            end
+        end
+    end
+    return list
+end
+
 local function initSettings()
     local settingsTab = {
         name = "Settings",
@@ -2960,10 +3005,37 @@ local function initSettings()
     }
     ProjectState.settingsTab = settingsTab
     
-    local configSection = createSection(settingsTab, "Configs", "Left")
-    local themeSection = createSection(settingsTab, "Themes", "Right")
-    local colorsSection = createSection(settingsTab, "Theme Colors", "Right")
+    local scriptsSection = createSection(settingsTab, "Scripts", "Left")
+    scriptsSection:Button("Open Folder", function()
+        warn("cannot open scripts folder directly copying path instead")
+        setclipboard("scripts/")
+    end)
+    local scriptList = scriptsSection:Dropdown("Script List", getScriptsList(), getScriptsList())
+    scriptList:Set("")
+    scriptsSection:Button("Load Script", function()
+        local name = scriptList.item.value[1]
+        if name and name ~= "" then
+            local ok, raw = pcall(readfile, name .. ".lua")
+            if ok and raw then
+                local fnOk, fn = pcall(loadstring, raw)
+                if fnOk and fn then
+                    task.spawn(fn)
+                else
+                    warn("failed compile " .. name)
+                end
+            else
+                warn("failed read " .. name)
+            end
+        end
+    end)
+    scriptsSection:Button("Set Auto Execute", function()
+        local name = scriptList.item.value[1]
+        if name and name ~= "" then
+            pcall(writefile, "homesick/autoexec.txt", name)
+        end
+    end)
     
+    local configSection = createSection(settingsTab, "Configs", "Left")
     configSection:Button("Save Current Config", function()
         saveConfig()
     end)
@@ -2983,6 +3055,63 @@ local function initSettings()
         importConfig(importBox.item.value)
     end)
     
+    local fileConfigSection = createSection(settingsTab, "File Configs", "Right")
+    fileConfigSection:Button("Open Folder", function()
+        warn("cannot open configs folder directly copying path instead")
+        setclipboard("homesick/")
+    end)
+    local configDropdown = fileConfigSection:Dropdown("Config List", getConfigsList(), getConfigsList())
+    configDropdown:Set("")
+    local configNameBox = fileConfigSection:Textbox("Config Name", "")
+    configNameBox:Set("")
+    
+    fileConfigSection:Button("Load", function()
+        local name = configNameBox.item.value
+        if name == "" then
+            name = configDropdown.item.value[1]
+        end
+        if name and name ~= "" then
+            local ok, raw = pcall(readfile, "homesick/" .. name .. ".json")
+            if ok and raw then
+                loadConfig(raw)
+            else
+                warn("failed load " .. name)
+            end
+        end
+    end)
+    fileConfigSection:Button("Save", function()
+        local name = configNameBox.item.value
+        if name == "" then
+            name = configDropdown.item.value[1]
+        end
+        if name and name ~= "" then
+            local configData = {}
+            for _, t in ipairs(ProjectState.tabs) do
+                for _, s in ipairs(t.sections) do
+                    for _, item in ipairs(s.items) do
+                        if item.type ~= "divider" and item.type ~= "label" and item.type ~= "button" then
+                            local key = t.name .. "." .. s.name .. "." .. item.label
+                            local data = { value = item.value }
+                            if item.keybind then
+                                data.keybind = { value = item.keybind.value, mode = item.keybind.mode }
+                            end
+                            if item.colorpicker then
+                                data.colorpicker = { value = toHex(item.colorpicker.value), alpha = item.colorpicker.alpha }
+                            end
+                            configData[key] = data
+                        end
+                    end
+                end
+            end
+            local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), configData)
+            if json and json ~= "" then
+                pcall(writefile, "homesick/" .. name .. ".json", json)
+                configDropdown:UpdateChoices(getConfigsList())
+            end
+        end
+    end)
+    
+    local themeSection = createSection(settingsTab, "Themes", "Right")
     themeSection:Button("Save Current Theme", function()
         saveTheme()
     end)
@@ -3002,6 +3131,7 @@ local function initSettings()
         importTheme(importThemeBox.item.value)
     end)
     
+    local colorsSection = createSection(settingsTab, "Theme Colors", "Right")
     colorsSection:Label("Customize UI theme colors below:")
     for _, name in ipairs({"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border"}) do
         local toggle = colorsSection:Toggle("Customize " .. name, false)
@@ -3516,7 +3646,7 @@ local function renderWindow(click, held, rightClick)
     local botY = y + h - 24
     local botH = 24
     line(x + 2, botY, x + w - 2, botY, Theme.border, 8)
-    txt((ProjectState.badgeText and ProjectState.badgeText ~= "") and (ProjectState.badgeText .. " • v1.0.0") or "v1.0.0", x + 14, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
+    txt((ProjectState.badgeText and ProjectState.badgeText ~= "") and (ProjectState.badgeText .. " | v1.0.0") or "v1.0.0", x + 14, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
     line(x + w - 13, y + h - 5, x + w - 5, y + h - 13, Theme.sub, 10, 1)
     line(x + w - 10, y + h - 5, x + w - 5, y + h - 10, Theme.sub, 10, 1)
     line(x + w - 7, y + h - 5, x + w - 5, y + h - 7, Theme.sub, 10, 1)
