@@ -28,7 +28,8 @@ _G.homesickOriginals = {
     print = print,
     warn = warn,
     printl = printl,
-    notify = notify
+    notify = notify,
+    isrbxactive = isrbxactive
 }
 local exportConfig, importConfig, exportTheme, importTheme, smoothValue, toHex
 
@@ -613,15 +614,24 @@ local function txt(value, x, y, color, size, font, z, centered, outline, maxWidt
     end
     d.Text = value
     local xPos = x
-    if centered then
-        xPos = x - textWidth(value, size or 13, font or FontSystem) / 2
+    local yPos = y
+    local isCentered = centered == true
+    if isCentered then
+        if font == FontUI then
+            xPos = x - textWidth(value, size or 13, font) / 2
+            yPos = y - (size or 13) / 2
+            d.Center = false
+        else
+            d.Center = true
+        end
+    else
+        d.Center = false
     end
-    d.Position = V2(xPos, y)
+    d.Position = V2(xPos, yPos)
     d.Color = color
     d.Size = size or 13
     d.Font = font or FontSystem
     d.ZIndex = (z or 1) + 10
-    d.Center = false
     d.Outline = outline == true
     d.Transparency = transparency or DRAW_VISIBLE
 end
@@ -714,16 +724,39 @@ local function renderNotifications()
             local nx = n.currentX
             local ny = n.currentY
             local z = 300
+            
+            local isWarn = n.title == "warning" or n.title == "warn"
+            local displayTitle = n.title
+            if displayTitle == "print" or displayTitle == "warning" or displayTitle == "warn" or displayTitle == "notification" then
+                displayTitle = "homesick"
+            end
+            local accentCol = isWarn and Theme.red or Theme.accent
+
             rect(nx, ny, width, height, Theme.surface2, z, 8, 0.95)
             strokeRect(nx, ny, width, height, Theme.border, z + 1, 8, 0.95)
+            rect(nx + 6, ny + 6, 3, height - 12, accentCol, z + 2, 1, 0.95)
+
             local textX = nx + 16
             if n.image and n.image ~= "" then
-                drawImage(n.image, nx + 12, ny + 12, 40, 40, z + 2, 0.95)
+                drawImage(n.image, nx + 14, ny + 12, 40, 40, z + 2, 0.95)
                 textX = nx + 64
+            else
+                textX = nx + 44
+                local cx = nx + 24
+                local cy = ny + 32
+                if isWarn then
+                    triangle(V2(cx, cy - 8), V2(cx - 9, cy + 8), V2(cx + 9, cy + 8), accentCol, z + 2, true, 0.95)
+                    txt("!", cx, cy + 2, Theme.bg, 11, FontBold, z + 3, true)
+                else
+                    circle(cx, cy, 9, accentCol, z + 2, false, 2, 32, 0.95)
+                    txt("i", cx, cy, accentCol, 12, FontBold, z + 3, true)
+                end
             end
-            txt(n.title, textX, ny + 12, Theme.accent, 13, FontBold, z + 2)
+
+            txt(displayTitle, textX, ny + 12, Theme.accent, 13, FontBold, z + 2)
             txt(n.description, textX, ny + 28, Theme.text, 11, FontUI, z + 2, false, false, width - (textX - nx) - 12)
-            line(nx + 8, ny + height - 3, nx + 8 + (width - 16) * clamp(1 - (n.elapsed / n.duration), 0, 1), ny + height - 3, Theme.accent, z + 2, 2, 0.95)
+            line(nx + 8, ny + height - 3, nx + 8 + (width - 16) * clamp(1 - (n.elapsed / n.duration), 0, 1), ny + height - 3, accentCol, z + 2, 2, 0.95)
+            
             i = i + 1
         end
     end
@@ -1246,7 +1279,9 @@ local function updateInput()
     ProjectState.mouseScroll = mouseScroll
     mouseScroll = 0
     local active = true
-    if type(isrbxactive) == "function" then
+    if _G.homesickOriginals and type(_G.homesickOriginals.isrbxactive) == "function" then
+        active = _G.homesickOriginals.isrbxactive() == true
+    elseif type(isrbxactive) == "function" then
         active = isrbxactive() == true
     end
     ProjectState.focusedWindow = active
@@ -1520,6 +1555,27 @@ local function processTextInput()
         if Input.a.click then
             item._selectedAll = true
             Input.a.click = false
+        elseif Input.c.click then
+            pcall(setclipboard, value)
+            Input.c.click = false
+        elseif Input.v.click then
+            local clip = nil
+            pcall(function()
+                clip = (type(getclipboard) == "function" and getclipboard()) or (type(get_clipboard) == "function" and get_clipboard())
+            end)
+            if type(clip) == "string" then
+                if item.type == "slider" then
+                    clip = clip:gsub("[^0-9%.%-]", "")
+                end
+                if item._selectedAll then
+                    value = clip
+                    item._selectedAll = false
+                else
+                    value = value .. clip
+                end
+                changed = true
+            end
+            Input.v.click = false
         elseif Input.z.click then
             if item._history and item._historyIndex > 0 then
                 local currentVal = (item.type == "textbox") and item.value or (item._directValue or "")
@@ -2647,11 +2703,10 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
         for ii = 1, #section.items do
             local item = section.items[ii]
             local itemH = getItemHeight(item)
+            local disabled = isItemDisabled(item)
+            local trans = (disabled and 0.4 or 1) * cardTrans * min(clamp((rowY - max(cardClipTop, sy + 26)) / 16, 0, 1), clamp((min(cardClipBottom, sy + secH - 4) - (rowY + itemH)) / 16, 0, 1))
             
-            if min(rowY + itemH, min(cardClipBottom, sy + secH - 4)) - max(rowY, max(cardClipTop, sy + 26)) > 0 then
-                local disabled = isItemDisabled(item)
-                local trans = (disabled and 0.4 or 1) * cardTrans * clamp((min(rowY + itemH, min(cardClipBottom, sy + secH - 4)) - max(rowY, max(cardClipTop, sy + 26))) / itemH, 0, 1)
-                
+            if trans > 0 then
                 if item.type == "label" then
                     txt(item.label, rowX, textTop(rowY, itemH - 2, 13), item.color or Theme.text, 13, FontSystem, z + 12, false, false, rowW, trans)
                     
@@ -2677,7 +2732,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         end
                     end
                     
-                    if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled then
+                    if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled and trans > 0.5 then
                         local onKeybind = item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)
                         local onColor = item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)
                         local onQ = item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)
@@ -2710,7 +2765,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         end
                     end
                     
-                    if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled then
+                    if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled and trans > 0.5 then
                         local onKeybind = item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)
                         local onColor = item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)
                         local onQ = item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)
@@ -2730,10 +2785,10 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     if hovered then
                         strokeRect(cpX - 2, rowY + 6, 16, 16, Theme.accent, z + 14, 4, trans)
                     end
-                    if click and hovered and not popupBlocking and not disabled then
+                    if click and hovered and not popupBlocking and not disabled and trans > 0.5 then
                         spawnColorpicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item)
                         click = false
-                    elseif rightClick and hovered and not popupBlocking and not disabled then
+                    elseif rightClick and hovered and not popupBlocking and not disabled and trans > 0.5 then
                         spawnDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
                             if choice and choice[1] == "Copy" then
                                 ProjectState.copiedColor = item.value
@@ -2749,7 +2804,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         end, nil, nil)
                         rightClick = false
                     end
-
+ 
                 elseif item.type == "slider" then
                     txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 80, trans)
                     
@@ -2768,8 +2823,8 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     if isFocusedSlider then
                         txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, FontUI) / 2, rowY + 9, Theme.text, 12, FontUI, z + 15, true, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
                     end
-
-                    if click and hoveredVal then
+ 
+                    if click and hoveredVal and trans > 0.5 then
                         ProjectState.focus = item
                         item._directValue = tostring(item.value)
                         click = false
@@ -2789,7 +2844,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     item._animatedRadius = smoothValue(item._animatedRadius, (hoveredVal or (over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled)) and 7 or 5, 18)
                     circle(sx + sw * frac, sy_bar + 2, item._animatedRadius, C3(190, 190, 190), z + 14, true, 0, 32, trans)
                     
-                    if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled and not hoveredVal then
+                    if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled and not hoveredVal and trans > 0.5 then
                         ProjectState.sliderDrag = item
                         click = false
                     end
@@ -2827,7 +2882,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         end
                     end
                     
-                    if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled then
+                    if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
                         spawnDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
                         click = false
                     end
@@ -2841,7 +2896,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), Theme.accent, 13, FontBold, z + 14, true, false, rowW - 24, trans)
                     
-                    if click and over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled then
+                    if click and over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled and trans > 0.5 then
                         safeCallback(item.callback)
                         click = false
                     end
@@ -2870,7 +2925,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         txt("|", cursorX, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
                     end
                     
-                    if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled then
+                    if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
                         ProjectState.focus = focused and nil or item
                         click = false
                     end
@@ -3341,6 +3396,11 @@ local function initSettings()
         maxScroll = 0,
     }
     ProjectState.settingsTab = settingsTab
+ 
+    local generalSec = createSection(settingsTab, "General Settings", "Left")
+    generalSec:Toggle("Spoof window focus", false, function(val)
+        ProjectState.isrbxactiveOverride = val
+    end)
 
     local configSection = createSection(settingsTab, "Configs", "Left")
     local configDropdown = configSection:Dropdown("Config List", getConfigsList(), getConfigsList())
@@ -3446,7 +3506,7 @@ end
 local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightClick, clipTop, clipBottom)
     local z = 40
     local disabled = isItemDisabled(item)
-    local trans = (disabled and 0.4 or 1) * clamp((min(rowY + getItemHeight(item), clipBottom) - max(rowY, clipTop)) / getItemHeight(item), 0, 1)
+    local trans = (disabled and 0.4 or 1) * min(clamp((rowY - clipTop) / 16, 0, 1), clamp((clipBottom - (rowY + getItemHeight(item))) / 16, 0, 1))
     if trans <= 0 then
         return click, held, rightClick
     end
@@ -3469,7 +3529,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             end
         end
         
-        if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled then
+        if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled and trans > 0.5 then
             if not (item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)) and not (item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)) and not (item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)) then
                 setItemValue(item, not item.value, true)
                 click = false
@@ -3485,10 +3545,10 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         if hovered then
             strokeRect(cpX - 2, rowY + 6, 16, 16, Theme.accent, z + 14, 4, trans)
         end
-        if click and hovered and not popupBlocking and not disabled then
+        if click and hovered and not popupBlocking and not disabled and trans > 0.5 then
             spawnColorpicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item)
             click = false
-        elseif rightClick and hovered and not popupBlocking and not disabled then
+        elseif rightClick and hovered and not popupBlocking and not disabled and trans > 0.5 then
             spawnDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
                 if choice and choice[1] == "Copy" then
                     ProjectState.copiedColor = item.value
@@ -3523,7 +3583,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, FontUI) / 2, rowY + 9, Theme.text, 12, FontUI, z + 15, true, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
         end
 
-        if click and hoveredVal then
+        if click and hoveredVal and trans > 0.5 then
             ProjectState.focus = item
             item._directValue = tostring(item.value)
             click = false
@@ -3542,7 +3602,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         item._animatedRadius = smoothValue(item._animatedRadius, (hoveredVal or (over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled)) and 7 or 5, 18)
         circle(sx + sw * frac, sy_bar + 2, item._animatedRadius, C3(190, 190, 190), z + 14, true, 0, 32, trans)
         
-        if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled and not hoveredVal then
+        if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled and not hoveredVal and trans > 0.5 then
             ProjectState.sliderDrag = item
             click = false
         end
@@ -3579,7 +3639,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             end
         end
         
-        if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled then
+        if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
             spawnDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
             click = false
         end
@@ -3593,7 +3653,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         
         txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), Theme.accent, 13, FontBold, z + 14, true, false, rowW - 24, trans)
         
-        if click and over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled then
+        if click and over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled and trans > 0.5 then
             safeCallback(item.callback)
             click = false
         end
@@ -3621,7 +3681,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             txt("|", cursorX, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
         end
         
-        if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled then
+        if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
             ProjectState.focus = focused and nil or item
             click = false
         end
@@ -3696,7 +3756,7 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
         local match = matches[i]
         
         if match.tab ~= lastTab then
-            local tabTrans = clamp((min(currentY + 20, clipBottom) - max(currentY, clipTop)) / 20, 0, 1)
+            local tabTrans = min(clamp((currentY - clipTop) / 16, 0, 1), clamp((clipBottom - (currentY + 20)) / 16, 0, 1))
             if tabTrans > 0 then
                 txt(match.tab.name, px + 10, currentY, Theme.accent, 14, FontBold, 30, false, false, nil, tabTrans)
             end
@@ -3706,7 +3766,7 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
         end
         
         if match.section ~= lastSec then
-            local secTrans = clamp((min(currentY + 18, clipBottom) - max(currentY, clipTop)) / 18, 0, 1)
+            local secTrans = min(clamp((currentY - clipTop) / 16, 0, 1), clamp((clipBottom - (currentY + 18)) / 16, 0, 1))
             if secTrans > 0 then
                 txt(match.section.name, px + 10, currentY, Theme.sub, 12, FontBold, 30, false, false, nil, secTrans)
                 
@@ -3735,7 +3795,7 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
         currentY = currentY + getItemHeight(match.item) + 6
         
         if i < #matches then
-            local divTrans = clamp((min(currentY + 6, clipBottom) - max(currentY, clipTop)) / 6, 0, 1)
+            local divTrans = min(clamp((currentY - clipTop) / 16, 0, 1), clamp((clipBottom - (currentY + 6)) / 16, 0, 1))
             if divTrans > 0 then
                 rect(px + 10, currentY, pw - 20, 1, Theme.border, 30, 0, 0.5 * divTrans)
             end
@@ -4054,7 +4114,7 @@ local function renderWindow(click, held, rightClick)
         local cancelHovered = over(mx + 20, btnY, btnW, btnH)
         rect(mx + 20, btnY, btnW, btnH, cancelHovered and Theme.surface3 or Theme.surface, mz + 2, 4, 1)
         strokeRect(mx + 20, btnY, btnW, btnH, cancelHovered and Theme.accent or Theme.border, mz + 3, 4, 1)
-        txt("Cancel", mx + 20 + btnW / 2, textTop(btnY, btnH, 12), Theme.text, 12, FontUI, mz + 4, true)
+        txt("Cancel", mx + 20 + btnW / 2, centerY(btnY, btnH), Theme.text, 12, FontUI, mz + 4, true)
         
         if click and over(mx + 20, btnY, btnW, btnH) then
             ProjectState.importModal = nil
@@ -4079,7 +4139,7 @@ local function renderWindow(click, held, rightClick)
         
         rect(confirmX, btnY, btnW, btnH, confirmBgColor, mz + 2, 4, 1)
         strokeRect(confirmX, btnY, btnW, btnH, not recognized and Theme.border or Theme.accent, mz + 3, 4, 1)
-        txt("Confirm", confirmX + btnW / 2, textTop(btnY, btnH, 12), confirmTextColor, 12, FontUI, mz + 4, true)
+        txt("Confirm", confirmX + btnW / 2, centerY(btnY, btnH), confirmTextColor, 12, FontUI, mz + 4, true)
         
         if confirmBgColor == confirmBgColor then end
         if confirmTextColor == confirmTextColor then end
@@ -4597,6 +4657,14 @@ if type(notify) == "function" then
         local lowerTitle = string.lower(tostring(title or "notification"))
         UI:Notify(lowerTitle, lowerMsg, duration or 5)
         return _G.homesickOriginals.notify(message, title, duration)
+    end
+end
+if _G.homesickOriginals and type(_G.homesickOriginals.isrbxactive) == "function" then
+    _G.isrbxactive = function()
+        if ProjectState.isrbxactiveOverride then
+            return false
+        end
+        return _G.homesickOriginals.isrbxactive()
     end
 end
 
