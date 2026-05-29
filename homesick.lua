@@ -24,7 +24,13 @@ local sin = math.sin
 local clock = os.clock
 local remove = table.remove
 local concat = table.concat
-local exportConfig, importConfig, exportTheme, importTheme
+_G.homesickOriginals = {
+    print = print,
+    warn = warn,
+    printl = printl,
+    notify = notify
+}
+local exportConfig, importConfig, exportTheme, importTheme, smoothValue, toHex
 
 local function clamp(value, low, high)
     if value < low then
@@ -189,10 +195,13 @@ local function warn(msg)
     ProjectState.notifications = ProjectState.notifications or {}
     table.insert(ProjectState.notifications, {
         title = "warning",
-        description = tostring(msg or msg),
+        description = string.lower(tostring(msg or "")),
         duration = 5,
         elapsed = 0,
     })
+    if _G.homesickOriginals and _G.homesickOriginals.warn then
+        _G.homesickOriginals.warn(msg)
+    end
 end
 
 local Pool = {
@@ -376,7 +385,7 @@ local function safeCallback(callback, ...)
     end
     local ok, result = pcall(callback, ...)
     if not ok then
-        warn("homesick callback error " .. tostring(result))
+        warn("homesick callback error " .. tostring(result) .. " rip")
         return
     end
     return result
@@ -603,12 +612,16 @@ local function txt(value, x, y, color, size, font, z, centered, outline, maxWidt
         return
     end
     d.Text = value
-    d.Position = V2(x, y)
+    local xPos = x
+    if centered then
+        xPos = x - textWidth(value, size or 13, font or FontSystem) / 2
+    end
+    d.Position = V2(xPos, y)
     d.Color = color
     d.Size = size or 13
     d.Font = font or FontSystem
     d.ZIndex = (z or 1) + 10
-    d.Center = centered == true
+    d.Center = false
     d.Outline = outline == true
     d.Transparency = transparency or DRAW_VISIBLE
 end
@@ -716,12 +729,12 @@ local function renderNotifications()
     end
 end
 
-local function drawChevronDown(x, y, color, z)
-    triangle(V2(x, y), V2(x + 8, y), V2(x + 4, y + 5), color, z, true)
+local function drawChevronDown(x, y, color, z, transparency)
+    triangle(V2(x, y), V2(x + 8, y), V2(x + 4, y + 5), color, z, true, transparency)
 end
 
-local function drawChevronUp(x, y, color, z)
-    triangle(V2(x, y + 5), V2(x + 8, y + 5), V2(x + 4, y), color, z, true)
+local function drawChevronUp(x, y, color, z, transparency)
+    triangle(V2(x, y + 5), V2(x + 8, y + 5), V2(x + 4, y), color, z, true, transparency)
 end
 
 local function snapValue(raw, item)
@@ -1000,8 +1013,8 @@ function UI.Notify(self, title, desc, duration, image)
     end
     ProjectState.notifications = ProjectState.notifications or {}
     table.insert(ProjectState.notifications, {
-        title = tostring(t or "notification"),
-        description = tostring(d or ""),
+        title = string.lower(tostring(t or "notification")),
+        description = string.lower(tostring(d or "")),
         duration = tonumber(dur) or 5,
         elapsed = 0,
         image = img,
@@ -1107,7 +1120,7 @@ end
 
 function UI:SetSize(w, h)
     ProjectState.w = max(300, tonumber(w) or ProjectState.w)
-    ProjectState.h = max(120, tonumber(h) or ProjectState.h)
+    ProjectState.h = max(300, tonumber(h) or ProjectState.h)
     if ProjectState.h > MINIMIZED_H then
         ProjectState.defaultH = ProjectState.h
         ProjectState.minimized = false
@@ -1315,7 +1328,7 @@ local function lerpColor(c1, c2, t)
     )
 end
 
-local function smoothValue(current, target, speed)
+smoothValue = function(current, target, speed)
     local dtValue = ProjectState.dt or 1/60
     if dtValue <= 0 then
         dtValue = 1/60
@@ -1325,7 +1338,7 @@ end
 
 local toHsv
 
-local function toHex(color)
+toHex = function(color)
     local r = floor(color.R * 255 + 0.5)
     local g = floor(color.G * 255 + 0.5)
     local b = floor(color.B * 255 + 0.5)
@@ -2520,100 +2533,106 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             end
         end
         
-        if sy + 8 >= cardClipTop and sy + 22 <= cardClipBottom then
-            txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, cardTrans)
-        end
-        
-        local showLock = section.allowLocking ~= false
-        if sy + 10 >= cardClipTop and sy + 20 <= cardClipBottom then
-            draw9Dot(colX + colW - 20, sy + 10, (showLock and section.locked) and C3(80, 75, 73) or Theme.sub, z + 2, cardTrans)
+        local headerTrans = clamp((min(sy + 28, cardClipBottom) - max(sy, cardClipTop)) / 28, 0, 1)
+        if headerTrans > 0 then
+            local hTrans = cardTrans * headerTrans
+            txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, hTrans)
+            
+            local showLock = section.allowLocking ~= false
+            draw9Dot(colX + colW - 20, sy + 10, (showLock and section.locked) and C3(80, 75, 73) or Theme.sub, z + 2, hTrans)
             if showLock then
-                rect(colX + colW - 36, sy + 11, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, cardTrans)
+                rect(colX + colW - 36, sy + 11, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, hTrans)
                 if section.locked then
-                    line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.accent, z + 2, 1, cardTrans)
-                    line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 11, Theme.accent, z + 2, 1, cardTrans)
-                    line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.accent, z + 2, 1, cardTrans)
+                    line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.accent, z + 2, 1, hTrans)
+                    line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 11, Theme.accent, z + 2, 1, hTrans)
+                    line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.accent, z + 2, 1, hTrans)
                 else
-                    line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.sub, z + 2, 1, cardTrans)
-                    line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 9, Theme.sub, z + 2, 1, cardTrans)
-                    line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.sub, z + 2, 1, cardTrans)
+                    line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.sub, z + 2, 1, hTrans)
+                    line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 9, Theme.sub, z + 2, 1, hTrans)
+                    line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.sub, z + 2, 1, hTrans)
                 end
             end
-        end
 
-        if (section.name == "Configs" or section.name == "Themes") and sy + 8 >= cardClipTop and sy + 22 <= cardClipBottom then
-            local expX = colX + colW - 54
-            local expHovered = not popupBlocking and over(expX - 3, sy + 6, 16, 14)
-            local expColor = expHovered and Theme.accent or Theme.sub
-            line(expX, sy + 16, expX + 10, sy + 16, expColor, z + 2, 1, cardTrans)
-            line(expX, sy + 14, expX, sy + 16, expColor, z + 2, 1, cardTrans)
-            line(expX + 10, sy + 14, expX + 10, sy + 16, expColor, z + 2, 1, cardTrans)
-            line(expX + 5, sy + 6, expX + 5, sy + 12, expColor, z + 2, 1, cardTrans)
-            line(expX + 2, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1, cardTrans)
-            line(expX + 8, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1, cardTrans)
-            
-            local impX = colX + colW - 70
-            local impHovered = not popupBlocking and over(impX - 3, sy + 6, 16, 14)
-            local impColor = impHovered and Theme.accent or Theme.sub
-            line(impX, sy + 16, impX + 10, sy + 16, impColor, z + 2, 1, cardTrans)
-            line(impX, sy + 14, impX, sy + 16, impColor, z + 2, 1, cardTrans)
-            line(impX + 10, sy + 14, impX + 10, sy + 16, impColor, z + 2, 1, cardTrans)
-            line(impX + 5, sy + 6, impX + 5, sy + 12, impColor, z + 2, 1, cardTrans)
-            line(impX + 2, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1, cardTrans)
-            line(impX + 8, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1, cardTrans)
+            if section.name == "Configs" or section.name == "Themes" then
+                local expX = colX + colW - 54
+                local expHovered = not popupBlocking and over(expX - 3, sy + 6, 16, 14) and headerTrans > 0.5
+                local expColor = expHovered and Theme.accent or Theme.sub
+                line(expX, sy + 16, expX + 10, sy + 16, expColor, z + 2, 1, hTrans)
+                line(expX, sy + 14, expX, sy + 16, expColor, z + 2, 1, hTrans)
+                line(expX + 10, sy + 14, expX + 10, sy + 16, expColor, z + 2, 1, hTrans)
+                line(expX + 5, sy + 6, expX + 5, sy + 12, expColor, z + 2, 1, hTrans)
+                line(expX + 2, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1, hTrans)
+                line(expX + 8, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1, hTrans)
+                
+                local impX = colX + colW - 70
+                local impHovered = not popupBlocking and over(impX - 3, sy + 6, 16, 14) and headerTrans > 0.5
+                local impColor = impHovered and Theme.accent or Theme.sub
+                line(impX, sy + 16, impX + 10, sy + 16, impColor, z + 2, 1, hTrans)
+                line(impX, sy + 14, impX, sy + 16, impColor, z + 2, 1, hTrans)
+                line(impX + 10, sy + 14, impX + 10, sy + 16, impColor, z + 2, 1, hTrans)
+                line(impX + 5, sy + 6, impX + 5, sy + 12, impColor, z + 2, 1, hTrans)
+                line(impX + 2, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1, hTrans)
+                line(impX + 8, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1, hTrans)
 
-            if not isFloating and click then
-                if expHovered then
-                    click = false
-                    if section.name == "Configs" then
-                        local code = exportConfig()
-                        setclipboard(code or code)
-                        warn("config code copied to clipboard lol")
-                    else
-                        local code = exportTheme()
-                        setclipboard(code or code)
-                        warn("theme code copied to clipboard lol")
-                    end
-                elseif impHovered then
-                    click = false
-                    local modalTextbox = {
-                        type = "textbox",
-                        value = "",
-                        label = "enter code...",
-                    }
-                    ProjectState.importModal = {
-                        type = (section.name == "Configs") and "config" or "theme",
-                        textbox = modalTextbox,
-                        onConfirm = function(code)
-                            if section.name == "Configs" then
-                                importConfig(code)
-                                warn("config imported successfully lol")
+                if not isFloating and click and headerTrans > 0.5 then
+                    if expHovered then
+                        click = false
+                        if section.name == "Configs" then
+                            if pcall(setclipboard, exportConfig()) then
+                                warn("config code copied to clipboard lol")
                             else
-                                importTheme(code)
-                                warn("theme imported successfully lol")
+                                warn("failed to copy config to clipboard sadge")
+                            end
+                        else
+                            if pcall(setclipboard, exportTheme()) then
+                                warn("theme code copied to clipboard lol")
+                            else
+                                warn("failed to copy theme to clipboard sadge")
                             end
                         end
-                    }
-                    ProjectState.focus = modalTextbox
+                    elseif impHovered then
+                        click = false
+                        local modalTextbox = {
+                            type = "textbox",
+                            value = "",
+                            label = "enter code...",
+                        }
+                        ProjectState.importModal = {
+                            type = (section.name == "Configs") and "config" or "theme",
+                            textbox = modalTextbox,
+                            onConfirm = function(code)
+                                if section.name == "Configs" then
+                                    importConfig(code)
+                                    warn("config imported successfully lol")
+                                else
+                                    importTheme(code)
+                                    warn("theme imported successfully lol")
+                                end
+                            end
+                        }
+                        ProjectState.focus = modalTextbox
+                    end
+                end
+            end
+
+            if not isFloating and headerTrans > 0.5 then
+                if showLock and click and over(colX + colW - 38, sy + 6, 12, 12) and not popupBlocking then
+                    section.locked = not section.locked
+                    click = false
+                end
+
+                if click and over(colX + colW - 22, sy + 8, 14, 14) and not popupBlocking and not section.locked then
+                    ProjectState.draggedSection = section
+                    ProjectState.dragOffset = {ProjectState.mouseX - colX, ProjectState.mouseY - sy}
+                    ProjectState.dragStartMouseX = ProjectState.mouseX
+                    ProjectState.draggedSectionOriginalSide = section.side
+                    click = false
                 end
             end
         end
-        
-        if not isFloating then
-            if showLock and click and over(colX + colW - 38, sy + 6, 12, 12) and not popupBlocking then
-                section.locked = not section.locked
-                click = false
-            end
 
-            if click and over(colX + colW - 22, sy + 8, 14, 14) and not popupBlocking and not section.locked then
-                ProjectState.draggedSection = section
-                ProjectState.dragOffset = {ProjectState.mouseX - colX, ProjectState.mouseY - sy}
-                ProjectState.dragStartMouseX = ProjectState.mouseX
-                ProjectState.draggedSectionOriginalSide = section.side
-                click = false
-            end
-            
-            if click and over(colX, sy + secH - 4, colW, 8) and not popupBlocking and not section.locked then
+        if not isFloating then
+            if click and over(colX, sy + secH - 4, colW, 8) and not popupBlocking and not section.locked and (sy + secH - 4 >= cardClipTop) and (sy + secH <= cardClipBottom) then
                 ProjectState.resizeSection = section
                 ProjectState.resizeSectionStartH = secH
                 ProjectState.resizeSectionStartMouseY = ProjectState.mouseY
@@ -2629,9 +2648,9 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             local item = section.items[ii]
             local itemH = getItemHeight(item)
             
-            if rowY >= max(cardClipTop, sy + 26) and rowY + itemH <= min(cardClipBottom, sy + secH - 4) then
+            if min(rowY + itemH, min(cardClipBottom, sy + secH - 4)) - max(rowY, max(cardClipTop, sy + 26)) > 0 then
                 local disabled = isItemDisabled(item)
-                local trans = (disabled and 0.4 or 1) * cardTrans
+                local trans = (disabled and 0.4 or 1) * cardTrans * clamp((min(rowY + itemH, min(cardClipBottom, sy + secH - 4)) - max(rowY, max(cardClipTop, sy + 26))) / itemH, 0, 1)
                 
                 if item.type == "label" then
                     txt(item.label, rowX, textTop(rowY, itemH - 2, 13), item.color or Theme.text, 13, FontSystem, z + 12, false, false, rowW, trans)
@@ -2795,9 +2814,9 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontSystem, z + 14, false, false, dw - 28, trans)
                     
                     if ProjectState.dropdown and ProjectState.dropdown.item == item then
-                        drawChevronUp(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
+                        drawChevronUp(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15, trans)
                     else
-                        drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
+                        drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15, trans)
                     end
                     
                     if item.tooltip and not isFloating then
@@ -3077,8 +3096,8 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
         local barH = max(22, (trackH / max(contentH, trackH)) * trackH)
         local barY = contY + CONTENT_PAD + 6 + (tab.scrollY / max(1, tab.maxScroll)) * (trackH - barH)
         local scrollBarX = ProjectState.x + ProjectState.w - 12
-        rect(scrollBarX, contY + CONTENT_PAD + 6, 3, trackH, Theme.surface3, 50, 2)
-        rect(scrollBarX, barY, 3, barH, Theme.accent, 51, 2)
+        rect(scrollBarX, contY + CONTENT_PAD + 6, 3, trackH, Theme.surface3, 50, 2, ProjectState.contentFade)
+        rect(scrollBarX, barY, 3, barH, Theme.accent, 51, 2, ProjectState.contentFade)
         if click and over(scrollBarX - 5, contY + CONTENT_PAD + 6, 14, trackH) and not popupBlocking then
             local grab = barH / 2
             if over(scrollBarX - 5, barY, 14, barH) then
@@ -3338,9 +3357,9 @@ local function initSettings()
             local ok, raw = pcall(readfile, "homesick/" .. name .. ".json")
             if ok and ok == ok and raw then
                 loadConfig(raw)
-                warn("loaded config " .. name)
+                warn("loaded config " .. name .. " no cap")
             else
-                warn("failed load " .. name)
+                warn("failed to load " .. name .. " sadge")
             end
         end
     end)
@@ -3426,9 +3445,11 @@ end
 
 local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightClick, clipTop, clipBottom)
     local z = 40
-    local trans = 1
     local disabled = isItemDisabled(item)
-    if disabled then trans = 0.4 end
+    local trans = (disabled and 0.4 or 1) * clamp((min(rowY + getItemHeight(item), clipBottom) - max(rowY, clipTop)) / getItemHeight(item), 0, 1)
+    if trans <= 0 then
+        return click, held, rightClick
+    end
     
     local itemH = getItemHeight(item)
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
@@ -3546,9 +3567,9 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontSystem, z + 14, false, false, dw - 28, trans)
         
         if ProjectState.dropdown and ProjectState.dropdown.item == item then
-            drawChevronUp(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
+            drawChevronUp(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15, trans)
         else
-            drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15)
+            drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15, trans)
         end
         
         if item.tooltip then
@@ -3673,45 +3694,50 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
     local lastSec = nil
     for i = 1, #matches do
         local match = matches[i]
-        local tab = match.tab
-        local sec = match.section
-        local item = match.item
         
-        if tab ~= lastTab then
-            if currentY >= clipTop - 20 and currentY <= clipBottom then
-                txt(tab.name, px + 10, currentY, Theme.accent, 14, FontBold, 30)
+        if match.tab ~= lastTab then
+            local tabTrans = clamp((min(currentY + 20, clipBottom) - max(currentY, clipTop)) / 20, 0, 1)
+            if tabTrans > 0 then
+                txt(match.tab.name, px + 10, currentY, Theme.accent, 14, FontBold, 30, false, false, nil, tabTrans)
             end
             currentY = currentY + 20
-            lastTab = tab
+            lastTab = match.tab
             lastSec = nil
         end
         
-        if sec ~= lastSec then
-            if currentY >= clipTop - 18 and currentY <= clipBottom then
-                txt(sec.name, px + 10, currentY, Theme.sub, 12, FontBold, 30)
+        if match.section ~= lastSec then
+            local secTrans = clamp((min(currentY + 18, clipBottom) - max(currentY, clipTop)) / 18, 0, 1)
+            if secTrans > 0 then
+                txt(match.section.name, px + 10, currentY, Theme.sub, 12, FontBold, 30, false, false, nil, secTrans)
                 
-                if (px + pw - 20) > (px + 18 + textWidth(sec.name, 12, FontBold)) then
-                    local segmentCount = 20
-                    for seg = 1, segmentCount do
-                        local sx = (px + 18 + textWidth(sec.name, 12, FontBold)) + (seg - 1) * (((px + pw - 20) - (px + 18 + textWidth(sec.name, 12, FontBold))) / segmentCount)
-                        local ex = sx + (((px + pw - 20) - (px + 18 + textWidth(sec.name, 12, FontBold))) / segmentCount)
-                        line(sx, currentY + 6, ex, currentY + 6, Theme.border, 30, 1, 1 - (seg / segmentCount))
+                if (px + pw - 20) > (px + 18 + textWidth(match.section.name, 12, FontBold)) then
+                    for seg = 1, 20 do
+                        line(
+                            (px + 18 + textWidth(match.section.name, 12, FontBold)) + (seg - 1) * (((px + pw - 20) - (px + 18 + textWidth(match.section.name, 12, FontBold))) / 20),
+                            currentY + 6,
+                            (px + 18 + textWidth(match.section.name, 12, FontBold)) + seg * (((px + pw - 20) - (px + 18 + textWidth(match.section.name, 12, FontBold))) / 20),
+                            currentY + 6,
+                            Theme.border,
+                            30,
+                            1,
+                            (1 - (seg / 20)) * secTrans
+                        )
                     end
                 end
             end
             currentY = currentY + 18
-            lastSec = sec
+            lastSec = match.section
         end
         
-        local itemH = getItemHeight(item)
-        if currentY >= clipTop - itemH and currentY <= clipBottom then
-            click, held, rightClick = renderSearchFeature(item, px + 10, currentY, pw - 20, click, held, rightClick, clipTop, clipBottom)
+        if min(currentY + getItemHeight(match.item), clipBottom) - max(currentY, clipTop) > 0 then
+            click, held, rightClick = renderSearchFeature(match.item, px + 10, currentY, pw - 20, click, held, rightClick, clipTop, clipBottom)
         end
-        currentY = currentY + itemH + 6
+        currentY = currentY + getItemHeight(match.item) + 6
         
         if i < #matches then
-            if currentY >= clipTop - 6 and currentY <= clipBottom then
-                rect(px + 10, currentY, pw - 20, 1, Theme.border, 30, 0, 0.5)
+            local divTrans = clamp((min(currentY + 6, clipBottom) - max(currentY, clipTop)) / 6, 0, 1)
+            if divTrans > 0 then
+                rect(px + 10, currentY, pw - 20, 1, Theme.border, 30, 0, 0.5 * divTrans)
             end
             currentY = currentY + 6
         end
@@ -3722,8 +3748,8 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
         local barH = max(22, (trackH / max(searchContentH, trackH)) * trackH)
         local barY = py + CONTENT_PAD + 6 + (ProjectState.searchScrollY / max(1, ProjectState.searchMaxScroll)) * (trackH - barH)
         local scrollBarX = ProjectState.x + ProjectState.w - 12
-        rect(scrollBarX, py + CONTENT_PAD + 6, 3, trackH, Theme.surface3, 50, 2)
-        rect(scrollBarX, barY, 3, barH, Theme.accent, 51, 2)
+        rect(scrollBarX, py + CONTENT_PAD + 6, 3, trackH, Theme.surface3, 50, 2, ProjectState.contentFade)
+        rect(scrollBarX, barY, 3, barH, Theme.accent, 51, 2, ProjectState.contentFade)
         if click and over(scrollBarX - 5, py + CONTENT_PAD + 6, 14, trackH) and not popupBlocking then
             ProjectState.scrollDrag = {
                 search = true,
@@ -3824,14 +3850,13 @@ local function renderWindow(click, held, rightClick)
             newW = max(300, start.w + dx)
         end
         if drag == "top" or drag == "topleft" or drag == "topright" then
-            local targetH = start.h - dy
-            if targetH >= 120 then
-                newH = targetH
+            if start.h - dy >= 300 then
+                newH = start.h - dy
                 newY = start.y + dy
             end
         end
         if drag == "bottom" or drag == "bottomleft" or drag == "bottomright" then
-            newH = max(120, start.h + dy)
+            newH = max(300, start.h + dy)
         end
 
         ProjectState.x = newX
@@ -4029,7 +4054,7 @@ local function renderWindow(click, held, rightClick)
         local cancelHovered = over(mx + 20, btnY, btnW, btnH)
         rect(mx + 20, btnY, btnW, btnH, cancelHovered and Theme.surface3 or Theme.surface, mz + 2, 4, 1)
         strokeRect(mx + 20, btnY, btnW, btnH, cancelHovered and Theme.accent or Theme.border, mz + 3, 4, 1)
-        txt("cancel", mx + 20 + btnW / 2, textTop(btnY, btnH, 12), Theme.text, 12, FontUI, mz + 4, true)
+        txt("Cancel", mx + 20 + btnW / 2, textTop(btnY, btnH, 12), Theme.text, 12, FontUI, mz + 4, true)
         
         if click and over(mx + 20, btnY, btnW, btnH) then
             ProjectState.importModal = nil
@@ -4054,7 +4079,7 @@ local function renderWindow(click, held, rightClick)
         
         rect(confirmX, btnY, btnW, btnH, confirmBgColor, mz + 2, 4, 1)
         strokeRect(confirmX, btnY, btnW, btnH, not recognized and Theme.border or Theme.accent, mz + 3, 4, 1)
-        txt("confirm", confirmX + btnW / 2, textTop(btnY, btnH, 12), confirmTextColor, 12, FontUI, mz + 4, true)
+        txt("Confirm", confirmX + btnW / 2, textTop(btnY, btnH, 12), confirmTextColor, 12, FontUI, mz + 4, true)
         
         if confirmBgColor == confirmBgColor then end
         if confirmTextColor == confirmTextColor then end
@@ -4309,7 +4334,7 @@ local function runStepSafe()
         ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
         if now - ProjectState.lastErrorAt > 1 then
             ProjectState.lastErrorAt = now
-            warn("homesick step error " .. tostring(err))
+            warn("homesick step error " .. tostring(err) .. " rip")
         end
         setrobloxinput(true)
         ProjectState.inputState = true
@@ -4536,6 +4561,43 @@ homesick.createWindow = function(title, width, height)
     pcall(loadTheme)
 
     return windowWrap
+end
+
+_G.print = function(...)
+    local strArgs = {}
+    for i = 1, select("#", ...) do
+        strArgs[i] = string.lower(tostring(select(i, ...)))
+    end
+    UI:Notify("print", table.concat(strArgs, " "), 5)
+    return _G.homesickOriginals.print(unpack(strArgs))
+end
+_G.warn = function(...)
+    local strArgs = {}
+    for i = 1, select("#", ...) do
+        strArgs[i] = string.lower(tostring(select(i, ...)))
+    end
+    UI:Notify("warning", table.concat(strArgs, " "), 5)
+    return _G.homesickOriginals.warn(unpack(strArgs))
+end
+if type(printl) == "function" then
+    _G.homesickOriginals.printl = printl
+    _G.printl = function(...)
+        local strArgs = {}
+        for i = 1, select("#", ...) do
+            strArgs[i] = string.lower(tostring(select(i, ...)))
+        end
+        UI:Notify("print", table.concat(strArgs, " "), 5)
+        return _G.homesickOriginals.printl(unpack(strArgs))
+    end
+end
+if type(notify) == "function" then
+    _G.homesickOriginals.notify = notify
+    _G.notify = function(message, title, duration)
+        local lowerMsg = string.lower(tostring(message or ""))
+        local lowerTitle = string.lower(tostring(title or "notification"))
+        UI:Notify(lowerTitle, lowerMsg, duration or 5)
+        return _G.homesickOriginals.notify(message, title, duration)
+    end
 end
 
 _G.homesick = homesick
