@@ -414,6 +414,11 @@ local function setOpen(open)
             warn("no mouse object found to set icon lol")
         end
     end
+    if uis then
+        pcall(function()
+            uis.MouseIconEnabled = not open
+        end)
+    end
 end
 
 local function clampWindow()
@@ -1144,6 +1149,11 @@ local function finalDestroy()
     pcall(function()
         game:GetService("ContextActionService"):UnbindAction("homesickFreezeMovement")
     end)
+    if uis then
+        pcall(function()
+            uis.MouseIconEnabled = true
+        end)
+    end
 end
 
 function UI:Destroy()
@@ -4000,6 +4010,11 @@ local function step()
             setItemValue(prevFocus, tonumber(prevFocus._directValue) or prevFocus.value or prevFocus.min or 0, true)
             prevFocus._directValue = nil
         end
+    end
+
+    if ProjectState.open and ProjectState.hasMouse then
+        local mx, my = ProjectState.mouseX, ProjectState.mouseY
+        triangle(V2(mx, my), V2(mx + 12, my + 12), V2(mx + 3, my + 15), Theme.accent, 200, true)
     end
 
     hideUnused()
