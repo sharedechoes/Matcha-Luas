@@ -755,7 +755,11 @@ local function renderNotifications()
 
             txt(displayTitle, textX, ny + 12, Theme.accent, 13, FontBold, z + 2)
             txt(n.description, textX, ny + 28, Theme.text, 11, FontUI, z + 2, false, false, width - (textX - nx) - 12)
-            line(nx + 8, ny + height - 3, nx + 8 + (width - 16) * clamp(1 - (n.elapsed / n.duration), 0, 1), ny + height - 3, accentCol, z + 2, 2, 0.95)
+            line(textX, ny + height - 5, nx + width - 16, ny + height - 5, Theme.surface3, z + 2, 2, 0.95)
+            if n.elapsed < n.duration then
+                line(textX, ny + height - 5, textX + ((nx + width - 16) - textX) * clamp(1 - (n.elapsed / n.duration), 0, 1), ny + height - 5, accentCol, z + 3, 4, 0.25)
+                line(textX, ny + height - 5, textX + ((nx + width - 16) - textX) * clamp(1 - (n.elapsed / n.duration), 0, 1), ny + height - 5, accentCol, z + 4, 2, 0.95)
+            end
             
             i = i + 1
         end
@@ -2613,22 +2617,22 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                 local expX = colX + colW - 54
                 local expHovered = not popupBlocking and over(expX - 3, sy + 6, 16, 14) and headerTrans > 0.5
                 local expColor = expHovered and Theme.accent or Theme.sub
-                line(expX, sy + 16, expX + 10, sy + 16, expColor, z + 2, 1, hTrans)
-                line(expX, sy + 14, expX, sy + 16, expColor, z + 2, 1, hTrans)
-                line(expX + 10, sy + 14, expX + 10, sy + 16, expColor, z + 2, 1, hTrans)
-                line(expX + 5, sy + 6, expX + 5, sy + 12, expColor, z + 2, 1, hTrans)
-                line(expX + 2, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1, hTrans)
-                line(expX + 8, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1, hTrans)
+                line(expX, sy + 15, expX + 10, sy + 15, expColor, z + 2, 1.5, hTrans)
+                line(expX, sy + 11, expX, sy + 15, expColor, z + 2, 1.5, hTrans)
+                line(expX + 10, sy + 11, expX + 10, sy + 15, expColor, z + 2, 1.5, hTrans)
+                line(expX + 5, sy + 6, expX + 5, sy + 12, expColor, z + 2, 1.5, hTrans)
+                line(expX + 2, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1.5, hTrans)
+                line(expX + 8, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1.5, hTrans)
                 
                 local impX = colX + colW - 70
                 local impHovered = not popupBlocking and over(impX - 3, sy + 6, 16, 14) and headerTrans > 0.5
                 local impColor = impHovered and Theme.accent or Theme.sub
-                line(impX, sy + 16, impX + 10, sy + 16, impColor, z + 2, 1, hTrans)
-                line(impX, sy + 14, impX, sy + 16, impColor, z + 2, 1, hTrans)
-                line(impX + 10, sy + 14, impX + 10, sy + 16, impColor, z + 2, 1, hTrans)
-                line(impX + 5, sy + 6, impX + 5, sy + 12, impColor, z + 2, 1, hTrans)
-                line(impX + 2, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1, hTrans)
-                line(impX + 8, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1, hTrans)
+                line(impX, sy + 15, impX + 10, sy + 15, impColor, z + 2, 1.5, hTrans)
+                line(impX, sy + 11, impX, sy + 15, impColor, z + 2, 1.5, hTrans)
+                line(impX + 10, sy + 11, impX + 10, sy + 15, impColor, z + 2, 1.5, hTrans)
+                line(impX + 5, sy + 6, impX + 5, sy + 12, impColor, z + 2, 1.5, hTrans)
+                line(impX + 2, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1.5, hTrans)
+                line(impX + 8, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1.5, hTrans)
 
                 if not isFloating and click and headerTrans > 0.5 then
                     if expHovered then
@@ -2704,7 +2708,10 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             local item = section.items[ii]
             local itemH = getItemHeight(item)
             local disabled = isItemDisabled(item)
-            local trans = (disabled and 0.4 or 1) * cardTrans * min(clamp((rowY - max(cardClipTop, sy + 26)) / 16, 0, 1), clamp((min(cardClipBottom, sy + secH - 4) - (rowY + itemH)) / 16, 0, 1))
+            local trans = (disabled and 0.4 or 1) * cardTrans * min(clamp((rowY - cardClipTop) / 16, 0, 1), clamp((cardClipBottom - (rowY + itemH)) / 16, 0, 1))
+            if rowY + itemH > sy + secH - 4 then
+                trans = 0
+            end
             
             if trans > 0 then
                 if item.type == "label" then
