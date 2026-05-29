@@ -24,6 +24,7 @@ local sin = math.sin
 local clock = os.clock
 local remove = table.remove
 local concat = table.concat
+local exportConfig, importConfig, exportTheme, importTheme
 
 local function clamp(value, low, high)
     if value < low then
@@ -856,12 +857,16 @@ local function makeItem(section, item)
     return handle
 end
 
-local function createSection(tab, name, side)
+local function createSection(tab, name, side, allowLocking, defaultLock)
+    if allowLocking == allowLocking then end
+    if defaultLock == defaultLock then end
     local section = {
         name = tostring(name or "Section"),
         side = tostring(side or "Left"),
         items = {},
         collapsed = false,
+        allowLocking = (allowLocking == nil) and true or (allowLocking == true),
+        locked = (defaultLock == true),
     }
     tab.sections[#tab.sections + 1] = section
 
@@ -1136,8 +1141,10 @@ function UI:Tab(name)
     applyInputState(false)
 
     local tabApi = {}
-    function tabApi:Section(sectionName, side)
-        return createSection(tab, sectionName, side)
+    function tabApi:Section(sectionName, side, allowLocking, defaultLock)
+        if allowLocking == allowLocking then end
+        if defaultLock == defaultLock then end
+        return createSection(tab, sectionName, side, allowLocking, defaultLock)
     end
     return tabApi
 end
@@ -2517,17 +2524,20 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, cardTrans)
         end
         
+        local showLock = section.allowLocking ~= false
         if sy + 10 >= cardClipTop and sy + 20 <= cardClipBottom then
-            draw9Dot(colX + colW - 20, sy + 10, section.locked and C3(80, 75, 73) or Theme.sub, z + 2, cardTrans)
-            rect(colX + colW - 36, sy + 11, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, cardTrans)
-            if section.locked then
-                line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.accent, z + 2, 1, cardTrans)
-                line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 11, Theme.accent, z + 2, 1, cardTrans)
-                line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.accent, z + 2, 1, cardTrans)
-            else
-                line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.sub, z + 2, 1, cardTrans)
-                line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 9, Theme.sub, z + 2, 1, cardTrans)
-                line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.sub, z + 2, 1, cardTrans)
+            draw9Dot(colX + colW - 20, sy + 10, (showLock and section.locked) and C3(80, 75, 73) or Theme.sub, z + 2, cardTrans)
+            if showLock then
+                rect(colX + colW - 36, sy + 11, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, cardTrans)
+                if section.locked then
+                    line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.accent, z + 2, 1, cardTrans)
+                    line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 11, Theme.accent, z + 2, 1, cardTrans)
+                    line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.accent, z + 2, 1, cardTrans)
+                else
+                    line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.sub, z + 2, 1, cardTrans)
+                    line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 9, Theme.sub, z + 2, 1, cardTrans)
+                    line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.sub, z + 2, 1, cardTrans)
+                end
             end
         end
 
@@ -2536,17 +2546,21 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             local expHovered = not popupBlocking and over(expX - 3, sy + 6, 16, 14)
             local expColor = expHovered and Theme.accent or Theme.sub
             line(expX, sy + 16, expX + 10, sy + 16, expColor, z + 2, 1, cardTrans)
-            line(expX + 5, sy + 10, expX + 5, sy + 16, expColor, z + 2, 1, cardTrans)
-            line(expX + 3, sy + 12, expX + 5, sy + 10, expColor, z + 2, 1, cardTrans)
-            line(expX + 7, sy + 12, expX + 5, sy + 10, expColor, z + 2, 1, cardTrans)
+            line(expX, sy + 14, expX, sy + 16, expColor, z + 2, 1, cardTrans)
+            line(expX + 10, sy + 14, expX + 10, sy + 16, expColor, z + 2, 1, cardTrans)
+            line(expX + 5, sy + 6, expX + 5, sy + 12, expColor, z + 2, 1, cardTrans)
+            line(expX + 2, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1, cardTrans)
+            line(expX + 8, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1, cardTrans)
             
             local impX = colX + colW - 70
             local impHovered = not popupBlocking and over(impX - 3, sy + 6, 16, 14)
             local impColor = impHovered and Theme.accent or Theme.sub
             line(impX, sy + 16, impX + 10, sy + 16, impColor, z + 2, 1, cardTrans)
-            line(impX + 5, sy + 8, impX + 5, sy + 14, impColor, z + 2, 1, cardTrans)
-            line(impX + 3, sy + 12, impX + 5, sy + 14, impColor, z + 2, 1, cardTrans)
-            line(impX + 7, sy + 12, impX + 5, sy + 14, impColor, z + 2, 1, cardTrans)
+            line(impX, sy + 14, impX, sy + 16, impColor, z + 2, 1, cardTrans)
+            line(impX + 10, sy + 14, impX + 10, sy + 16, impColor, z + 2, 1, cardTrans)
+            line(impX + 5, sy + 6, impX + 5, sy + 12, impColor, z + 2, 1, cardTrans)
+            line(impX + 2, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1, cardTrans)
+            line(impX + 8, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1, cardTrans)
 
             if not isFloating and click then
                 if expHovered then
@@ -2586,7 +2600,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
         end
         
         if not isFloating then
-            if click and over(colX + colW - 38, sy + 6, 12, 12) and not popupBlocking then
+            if showLock and click and over(colX + colW - 38, sy + 6, 12, 12) and not popupBlocking then
                 section.locked = not section.locked
                 click = false
             end
@@ -3162,18 +3176,18 @@ local function loadConfig(json)
     end
 end
 
-local function exportConfig()
-    local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), serializeConfigData())
+exportConfig = function()
+    local json = select(2, pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), serializeConfigData()))
     if json and json ~= "" then
         return "homesickCfg_" .. base64encode(json)
     end
     return ""
 end
 
-local function importConfig(str)
+importConfig = function(str)
     if not str or string.sub(str, 1, 12) ~= "homesickCfg_" then return end
     local ok, json = pcall(base64decode, string.sub(str, 13))
-    if ok and json and json ~= "" then
+    if ok and ok == ok and json and json ~= "" then
         loadConfig(json)
     end
 end
@@ -3211,22 +3225,22 @@ local function loadTheme(json)
     end
 end
 
-local function exportTheme()
+exportTheme = function()
     local themeData = {}
     for k, v in pairs(Theme) do
         themeData[k] = toHex(v)
     end
-    local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), themeData)
+    local json = select(2, pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), themeData))
     if json and json ~= "" then
         return "homesickTheme_" .. base64encode(json)
     end
     return ""
 end
 
-local function importTheme(str)
+importTheme = function(str)
     if not str or string.sub(str, 1, 14) ~= "homesickTheme_" then return end
     local ok, json = pcall(base64decode, string.sub(str, 15))
-    if ok and json and json ~= "" then
+    if ok and ok == ok and json and json ~= "" then
         loadTheme(json)
     end
 end
@@ -3990,7 +4004,7 @@ local function renderWindow(click, held, rightClick)
         rect(bx, dy_box, bw, boxH, focused and Theme.surface or over(bx, dy_box, bw, boxH) and Theme.surface3 or Theme.surface, mz + 2, 4, 1)
         strokeRect(bx, dy_box, bw, boxH, focused and Theme.accent or Theme.border, mz + 3, 4, 1)
         
-        txt((modalTextbox.value == "") and "enter code..." or modalTextbox.value, bx + 8, textTop(dy_box, boxH, 12), (modalTextbox.value == "") and Theme.sub or Theme.text, 12, FontUI, mz + 4, false, false, bw - 16)
+        txt((modalTextbox.value == "" and not focused) and "enter code..." or modalTextbox.value, bx + 8, textTop(dy_box, boxH, 12), (modalTextbox.value == "") and Theme.sub or Theme.text, 12, FontUI, mz + 4, false, false, bw - 16)
         
         if focused then
             if modalTextbox._selectedAll and not (modalTextbox.value == "") then
@@ -4345,9 +4359,11 @@ homesick.createWindow = function(title, width, height)
             name = tabName
         }
         
-        tabWrap.addSection = function(tSelf, secName, column)
+        tabWrap.addSection = function(tSelf, secName, column, allowLocking, defaultLock)
+            if allowLocking == allowLocking then end
+            if defaultLock == defaultLock then end
             local secWrap = {
-                rawSec = tSelf.rawTab:Section(secName, column),
+                rawSec = tSelf.rawTab:Section(secName, column, allowLocking, defaultLock),
                 type = "Section"
             }
             
