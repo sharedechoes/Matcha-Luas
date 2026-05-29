@@ -390,12 +390,25 @@ local function setOpen(open)
     ProjectState.scrollDrag = nil
     ProjectState.dropdown = nil
     ProjectState.colorpicker = nil
+    ProjectState.cpDrag = nil
     ProjectState.focus = nil
     applyInputState(false)
+    if not Mouse then
+        LocalPlayer = Players.LocalPlayer
+        Mouse = LocalPlayer and LocalPlayer:GetMouse()
+    end
     if Mouse then
-        pcall(function()
+        local success, errorMsg = pcall(function()
             Mouse.Icon = open and "http://www.roblox.com/asset/?id=12556702945" or ""
         end)
+        if not success then
+            warn("cant set mouse icon rip " .. tostring(errorMsg))
+        end
+        if success == nil or errorMsg == nil then
+            success = true
+        end
+    else
+        warn("no mouse object found to set icon lol")
     end
 end
 
@@ -848,6 +861,17 @@ local function createSection(tab, name, side)
         })
     end
 
+    function sectionApi:Colorpicker(label, default, overwrite, callback, defaultAlpha)
+        return makeItem(section, {
+            type = "colorpicker",
+            label = tostring(label or "Colorpicker"),
+            value = default or Theme.accent,
+            alpha = type(overwrite) == "number" and overwrite or defaultAlpha or 1,
+            overwrite = overwrite == true,
+            callback = callback,
+        })
+    end
+
     function sectionApi:Checkbox(label, default, callback, unsafe, tooltip)
         return makeItem(section, {
             type = "checkbox",
@@ -1261,6 +1285,21 @@ local function getFocusableItems()
     return list
 end
 
+local function pushHistory(item, prevValue)
+    if not item._history then
+        item._history = { prevValue }
+        item._historyIndex = 1
+    else
+        while #item._history > item._historyIndex do
+            table.remove(item._history)
+        end
+        if item._history[item._historyIndex] ~= prevValue then
+            item._historyIndex = item._historyIndex + 1
+            item._history[item._historyIndex] = prevValue
+        end
+    end
+end
+
 local function processTextInput()
     if Input.tab.click then
         local items = getFocusableItems()
@@ -1390,34 +1429,66 @@ local function processTextInput()
     local now = clock()
     local any_held = false
     
-    if Input.delete.click then
-        value = ""
-        changed = true
-    end
-
-    for i = 1, #InputOrder do
-        local name = InputOrder[i]
-        local input = Input[name]
-        
-        if input.click and input.char then
-            local char = shifted and input.shifted or input.char
-            if item.type == "slider" then
-                if tonumber(char) or char == "." or char == "-" then
-                    value = value .. char
-                    changed = true
+    if (Input.ctrl.held or Input.lctrl.held or Input.rctrl.held) then
+        if Input.a.click then
+            item._selectedAll = true
+            Input.a.click = false
+        elseif Input.z.click then
+            if item._history and item._historyIndex > 0 then
+                local currentVal = (item.type == "textbox") and item.value or (item._directValue or "")
+                if item._historyIndex == #item._history then
+                    if item._history[item._historyIndex] ~= currentVal then
+                        item._history[#item._history + 1] = currentVal
+                    end
                 end
-            else
-                value = value .. char
-                changed = true
+                if item._historyIndex > 1 then
+                    item._historyIndex = item._historyIndex - 1
+                    local targetVal = item._history[item._historyIndex]
+                    if item.type == "textbox" then
+                        item.value = targetVal
+                        safeCallback(item.callback, targetVal)
+                    else
+                        item._directValue = targetVal
+                    end
+                    item._selectedAll = false
+                end
             end
-            ProjectState.repeatKey = name
-            ProjectState.repeatAt = now + 0.4
-            any_held = true
-            break
-        elseif input.held and input.char and ProjectState.repeatKey == name then
-            any_held = true
-            if now >= (ProjectState.repeatAt or 0) then
+            Input.z.click = false
+        elseif Input.y.click then
+            if item._history and item._historyIndex < #item._history then
+                item._historyIndex = item._historyIndex + 1
+                local targetVal = item._history[item._historyIndex]
+                if item.type == "textbox" then
+                    item.value = targetVal
+                    safeCallback(item.callback, targetVal)
+                else
+                    item._directValue = targetVal
+                end
+                item._selectedAll = false
+            end
+            Input.y.click = false
+        end
+    else
+        if Input.delete.click then
+            if item._selectedAll then
+                value = ""
+                item._selectedAll = false
+            else
+                value = ""
+            end
+            changed = true
+        end
+
+        for i = 1, #InputOrder do
+            local name = InputOrder[i]
+            local input = Input[name]
+            
+            if input.click and input.char then
                 local char = shifted and input.shifted or input.char
+                if item._selectedAll then
+                    value = ""
+                    item._selectedAll = false
+                end
                 if item.type == "slider" then
                     if tonumber(char) or char == "." or char == "-" then
                         value = value .. char
@@ -1427,24 +1498,56 @@ local function processTextInput()
                     value = value .. char
                     changed = true
                 end
-                ProjectState.repeatAt = now + 0.035
-            end
-            break
-        elseif input.click and (name == "backspace" or name == "unbound") then
-            value = string.sub(value, 1, max(0, #value - 1))
-            changed = true
-            ProjectState.repeatKey = name
-            ProjectState.repeatAt = now + 0.4
-            any_held = true
-            break
-        elseif input.held and (name == "backspace" or name == "unbound") and ProjectState.repeatKey == name then
-            any_held = true
-            if now >= (ProjectState.repeatAt or 0) then
-                value = string.sub(value, 1, max(0, #value - 1))
+                ProjectState.repeatKey = name
+                ProjectState.repeatAt = now + 0.4
+                any_held = true
+                break
+            elseif input.held and input.char and ProjectState.repeatKey == name then
+                any_held = true
+                if now >= (ProjectState.repeatAt or 0) then
+                    local char = shifted and input.shifted or input.char
+                    if item._selectedAll then
+                        value = ""
+                        item._selectedAll = false
+                    end
+                    if item.type == "slider" then
+                        if tonumber(char) or char == "." or char == "-" then
+                            value = value .. char
+                            changed = true
+                        end
+                    else
+                        value = value .. char
+                        changed = true
+                    end
+                    ProjectState.repeatAt = now + 0.035
+                end
+                break
+            elseif input.click and (name == "backspace" or name == "unbound") then
+                if item._selectedAll then
+                    value = ""
+                    item._selectedAll = false
+                else
+                    value = string.sub(value, 1, max(0, #value - 1))
+                end
                 changed = true
-                ProjectState.repeatAt = now + 0.035
+                ProjectState.repeatKey = name
+                ProjectState.repeatAt = now + 0.4
+                any_held = true
+                break
+            elseif input.held and (name == "backspace" or name == "unbound") and ProjectState.repeatKey == name then
+                any_held = true
+                if now >= (ProjectState.repeatAt or 0) then
+                    if item._selectedAll then
+                        value = ""
+                        item._selectedAll = false
+                    else
+                        value = string.sub(value, 1, max(0, #value - 1))
+                    end
+                    changed = true
+                    ProjectState.repeatAt = now + 0.035
+                end
+                break
             end
-            break
         end
     end
     
@@ -1455,11 +1558,15 @@ local function processTextInput()
     if changed then
         if item.type == "textbox" then
             if value ~= item.value then
+                pushHistory(item, item.value)
                 item.value = value
                 safeCallback(item.callback, value)
             end
         else
-            item._directValue = value
+            if value ~= item._directValue then
+                pushHistory(item, item._directValue or "")
+                item._directValue = value
+            end
         end
     end
 end
@@ -1801,6 +1908,26 @@ local function renderColorpicker(click, held)
     end
 
     local x, y, w, h = cp.x, cp.y, cp.w, cp.h
+
+    if click and over(x, y, w, 24) then
+        ProjectState.cpDrag = { ProjectState.mouseX - x, ProjectState.mouseY - y }
+        click = false
+    end
+
+    if held and ProjectState.cpDrag then
+        cp.x = ProjectState.mouseX - ProjectState.cpDrag[1]
+        cp.y = ProjectState.mouseY - ProjectState.cpDrag[2]
+        local szX, szY = viewportSize()
+        cp.x = clamp(cp.x, 0, szX - w)
+        cp.y = clamp(cp.y, 0, szY - h)
+        if szX < 0 or szY < 0 then
+            szX = 0
+        end
+        x, y = cp.x, cp.y
+    else
+        ProjectState.cpDrag = nil
+    end
+
     rect(x, y, w, h, Theme.surface2, 110, 8)
     strokeRect(x, y, w, h, Theme.border, 111, 8)
     txt(cp.picker.label, x + 10, y + 8, Theme.text, 13, FontBold, 112, false, false, w - 20)
@@ -1933,6 +2060,7 @@ local function renderColorpicker(click, held)
             ProjectState.focus = nil
         end
         ProjectState.colorpicker = nil
+        ProjectState.cpDrag = nil
         return false
     end
 
@@ -2439,6 +2567,35 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         end
                     end
                     
+                elseif item.type == "colorpicker" then
+                    txt(item.label, rowX + 4, textTop(rowY, itemH - 2, 13), Theme.text, 13, FontSystem, z + 12, false, false, rowW - 28, trans)
+                    local cpX = rowX + rowW - 16
+                    local hovered = over(cpX - 3, rowY + 5, 18, 18)
+                    rect(cpX, rowY + 8, 12, 12, item.value, z + 12, 3, trans * (item.alpha or 1))
+                    strokeRect(cpX, rowY + 8, 12, 12, Theme.border, z + 13, 3, trans)
+                    if hovered then
+                        strokeRect(cpX - 2, rowY + 6, 16, 16, Theme.accent, z + 14, 4, trans)
+                    end
+                    if click and hovered and not popupBlocking and not disabled then
+                        spawnColorpicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item)
+                        click = false
+                    elseif rightClick and hovered and not popupBlocking and not disabled then
+                        spawnDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
+                            if choice and choice[1] == "Copy" then
+                                ProjectState.copiedColor = item.value
+                                pcall(setclipboard, "#" .. toHex(item.value))
+                            elseif choice and choice[1] == "Paste" then
+                                if ProjectState.copiedColor and colorChanged(item.value, ProjectState.copiedColor) then
+                                    item.value = ProjectState.copiedColor
+                                    safeCallback(item.callback, item.value)
+                                else
+                                    warn("color clipboard empty lol")
+                                end
+                            end
+                        end, nil, nil)
+                        rightClick = false
+                    end
+
                 elseif item.type == "slider" then
                     txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 80, trans)
                     
@@ -2549,6 +2706,9 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     local is_empty = item.value == ""
                     txt(is_empty and item.label or item.value, bx + 8, textTop(dy_box, boxH, 13), is_empty and Theme.sub or Theme.text, 13, FontUI, z + 14, false, false, bw - 16, trans)
                     if focused then
+                        if item._selectedAll and not is_empty then
+                            rect(bx + 8, dy_box + 3, math.min(bw - 16, textWidth(item.value, 13, FontUI)), boxH - 6, Theme.accent, z + 13, 2, trans * 0.4)
+                        end
                         local cursorX = bx + 8
                         if not is_empty then
                             cursorX = cursorX + textWidth(item.value, 13, FontUI)
@@ -2806,15 +2966,19 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     return click, held, rightClick
 end
 
-local function saveConfig()
-    pcall(makefolder, "homesick")
+local function serializeConfigData()
     local configData = {}
     for _, t in ipairs(ProjectState.tabs) do
         for _, s in ipairs(t.sections) do
             for _, item in ipairs(s.items) do
                 if item.type ~= "divider" and item.type ~= "label" and item.type ~= "button" then
                     local key = t.name .. "." .. s.name .. "." .. item.label
-                    local data = { value = item.value }
+                    local data
+                    if item.type == "colorpicker" then
+                        data = { value = toHex(item.value), alpha = item.alpha }
+                    else
+                        data = { value = item.value }
+                    end
                     if item.keybind then
                         data.keybind = { value = item.keybind.value, mode = item.keybind.mode }
                     end
@@ -2826,7 +2990,12 @@ local function saveConfig()
             end
         end
     end
-    local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), configData)
+    return configData
+end
+
+local function saveConfig()
+    pcall(makefolder, "homesick")
+    local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), serializeConfigData())
     if json and json ~= "" then
         pcall(writefile, "homesick/config.json", json)
     end
@@ -2848,7 +3017,13 @@ local function loadConfig(json)
                     local key = t.name .. "." .. s.name .. "." .. item.label
                     local data = configData[key]
                     if data then
-                        setItemValue(item, data.value, true)
+                        if item.type == "colorpicker" then
+                            item.value = C3HEX("#" .. data.value)
+                            item.alpha = data.alpha
+                            safeCallback(item.callback, item.value, item.alpha)
+                        else
+                            setItemValue(item, data.value, true)
+                        end
                         if data.keybind and item.keybind then
                             item.keybind.value = data.keybind.value
                             item.keybind.mode = data.keybind.mode
@@ -2867,25 +3042,7 @@ local function loadConfig(json)
 end
 
 local function exportConfig()
-    local configData = {}
-    for _, t in ipairs(ProjectState.tabs) do
-        for _, s in ipairs(t.sections) do
-            for _, item in ipairs(s.items) do
-                if item.type ~= "divider" and item.type ~= "label" and item.type ~= "button" then
-                    local key = t.name .. "." .. s.name .. "." .. item.label
-                    local data = { value = item.value }
-                    if item.keybind then
-                        data.keybind = { value = item.keybind.value, mode = item.keybind.mode }
-                    end
-                    if item.colorpicker then
-                        data.colorpicker = { value = toHex(item.colorpicker.value), alpha = item.colorpicker.alpha }
-                    end
-                    configData[key] = data
-                end
-            end
-        end
-    end
-    local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), configData)
+    local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), serializeConfigData())
     if json and json ~= "" then
         return "homesickCfg_" .. base64encode(json)
     end
@@ -2925,6 +3082,9 @@ local function loadTheme(json)
         for k, v in pairs(themeData) do
             if Theme[k] ~= nil then
                 Theme[k] = C3HEX("#" .. v)
+                if ProjectState.themeColorPickers and ProjectState.themeColorPickers[k] then
+                    ProjectState.themeColorPickers[k]:Set(Theme[k])
+                end
             end
         end
     end
@@ -3085,25 +3245,7 @@ local function initSettings()
             name = configDropdown.item.value[1]
         end
         if name and name ~= "" then
-            local configData = {}
-            for _, t in ipairs(ProjectState.tabs) do
-                for _, s in ipairs(t.sections) do
-                    for _, item in ipairs(s.items) do
-                        if item.type ~= "divider" and item.type ~= "label" and item.type ~= "button" then
-                            local key = t.name .. "." .. s.name .. "." .. item.label
-                            local data = { value = item.value }
-                            if item.keybind then
-                                data.keybind = { value = item.keybind.value, mode = item.keybind.mode }
-                            end
-                            if item.colorpicker then
-                                data.colorpicker = { value = toHex(item.colorpicker.value), alpha = item.colorpicker.alpha }
-                            end
-                            configData[key] = data
-                        end
-                    end
-                end
-            end
-            local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), configData)
+            local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), serializeConfigData())
             if json and json ~= "" then
                 pcall(writefile, "homesick/" .. name .. ".json", json)
                 configDropdown:UpdateChoices(getConfigsList())
@@ -3131,13 +3273,25 @@ local function initSettings()
         importTheme(importThemeBox.item.value)
     end)
     
-    local colorsSection = createSection(settingsTab, "Theme Colors", "Right")
-    colorsSection:Label("Customize UI theme colors below:")
+    local colorsSec = createSection(settingsTab, "Theme Colors", "Right")
+    colorsSec:Label("Customize UI theme colors below:")
+    ProjectState.themeColorPickers = {}
     for _, name in ipairs({"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border"}) do
-        local toggle = colorsSection:Toggle("Customize " .. name, false)
-        toggle:AddColorpicker(name, Theme[name], true, function(color)
-            Theme[name] = color
-        end)
+        ProjectState.themeColorPickers[name] = colorsSec:Colorpicker(
+            name == "accent" and "Accent" or
+            name == "bg" and "Background" or
+            name == "surface" and "Surface 1" or
+            name == "surface2" and "Surface 2" or
+            name == "surface3" and "Surface 3" or
+            name == "text" and "Text" or
+            name == "sub" and "Sub Text" or
+            "Border",
+            Theme[name],
+            true,
+            function(color)
+                Theme[name] = color
+            end
+        )
     end
 end
 
@@ -3172,6 +3326,35 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             end
         end
         
+    elseif item.type == "colorpicker" then
+        txt(item.label, rowX + 4, textTop(rowY, itemH - 2, 13), Theme.text, 13, FontSystem, z + 12, false, false, rowW - 28, trans)
+        local cpX = rowX + rowW - 16
+        local hovered = over(cpX - 3, rowY + 5, 18, 18)
+        rect(cpX, rowY + 8, 12, 12, item.value, z + 12, 3, trans * (item.alpha or 1))
+        strokeRect(cpX, rowY + 8, 12, 12, Theme.border, z + 13, 3, trans)
+        if hovered then
+            strokeRect(cpX - 2, rowY + 6, 16, 16, Theme.accent, z + 14, 4, trans)
+        end
+        if click and hovered and not popupBlocking and not disabled then
+            spawnColorpicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item)
+            click = false
+        elseif rightClick and hovered and not popupBlocking and not disabled then
+            spawnDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
+                if choice and choice[1] == "Copy" then
+                    ProjectState.copiedColor = item.value
+                    pcall(setclipboard, "#" .. toHex(item.value))
+                elseif choice and choice[1] == "Paste" then
+                    if ProjectState.copiedColor and colorChanged(item.value, ProjectState.copiedColor) then
+                        item.value = ProjectState.copiedColor
+                        safeCallback(item.callback, item.value)
+                    else
+                        warn("color clipboard empty lol")
+                    end
+                end
+            end, nil, nil)
+            rightClick = false
+        end
+
     elseif item.type == "slider" then
         txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 80, trans)
         
@@ -3278,6 +3461,9 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         
         txt((item.value == "") and item.label or item.value, bx + 8, textTop(dy_box, boxH, 13), (item.value == "") and Theme.sub or Theme.text, 13, FontUI, z + 14, false, false, bw - 16, trans)
         if focused then
+            if item._selectedAll and not (item.value == "") then
+                rect(bx + 8, dy_box + 3, math.min(bw - 16, textWidth(item.value, 13, FontUI)), boxH - 6, Theme.accent, z + 13, 2, trans * 0.4)
+            end
             local cursorX = bx + 8
             if not (item.value == "") then
                 cursorX = cursorX + textWidth(item.value, 13, FontUI)
@@ -3593,13 +3779,19 @@ local function renderWindow(click, held, rightClick)
 
     local cx_set = x + w - 21
     local cy = y + 18
-    line(cx_set - 6, cy, cx_set + 6, cy, setHovered and Theme.accent or Theme.sub, 20, 1.5)
-    line(cx_set, cy - 6, cx_set, cy + 6, setHovered and Theme.accent or Theme.sub, 20, 1.5)
-    line(cx_set - 4.5, cy - 4.5, cx_set + 4.5, cy + 4.5, setHovered and Theme.accent or Theme.sub, 20, 1.5)
-    line(cx_set - 4.5, cy + 4.5, cx_set + 4.5, cy - 4.5, setHovered and Theme.accent or Theme.sub, 20, 1.5)
+    local col = (setHovered or ProjectState.settingsActive) and Theme.accent or Theme.sub
+    if ProjectState.settingsActive then
+        circle(cx_set, cy, 9, Theme.accent, 19, true, 0, 32, 0.25)
+    end
+    for i = 0, 3 do
+        local a = (ProjectState.settingsActive and clock() * 2 or 0) + i * math.pi / 4
+        local c = math.cos(a)
+        local s = math.sin(a)
+        line(cx_set - 6 * c, cy - 6 * s, cx_set + 6 * c, cy + 6 * s, col, 20, 1.5)
+    end
     circle(cx_set, cy, 4, Theme.surface2, 21, true)
-    circle(cx_set, cy, 4, setHovered and Theme.accent or Theme.sub, 22, false, 1.5)
-    circle(cx_set, cy, 1.5, setHovered and Theme.accent or Theme.sub, 23, true)
+    circle(cx_set, cy, 4, col, 22, false, 1.5)
+    circle(cx_set, cy, 1.5, col, 23, true)
 
     if ProjectState.minimized or h <= MINIMIZED_H then
         return click, held, rightClick
@@ -3655,10 +3847,11 @@ local function renderWindow(click, held, rightClick)
 end
 
 local function step()
-    local isTyping = ProjectState.focus and (ProjectState.focus.type == "textbox")
+    local isTyping = ProjectState.focus ~= nil
     if isTyping ~= ProjectState.lastIsTyping then
         ProjectState.lastIsTyping = isTyping
         if isTyping then
+            setrobloxinput(false)
             pcall(function()
                 game:GetService("ContextActionService"):BindActionAtPriority(
                     "homesickFreezeMovement",
@@ -3670,6 +3863,7 @@ local function step()
                 )
             end)
         else
+            setrobloxinput(true)
             pcall(function()
                 game:GetService("ContextActionService"):UnbindAction("homesickFreezeMovement")
             end)
@@ -3726,7 +3920,7 @@ local function step()
     getMouse()
     updateInput()
 
-    if Input[MENU_KEY] and Input[MENU_KEY].click then
+    if Input[MENU_KEY] and Input[MENU_KEY].click and not ProjectState.focus then
         setOpen(not ProjectState.open)
     end
 
@@ -3789,9 +3983,12 @@ local function step()
 
     renderWatermark(click, held)
 
-    if prevFocus and prevFocus.type == "slider" and ProjectState.focus ~= prevFocus and prevFocus._directValue then
-        setItemValue(prevFocus, tonumber(prevFocus._directValue) or prevFocus.value or prevFocus.min or 0, true)
-        prevFocus._directValue = nil
+    if prevFocus and ProjectState.focus ~= prevFocus then
+        prevFocus._selectedAll = false
+        if prevFocus.type == "slider" and prevFocus._directValue then
+            setItemValue(prevFocus, tonumber(prevFocus._directValue) or prevFocus.value or prevFocus.min or 0, true)
+            prevFocus._directValue = nil
+        end
     end
 
     hideUnused()
