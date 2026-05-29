@@ -190,6 +190,13 @@ local ProjectState = {
     },
     settingsActive = false,
     settingsTab = nil,
+    tabAnimations = true,
+    gridLocking = true,
+    smoothScrolling = true,
+    hoverEffects = true,
+    settingsTargetH = nil,
+    preSettingsH = nil,
+    gridSnapLines = nil,
 }
 
 local function warn(msg)
@@ -396,7 +403,7 @@ local function applyInputState(force)
     local desired = not ProjectState.open
     if force or ProjectState.inputState ~= desired then
         ProjectState.inputState = desired
-        setrobloxinput(true)
+        setrobloxinput(desired)
     end
 end
 
@@ -698,6 +705,33 @@ local function drawImage(data, x, y, w, h, z, trans)
         pcall(function() obj.Visible = true end)
     end
     return obj
+end
+
+local IconCache = {}
+local IconUrls = {
+    lock = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/lock.png",
+    unlock = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/unlock.png",
+    search = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/magnifying-glass.png",
+    menu = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/menu.png",
+    setting = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/setting.png",
+    import_icon = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/import.png",
+    export_icon = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/export.png",
+}
+
+task.spawn(function()
+    for name, url in pairs(IconUrls) do
+        local ok, data = pcall(function()
+            return game:HttpGet(url)
+        end)
+        if ok and data and #data > 100 then
+            IconCache[name] = data
+        end
+    end
+end)
+
+local function drawIconImg(name, x, y, size, z, trans)
+    if not IconCache[name] then return end
+    drawImage(IconCache[name], x, y, size, size, z, trans or 1)
 end
 
 local function renderNotifications()
@@ -1401,7 +1435,7 @@ local function getFocusableItems()
         for _, s in ipairs(ProjectState.activeTab.sections) do
             if not s.collapsed then
                 for _, item in ipairs(s.items) do
-                    if (item.type == "textbox" or item.type == "slider") and not isItemDisabled(item) then
+                    if item.type == "textbox" and not isItemDisabled(item) then
                         list[#list + 1] = item
                     end
                 end
@@ -1787,7 +1821,7 @@ toHsv = function(color)
     return hue, saturation, high
 end
 
-local function spawnDropdown(kind, x, y, w, choices, value, multi, callback, item, keybind)
+local function dDropdown(kind, x, y, w, choices, value, multi, callback, item, keybind)
     local vw, vh = viewportSize()
     local height
     if multi then
@@ -1823,7 +1857,7 @@ local PRESET_SWATCHES = {
     C3(0, 0, 0)
 }
 
-local function spawnColorpicker(x, y, picker)
+local function doColorPicker(x, y, picker)
     local h, s, v = toHsv(picker.value)
     local vw, vh = viewportSize()
     local w, height = 220, 260
@@ -2399,6 +2433,9 @@ local function renderTabs(click, px, py, pw)
         if not ProjectState.currentPillX then
             ProjectState.currentPillX = targetPillX
             ProjectState.currentPillW = targetPillW
+        elseif ProjectState.tabAnimations == false then
+            ProjectState.currentPillX = targetPillX
+            ProjectState.currentPillW = targetPillW
         else
             ProjectState.currentPillX = smoothValue(ProjectState.currentPillX, targetPillX, 18)
             ProjectState.currentPillW = smoothValue(ProjectState.currentPillW, targetPillW, 18)
@@ -2452,7 +2489,7 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
             item.keybind.listenAt = clock()
             click = false
         elseif rightClick and hovered and item.keybind.canChange then
-            spawnDropdown("keymode", keyX, rowY + 24, 90, KEYBIND_MODES, nil, false, nil, nil, item.keybind)
+            dDropdown("keymode", keyX, rowY + 24, 90, KEYBIND_MODES, nil, false, nil, nil, item.keybind)
             rightClick = false
         end
         currentX = currentX - 14
@@ -2471,10 +2508,10 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
         end
 
         if click and hovered then
-            spawnColorpicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item.colorpicker)
+            doColorPicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item.colorpicker)
             click = false
         elseif rightClick and hovered then
-            spawnDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
+            dDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
                 if choice and choice[1] == "Copy" then
                     ProjectState.copiedColor = item.colorpicker.value
                     pcall(setclipboard, "#" .. toHex(item.colorpicker.value))
@@ -2599,40 +2636,19 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, hTrans)
             
             local showLock = section.allowLocking ~= false
-            draw9Dot(colX + colW - 20, sy + 10, (showLock and section.locked) and C3(80, 75, 73) or Theme.sub, z + 2, hTrans)
+            drawIconImg("menu", colX + colW - 22, sy + 8, 12, z + 2, hTrans * 0.6)
             if showLock then
-                rect(colX + colW - 36, sy + 11, 8, 6, section.locked and Theme.accent or Theme.sub, z + 2, 1, hTrans)
-                if section.locked then
-                    line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.accent, z + 2, 1, hTrans)
-                    line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 11, Theme.accent, z + 2, 1, hTrans)
-                    line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.accent, z + 2, 1, hTrans)
-                else
-                    line(colX + colW - 34, sy + 8, colX + colW - 34, sy + 11, Theme.sub, z + 2, 1, hTrans)
-                    line(colX + colW - 31, sy + 8, colX + colW - 31, sy + 9, Theme.sub, z + 2, 1, hTrans)
-                    line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.sub, z + 2, 1, hTrans)
-                end
+                drawIconImg(section.locked and "lock" or "unlock", colX + colW - 38, sy + 6, 14, z + 2, section.locked and hTrans or hTrans * 0.5)
             end
 
             if section.name == "Configs" or section.name == "Themes" then
                 local expX = colX + colW - 54
                 local expHovered = not popupBlocking and over(expX - 3, sy + 6, 16, 14) and headerTrans > 0.5
-                local expColor = expHovered and Theme.accent or Theme.sub
-                line(expX, sy + 15, expX + 10, sy + 15, expColor, z + 2, 1.5, hTrans)
-                line(expX, sy + 11, expX, sy + 15, expColor, z + 2, 1.5, hTrans)
-                line(expX + 10, sy + 11, expX + 10, sy + 15, expColor, z + 2, 1.5, hTrans)
-                line(expX + 5, sy + 6, expX + 5, sy + 12, expColor, z + 2, 1.5, hTrans)
-                line(expX + 2, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1.5, hTrans)
-                line(expX + 8, sy + 9, expX + 5, sy + 6, expColor, z + 2, 1.5, hTrans)
+                drawIconImg("export_icon", expX - 2, sy + 4, 14, z + 2, expHovered and hTrans or hTrans * 0.5)
                 
                 local impX = colX + colW - 70
                 local impHovered = not popupBlocking and over(impX - 3, sy + 6, 16, 14) and headerTrans > 0.5
-                local impColor = impHovered and Theme.accent or Theme.sub
-                line(impX, sy + 15, impX + 10, sy + 15, impColor, z + 2, 1.5, hTrans)
-                line(impX, sy + 11, impX, sy + 15, impColor, z + 2, 1.5, hTrans)
-                line(impX + 10, sy + 11, impX + 10, sy + 15, impColor, z + 2, 1.5, hTrans)
-                line(impX + 5, sy + 6, impX + 5, sy + 12, impColor, z + 2, 1.5, hTrans)
-                line(impX + 2, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1.5, hTrans)
-                line(impX + 8, sy + 9, impX + 5, sy + 12, impColor, z + 2, 1.5, hTrans)
+                drawIconImg("import_icon", impX - 2, sy + 4, 14, z + 2, impHovered and hTrans or hTrans * 0.5)
 
                 if not isFloating and click and headerTrans > 0.5 then
                     if expHovered then
@@ -2793,10 +2809,10 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         strokeRect(cpX - 2, rowY + 6, 16, 16, Theme.accent, z + 14, 4, trans)
                     end
                     if click and hovered and not popupBlocking and not disabled and trans > 0.5 then
-                        spawnColorpicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item)
+                        doColorPicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item)
                         click = false
                     elseif rightClick and hovered and not popupBlocking and not disabled and trans > 0.5 then
-                        spawnDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
+                        dDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
                             if choice and choice[1] == "Copy" then
                                 ProjectState.copiedColor = item.value
                                 pcall(setclipboard, "#" .. toHex(item.value))
@@ -2890,7 +2906,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     end
                     
                     if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
-                        spawnDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
+                        dDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
                         click = false
                     end
                     
@@ -2920,7 +2936,8 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     strokeRect(bx, dy_box, bw, boxH, focused and Theme.accent or Theme.border, z + 13, 4, trans)
                     
                     local is_empty = item.value == ""
-                    txt(is_empty and item.label or item.value, bx + 8, textTop(dy_box, boxH, 13), is_empty and Theme.sub or Theme.text, 13, FontUI, z + 14, false, false, bw - 16, trans)
+                    local textTrans = (focused and is_empty) and trans * 0.2 or trans
+                    txt(is_empty and item.label or item.value, bx + 8, textTop(dy_box, boxH, 13), is_empty and Theme.sub or Theme.text, 13, FontUI, z + 14, false, false, bw - 16, textTrans)
                     if focused then
                         if item._selectedAll and not is_empty then
                             rect(bx + 8, dy_box + 3, math.min(bw - 16, textWidth(item.value, 13, FontUI)), boxH - 6, Theme.accent, z + 13, 2, trans * 0.4)
@@ -3092,9 +3109,29 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
 
     if held and ProjectState.resizeSection then
         local dy = ProjectState.mouseY - ProjectState.resizeSectionStartMouseY
-        ProjectState.resizeSection.customHeight = max(40, ProjectState.resizeSectionStartH + dy)
+        local newH = max(40, ProjectState.resizeSectionStartH + dy)
+        
+        if ProjectState.gridLocking ~= false then
+            local resizeSec = ProjectState.resizeSection
+            local resizeBottom = (resizeSec.lastRenderY or 0) + newH
+            ProjectState.gridSnapLines = {}
+            
+            for i = 1, #sectionsToRender do
+                local otherSec = sectionsToRender[i]
+                if otherSec ~= resizeSec then
+                    local otherBottom = (otherSec.lastRenderY or 0) + (otherSec.calculatedHeight or 0)
+                    if abs(resizeBottom - otherBottom) < 10 then
+                        newH = otherBottom - (resizeSec.lastRenderY or 0)
+                        ProjectState.gridSnapLines[#ProjectState.gridSnapLines + 1] = otherBottom
+                    end
+                end
+            end
+        end
+        
+        ProjectState.resizeSection.customHeight = newH
     else
         ProjectState.resizeSection = nil
+        ProjectState.gridSnapLines = nil
     end
 
     local leftY = sy
@@ -3151,6 +3188,15 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
             false,
             true
         )
+    end
+
+    if ProjectState.gridSnapLines then
+        for i = 1, #ProjectState.gridSnapLines do
+            local snapY = ProjectState.gridSnapLines[i]
+            if snapY > clipTop and snapY < clipBottom then
+                line(px, snapY, px + pw, snapY, Theme.accent, 60, 1, 0.6)
+            end
+        end
     end
 
     if tab.maxScroll > 0 then
@@ -3234,21 +3280,31 @@ local function loadConfig(json)
                     local data = configData[key]
                     if data then
                         if item.type == "colorpicker" then
-                            item.value = C3HEX("#" .. data.value)
-                            item.alpha = data.alpha
-                            safeCallback(item.callback, item.value, item.alpha)
+                            pcall(function()
+                                item.value = C3HEX("#" .. tostring(data.value or "FFFFFF"))
+                                item.alpha = data.alpha or 1
+                                safeCallback(item.callback, item.value, item.alpha)
+                            end)
+                        elseif item.type == "dropdown" then
+                            local loadedVal = data.value
+                            if type(loadedVal) ~= "table" then
+                                loadedVal = loadedVal ~= nil and {loadedVal} or {}
+                            end
+                            setDropdownValue(item, loadedVal, true)
                         else
                             setItemValue(item, data.value, true)
                         end
                         if data.keybind and item.keybind then
-                            item.keybind.value = data.keybind.value
-                            item.keybind.mode = data.keybind.mode
+                            item.keybind.value = normalizeKey(data.keybind.value)
+                            item.keybind.mode = normalizeMode(data.keybind.mode)
                             safeCallback(item.keybind.callback, item.keybind.value and Input[item.keybind.value] and Input[item.keybind.value].id or nil, item.keybind.mode)
                         end
                         if data.colorpicker and item.colorpicker then
-                            item.colorpicker.value = C3HEX("#" .. data.colorpicker.value)
-                            item.colorpicker.alpha = data.colorpicker.alpha
-                            safeCallback(item.colorpicker.callback, item.colorpicker.value, item.colorpicker.alpha)
+                            pcall(function()
+                                item.colorpicker.value = C3HEX("#" .. tostring(data.colorpicker.value or "FFFFFF"))
+                                item.colorpicker.alpha = data.colorpicker.alpha or 1
+                                safeCallback(item.colorpicker.callback, item.colorpicker.value, item.colorpicker.alpha)
+                            end)
                         end
                     end
                 end
@@ -3404,11 +3460,6 @@ local function initSettings()
     }
     ProjectState.settingsTab = settingsTab
  
-    local generalSec = createSection(settingsTab, "General Settings", "Left")
-    generalSec:Toggle("Spoof window focus", false, function(val)
-        ProjectState.isrbxactiveOverride = val
-    end)
-
     local configSection = createSection(settingsTab, "Configs", "Left")
     local configDropdown = configSection:Dropdown("Config List", getConfigsList(), getConfigsList())
     configDropdown:Set("")
@@ -3485,6 +3536,23 @@ local function initSettings()
         end
     end)
 
+    local generalSec = createSection(settingsTab, "General Settings", "Full")
+    generalSec:Toggle("Spoof window focus", false, function(val)
+        ProjectState.isrbxactiveOverride = val
+    end)
+    generalSec:Toggle("Tab Animations", true, function(val)
+        ProjectState.tabAnimations = val
+    end)
+    generalSec:Toggle("Grid Locking", true, function(val)
+        ProjectState.gridLocking = val
+    end)
+    generalSec:Toggle("Smooth Scrolling", true, function(val)
+        ProjectState.smoothScrolling = val
+    end)
+    generalSec:Toggle("Hover Effects", true, function(val)
+        ProjectState.hoverEffects = val
+    end)
+
     local colorsSec = createSection(settingsTab, "Theme Colors", "Full")
     colorsSec:Label("Customize UI theme colors below:")
     ProjectState.themeColorPickers = {}
@@ -3553,10 +3621,10 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             strokeRect(cpX - 2, rowY + 6, 16, 16, Theme.accent, z + 14, 4, trans)
         end
         if click and hovered and not popupBlocking and not disabled and trans > 0.5 then
-            spawnColorpicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item)
+            doColorPicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item)
             click = false
         elseif rightClick and hovered and not popupBlocking and not disabled and trans > 0.5 then
-            spawnDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
+            doDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
                 if choice and choice[1] == "Copy" then
                     ProjectState.copiedColor = item.value
                     pcall(setclipboard, "#" .. toHex(item.value))
@@ -3647,7 +3715,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         end
         
         if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
-            spawnDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
+            doDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
             click = false
         end
         
@@ -3952,6 +4020,16 @@ local function renderWindow(click, held, rightClick)
         if ProjectState.settingsActive then
             ProjectState.searchBar.active = false
             ProjectState.searchBar.value = ""
+            ProjectState.preSettingsH = ProjectState.h
+            local contentH = 0
+            if ProjectState.settingsTab then
+                for _, sec in ipairs(ProjectState.settingsTab.sections) do
+                    contentH = contentH + (sec.customHeight or 160)
+                end
+            end
+            ProjectState.settingsTargetH = math.max(ProjectState.h, math.min(contentH + 80, 700))
+        else
+            ProjectState.settingsTargetH = ProjectState.preSettingsH or ProjectState.defaultH or ProjectState.h
         end
         click = false
         baseClick = false
@@ -3974,13 +4052,27 @@ local function renderWindow(click, held, rightClick)
         baseClick = false
     end
 
+    if ProjectState.settingsTargetH then
+        ProjectState.h = smoothValue(ProjectState.h, ProjectState.settingsTargetH, 14)
+        if math.abs(ProjectState.h - ProjectState.settingsTargetH) < 0.5 then
+            ProjectState.h = ProjectState.settingsTargetH
+            if not ProjectState.settingsActive then
+                ProjectState.settingsTargetH = nil
+            end
+        end
+        clampWindow()
+        x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
+    end
     ProjectState.searchBar.width = smoothValue(ProjectState.searchBar.width or 0, ProjectState.searchBar.active and 140 or 0, 18)
     if ProjectState.searchBar.width > 2 then
         local searchW = ProjectState.searchBar.width
         local searchX = x + w - 56 - searchW
         rect(searchX, y + 8, searchW, 20, Theme.surface, 15, 6)
         strokeRect(searchX, y + 8, searchW, 20, (ProjectState.focus == ProjectState.searchBar) and Theme.accent or Theme.border, 16, 6)
-        txt((ProjectState.searchBar.value == "") and "Search..." or ProjectState.searchBar.value, searchX + 8, textTop(y + 8, 20, 12), (ProjectState.searchBar.value == "") and Theme.sub or Theme.text, 12, FontUI, 17, false, false, searchW - 16)
+        local searchFocused = ProjectState.focus == ProjectState.searchBar
+        local searchEmpty = ProjectState.searchBar.value == ""
+        local searchPlaceholderTrans = (searchFocused and searchEmpty) and 0.25 or 1
+        txt(searchEmpty and "Search..." or ProjectState.searchBar.value, searchX + 8, textTop(y + 8, 20, 12), searchEmpty and Theme.sub or Theme.text, 12, FontUI, 17, false, false, searchW - 16, searchPlaceholderTrans)
         if ProjectState.focus == ProjectState.searchBar then
             local cursorX = searchX + 8
             if not (ProjectState.searchBar.value == "") then
@@ -4433,6 +4525,10 @@ _G.homesickUI = UI
 
 local homesick = {}
 
+homesick.GetDrawing = function(self, kind)
+    return UI:GetDrawing(kind)
+end
+
 homesick.createWindow = function(title, width, height)
     UI:SetTitle(title)
     UI:SetSize(width, height)
@@ -4669,7 +4765,7 @@ end
 if _G.homesickOriginals and type(_G.homesickOriginals.isrbxactive) == "function" then
     _G.isrbxactive = function()
         if ProjectState.isrbxactiveOverride then
-            return false
+            return true
         end
         return _G.homesickOriginals.isrbxactive()
     end
