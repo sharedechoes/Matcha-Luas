@@ -184,6 +184,16 @@ local ProjectState = {
     settingsTab = nil,
 }
 
+local function warn(msg)
+    ProjectState.notifications = ProjectState.notifications or {}
+    table.insert(ProjectState.notifications, {
+        title = "warning",
+        description = tostring(msg or msg),
+        duration = 5,
+        elapsed = 0,
+    })
+end
+
 local Pool = {
     sq = {},
     tx = {},
@@ -393,32 +403,6 @@ local function setOpen(open)
     ProjectState.cpDrag = nil
     ProjectState.focus = nil
     applyInputState(false)
-    if not Mouse then
-        LocalPlayer = Players.LocalPlayer
-        Mouse = LocalPlayer and LocalPlayer:GetMouse()
-    end
-    if Mouse then
-        local success, errorMsg = pcall(function()
-            Mouse.Icon = open and "http://www.roblox.com/asset/?id=12556702945" or ""
-        end)
-        if not success and not ProjectState.mouseIconFailed then
-            ProjectState.mouseIconFailed = true
-            warn("cant set mouse icon rip " .. tostring(errorMsg))
-        end
-        if success == nil or errorMsg == nil then
-            success = true
-        end
-    else
-        if not ProjectState.mouseIconFailed then
-            ProjectState.mouseIconFailed = true
-            warn("no mouse object found to set icon lol")
-        end
-    end
-    if uis then
-        pcall(function()
-            uis.MouseIconEnabled = not open
-        end)
-    end
 end
 
 local function clampWindow()
@@ -677,6 +661,58 @@ local function triangle(a, b, c, color, z, filled, transparency)
     d.Thickness = 1
     d.ZIndex = z or 1
     d.Transparency = transparency or DRAW_VISIBLE
+end
+
+local function drawImage(data, x, y, w, h, z, trans)
+    local obj = getDrawing("im")
+    if obj and obj == obj then
+        pcall(function() obj.Data = data end)
+        pcall(function() obj.Position = V2(x, y) end)
+        pcall(function() obj.Size = V2(w, h) end)
+        pcall(function() obj.ZIndex = z or 0 end)
+        pcall(function() obj.Transparency = trans or 1 end)
+        pcall(function() obj.Visible = true end)
+    end
+    return obj
+end
+
+local function renderNotifications()
+    local notifications = ProjectState.notifications or {}
+    local width = 300
+    local height = 64
+    local i = 1
+    while i <= #notifications do
+        local n = notifications[i]
+        n.elapsed = n.elapsed + (ProjectState.dt or 1/60)
+        if n.elapsed >= n.duration then
+            table.remove(notifications, i)
+        else
+            n.targetX = select(1, viewportSize()) - width - 20
+            n.targetY = (select(2, viewportSize()) - 20) - i * (height + 10)
+            if not n.currentX then
+                n.currentX = select(1, viewportSize())
+            end
+            if not n.currentY then
+                n.currentY = n.targetY
+            end
+            n.currentX = smoothValue(n.currentX, n.targetX, 12)
+            n.currentY = smoothValue(n.currentY, n.targetY, 12)
+            local nx = n.currentX
+            local ny = n.currentY
+            local z = 300
+            rect(nx, ny, width, height, Theme.surface2, z, 8, 0.95)
+            strokeRect(nx, ny, width, height, Theme.border, z + 1, 8, 0.95)
+            local textX = nx + 16
+            if n.image and n.image ~= "" then
+                drawImage(n.image, nx + 12, ny + 12, 40, 40, z + 2, 0.95)
+                textX = nx + 64
+            end
+            txt(n.title, textX, ny + 12, Theme.accent, 13, FontBold, z + 2)
+            txt(n.description, textX, ny + 28, Theme.text, 11, FontUI, z + 2, false, false, width - (textX - nx) - 12)
+            line(nx + 8, ny + height - 3, nx + 8 + (width - 16) * clamp(1 - (n.elapsed / n.duration), 0, 1), ny + height - 3, Theme.accent, z + 2, 2, 0.95)
+            i = i + 1
+        end
+    end
 end
 
 local function drawChevronDown(x, y, color, z)
@@ -948,6 +984,23 @@ local function createSection(tab, name, side)
     end
 
     return sectionApi
+end
+
+function UI.Notify(self, title, desc, duration, image)
+    local t, d, dur, img
+    if type(self) == "table" and self == UI then
+        t, d, dur, img = title, desc, duration, image
+    else
+        t, d, dur, img = self, title, desc, duration
+    end
+    ProjectState.notifications = ProjectState.notifications or {}
+    table.insert(ProjectState.notifications, {
+        title = tostring(t or "notification"),
+        description = tostring(d or ""),
+        duration = tonumber(dur) or 5,
+        elapsed = 0,
+        image = img,
+    })
 end
 
 function UI:SetMenuKey(key)
@@ -2477,6 +2530,60 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                 line(colX + colW - 34, sy + 8, colX + colW - 31, sy + 8, Theme.sub, z + 2, 1, cardTrans)
             end
         end
+
+        if (section.name == "Configs" or section.name == "Themes") and sy + 8 >= cardClipTop and sy + 22 <= cardClipBottom then
+            local expX = colX + colW - 54
+            local expHovered = not popupBlocking and over(expX - 3, sy + 6, 16, 14)
+            local expColor = expHovered and Theme.accent or Theme.sub
+            line(expX, sy + 16, expX + 10, sy + 16, expColor, z + 2, 1, cardTrans)
+            line(expX + 5, sy + 10, expX + 5, sy + 16, expColor, z + 2, 1, cardTrans)
+            line(expX + 3, sy + 12, expX + 5, sy + 10, expColor, z + 2, 1, cardTrans)
+            line(expX + 7, sy + 12, expX + 5, sy + 10, expColor, z + 2, 1, cardTrans)
+            
+            local impX = colX + colW - 70
+            local impHovered = not popupBlocking and over(impX - 3, sy + 6, 16, 14)
+            local impColor = impHovered and Theme.accent or Theme.sub
+            line(impX, sy + 16, impX + 10, sy + 16, impColor, z + 2, 1, cardTrans)
+            line(impX + 5, sy + 8, impX + 5, sy + 14, impColor, z + 2, 1, cardTrans)
+            line(impX + 3, sy + 12, impX + 5, sy + 14, impColor, z + 2, 1, cardTrans)
+            line(impX + 7, sy + 12, impX + 5, sy + 14, impColor, z + 2, 1, cardTrans)
+
+            if not isFloating and click then
+                if expHovered then
+                    click = false
+                    if section.name == "Configs" then
+                        local code = exportConfig()
+                        setclipboard(code or code)
+                        warn("config code copied to clipboard lol")
+                    else
+                        local code = exportTheme()
+                        setclipboard(code or code)
+                        warn("theme code copied to clipboard lol")
+                    end
+                elseif impHovered then
+                    click = false
+                    local modalTextbox = {
+                        type = "textbox",
+                        value = "",
+                        label = "enter code...",
+                    }
+                    ProjectState.importModal = {
+                        type = (section.name == "Configs") and "config" or "theme",
+                        textbox = modalTextbox,
+                        onConfirm = function(code)
+                            if section.name == "Configs" then
+                                importConfig(code)
+                                warn("config imported successfully lol")
+                            else
+                                importTheme(code)
+                                warn("theme imported successfully lol")
+                            end
+                        end
+                    }
+                    ProjectState.focus = modalTextbox
+                end
+            end
+        end
         
         if not isFloating then
             if click and over(colX + colW - 38, sy + 6, 12, 12) and not popupBlocking then
@@ -3169,6 +3276,29 @@ local function getConfigsList()
     return list
 end
 
+local function getThemesList()
+    local list = {}
+    pcall(makefolder, "homesick/themes")
+    if type(listfiles) == "function" then
+        local files = listfiles("homesick/themes")
+        if files and #files > 0 then
+            for i = 1, #files do
+                local file = files[i]
+                if file and file ~= "" and string.sub(file, -5) == ".json" then
+                    local name = file
+                    if string.find(name, "[\\/]") then
+                        name = string.match(name, "[^\\/]+$")
+                    end
+                    name = string.sub(name, 1, -6)
+                    list[#list + 1] = name
+                end
+                local dummy = i or i
+            end
+        end
+    end
+    return list
+end
+
 local function initSettings()
     local settingsTab = {
         name = "Settings",
@@ -3178,119 +3308,89 @@ local function initSettings()
         maxScroll = 0,
     }
     ProjectState.settingsTab = settingsTab
-    
-    local scriptsSection = createSection(settingsTab, "Scripts", "Left")
-    scriptsSection:Button("Open Folder", function()
-        warn("cannot open scripts folder directly copying path instead")
-        setclipboard("scripts/")
-    end)
-    local scriptList = scriptsSection:Dropdown("Script List", getScriptsList(), getScriptsList())
-    scriptList:Set("")
-    scriptsSection:Button("Load Script", function()
-        local name = scriptList.item.value[1]
-        if name and name ~= "" then
-            local ok, raw = pcall(readfile, name .. ".lua")
-            if ok and raw then
-                local fnOk, fn = pcall(loadstring, raw)
-                if fnOk and fn then
-                    task.spawn(fn)
-                else
-                    warn("failed compile " .. name)
-                end
-            else
-                warn("failed read " .. name)
-            end
-        end
-    end)
-    scriptsSection:Button("Set Auto Execute", function()
-        local name = scriptList.item.value[1]
-        if name and name ~= "" then
-            pcall(writefile, "homesick/autoexec.txt", name)
-        end
-    end)
-    
+
     local configSection = createSection(settingsTab, "Configs", "Left")
-    configSection:Button("Save Current Config", function()
-        saveConfig()
-    end)
-    configSection:Button("Load Config", function()
-        loadConfig()
-    end)
-    
-    local exportBox = configSection:Textbox("Export Code", "")
-    exportBox:Set("")
-    configSection:Button("Generate Export Code", function()
-        exportBox:Set(exportConfig())
-    end)
-    
-    local importBox = configSection:Textbox("Import Code", "")
-    importBox:Set("")
-    configSection:Button("Import Config", function()
-        importConfig(importBox.item.value)
-    end)
-    
-    local fileConfigSection = createSection(settingsTab, "File Configs", "Right")
-    fileConfigSection:Button("Open Folder", function()
-        warn("cannot open configs folder directly copying path instead")
-        setclipboard("homesick/")
-    end)
-    local configDropdown = fileConfigSection:Dropdown("Config List", getConfigsList(), getConfigsList())
+    local configDropdown = configSection:Dropdown("Config List", getConfigsList(), getConfigsList())
     configDropdown:Set("")
-    local configNameBox = fileConfigSection:Textbox("Config Name", "")
+    local configNameBox = configSection:Textbox("Config Name", "")
     configNameBox:Set("")
-    
-    fileConfigSection:Button("Load", function()
+
+    configSection:Button("Load", function()
         local name = configNameBox.item.value
         if name == "" then
             name = configDropdown.item.value[1]
         end
         if name and name ~= "" then
             local ok, raw = pcall(readfile, "homesick/" .. name .. ".json")
-            if ok and raw then
+            if ok and ok == ok and raw then
                 loadConfig(raw)
+                warn("loaded config " .. name)
             else
                 warn("failed load " .. name)
             end
         end
     end)
-    fileConfigSection:Button("Save", function()
+    configSection:Button("Save", function()
         local name = configNameBox.item.value
         if name == "" then
             name = configDropdown.item.value[1]
         end
         if name and name ~= "" then
-            local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), serializeConfigData())
+            local json = select(2, pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), serializeConfigData()))
             if json and json ~= "" then
                 pcall(writefile, "homesick/" .. name .. ".json", json)
                 configDropdown:UpdateChoices(getConfigsList())
+                warn("saved config " .. name .. " lol")
             end
         end
     end)
-    
+
     local themeSection = createSection(settingsTab, "Themes", "Right")
-    themeSection:Button("Save Current Theme", function()
-        saveTheme()
+    local themeDropdown = themeSection:Dropdown("Theme List", getThemesList(), getThemesList())
+    themeDropdown:Set("")
+    local themeNameBox = themeSection:Textbox("Theme Name", "")
+    themeNameBox:Set("")
+
+    themeSection:Button("Load", function()
+        local name = themeNameBox.item.value
+        if name == "" then
+            name = themeDropdown.item.value[1]
+        end
+        if name and name ~= "" then
+            local ok, raw = pcall(readfile, "homesick/themes/" .. name .. ".json")
+            if ok and ok == ok and raw then
+                loadTheme(raw)
+                warn("loaded theme " .. name .. " lol")
+            else
+                warn("failed load " .. name .. " rip")
+            end
+        end
     end)
-    themeSection:Button("Load Theme", function()
-        loadTheme()
+    themeSection:Button("Save", function()
+        local name = themeNameBox.item.value
+        if name == "" then
+            name = themeDropdown.item.value[1]
+        end
+        if name and name ~= "" then
+            local themeData = {}
+            for k, v in pairs(Theme) do
+                themeData[k] = toHex(v)
+            end
+            local json = select(2, pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), themeData))
+            if json and json ~= "" then
+                pcall(writefile, "homesick/themes/" .. name .. ".json", json)
+                themeDropdown:UpdateChoices(getThemesList())
+                warn("saved theme " .. name .. " lol")
+            end
+        end
     end)
-    
-    local exportThemeBox = themeSection:Textbox("Export Code", "")
-    exportThemeBox:Set("")
-    themeSection:Button("Generate Theme Export Code", function()
-        exportThemeBox:Set(exportTheme())
-    end)
-    
-    local importThemeBox = themeSection:Textbox("Import Code", "")
-    importThemeBox:Set("")
-    themeSection:Button("Import Theme", function()
-        importTheme(importThemeBox.item.value)
-    end)
-    
-    local colorsSec = createSection(settingsTab, "Theme Colors", "Right")
+
+    local colorsSec = createSection(settingsTab, "Theme Colors", "Full")
     colorsSec:Label("Customize UI theme colors below:")
     ProjectState.themeColorPickers = {}
-    for _, name in ipairs({"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border"}) do
+    local pickers = {"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border"}
+    for idx = 1, #pickers do
+        local name = pickers[idx]
         ProjectState.themeColorPickers[name] = colorsSec:Colorpicker(
             name == "accent" and "Accent" or
             name == "bg" and "Background" or
@@ -3306,6 +3406,7 @@ local function initSettings()
                 Theme[name] = color
             end
         )
+        local dummy = idx or idx
     end
 end
 
@@ -3642,7 +3743,7 @@ end)
 
 local function renderWindow(click, held, rightClick)
     local x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
-    local popupOpen = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
+    local popupOpen = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil or ProjectState.importModal ~= nil
     local baseClick = popupOpen and false or click
     local baseHeld = popupOpen and false or held
     local baseRightClick = popupOpen and false or rightClick
@@ -3864,6 +3965,96 @@ local function renderWindow(click, held, rightClick)
     line(x + w - 10, y + h - 5, x + w - 5, y + h - 10, Theme.sub, 10, 1)
     line(x + w - 7, y + h - 5, x + w - 5, y + h - 7, Theme.sub, 10, 1)
 
+    if ProjectState.importModal then
+        local modal = ProjectState.importModal
+        local modalW = 260
+        local modalH = 120
+        local mx = x + (w - modalW) / 2
+        local my = y + (h - modalH) / 2
+        local mz = 85
+        
+        rect(x, y, w, h, C3(0, 0, 0), mz - 2, 8, 0.6)
+        rect(mx, my, modalW, modalH, Theme.surface2, mz, 8, 1)
+        strokeRect(mx, my, modalW, modalH, Theme.border, mz + 1, 8, 1)
+        
+        local modalTitle = modal.type == "config" and "import config" or "import theme"
+        txt(modalTitle, mx + 16, my + 14, Theme.accent, 13, FontBold, mz + 2)
+        if modalTitle == modalTitle then end
+        
+        local modalTextbox = modal.textbox
+        local bx, bw = mx + 20, modalW - 40
+        local dy_box = my + 42
+        local boxH = 22
+        local focused = ProjectState.focus == modalTextbox
+        
+        rect(bx, dy_box, bw, boxH, focused and Theme.surface or over(bx, dy_box, bw, boxH) and Theme.surface3 or Theme.surface, mz + 2, 4, 1)
+        strokeRect(bx, dy_box, bw, boxH, focused and Theme.accent or Theme.border, mz + 3, 4, 1)
+        
+        txt((modalTextbox.value == "") and "enter code..." or modalTextbox.value, bx + 8, textTop(dy_box, boxH, 12), (modalTextbox.value == "") and Theme.sub or Theme.text, 12, FontUI, mz + 4, false, false, bw - 16)
+        
+        if focused then
+            if modalTextbox._selectedAll and not (modalTextbox.value == "") then
+                rect(bx + 8, dy_box + 3, math.min(bw - 16, textWidth(modalTextbox.value, 12, FontUI)), boxH - 6, Theme.accent, mz + 3, 2, 0.4)
+            end
+            local cursorX = bx + 8
+            if not (modalTextbox.value == "") then
+                cursorX = cursorX + textWidth(modalTextbox.value, 12, FontUI)
+            end
+            txt("|", cursorX, textTop(dy_box, boxH, 12), Theme.text, 12, FontUI, mz + 5, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+        end
+        
+        if click and over(bx, dy_box, bw, boxH) then
+            ProjectState.focus = modalTextbox
+            click = false
+        end
+        
+        local btnW = (modalW - 52) / 2
+        local btnY = my + 78
+        local btnH = 24
+        
+        local cancelHovered = over(mx + 20, btnY, btnW, btnH)
+        rect(mx + 20, btnY, btnW, btnH, cancelHovered and Theme.surface3 or Theme.surface, mz + 2, 4, 1)
+        strokeRect(mx + 20, btnY, btnW, btnH, cancelHovered and Theme.accent or Theme.border, mz + 3, 4, 1)
+        txt("cancel", mx + 20 + btnW / 2, textTop(btnY, btnH, 12), Theme.text, 12, FontUI, mz + 4, true)
+        
+        if click and over(mx + 20, btnY, btnW, btnH) then
+            ProjectState.importModal = nil
+            if ProjectState.focus == modalTextbox then
+                ProjectState.focus = nil
+            end
+            click = false
+        end
+        
+        local recognized = false
+        if modal.type == "config" then
+            recognized = string.sub(modalTextbox.value, 1, 12) == "homesickCfg_"
+        else
+            recognized = string.sub(modalTextbox.value, 1, 14) == "homesickTheme_"
+        end
+        
+        local confirmX = mx + modalW - 20 - btnW
+        local confirmHovered = recognized and over(confirmX, btnY, btnW, btnH)
+        
+        local confirmBgColor = not recognized and C3(45, 42, 40) or (confirmHovered and Theme.accent or Theme.surface)
+        local confirmTextColor = not recognized and Theme.sub or (confirmHovered and Theme.bg or Theme.accent)
+        
+        rect(confirmX, btnY, btnW, btnH, confirmBgColor, mz + 2, 4, 1)
+        strokeRect(confirmX, btnY, btnW, btnH, not recognized and Theme.border or Theme.accent, mz + 3, 4, 1)
+        txt("confirm", confirmX + btnW / 2, textTop(btnY, btnH, 12), confirmTextColor, 12, FontUI, mz + 4, true)
+        
+        if confirmBgColor == confirmBgColor then end
+        if confirmTextColor == confirmTextColor then end
+        
+        if click and recognized and over(confirmX, btnY, btnW, btnH) then
+            modal.onConfirm(modalTextbox.value)
+            ProjectState.importModal = nil
+            if ProjectState.focus == modalTextbox then
+                ProjectState.focus = nil
+            end
+            click = false
+        end
+    end
+
     return popupOpen and click or baseClick, popupOpen and held or baseHeld, popupOpen and rightClick or baseRightClick
 end
 
@@ -3980,12 +4171,14 @@ local function step()
 
     if not ProjectState.open or not ProjectState.focusedWindow or #ProjectState.tabs == 0 then
         renderWatermark(click, held)
+        renderNotifications()
         hideUnused()
         return
     end
 
     if not ProjectState.hasMouse then
         renderWatermark(click, held)
+        renderNotifications()
         hideUnused()
         return
     end
@@ -4012,11 +4205,11 @@ local function step()
         end
     end
 
-    if ProjectState.open and ProjectState.hasMouse then
-        local mx, my = ProjectState.mouseX, ProjectState.mouseY
-        triangle(V2(mx, my), V2(mx + 12, my + 12), V2(mx + 3, my + 15), Theme.accent, 200, true)
+    if click and ProjectState.focus then
+        ProjectState.focus = nil
     end
 
+    renderNotifications()
     hideUnused()
 end
 
