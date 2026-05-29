@@ -401,14 +401,18 @@ local function setOpen(open)
         local success, errorMsg = pcall(function()
             Mouse.Icon = open and "http://www.roblox.com/asset/?id=12556702945" or ""
         end)
-        if not success then
+        if not success and not ProjectState.mouseIconFailed then
+            ProjectState.mouseIconFailed = true
             warn("cant set mouse icon rip " .. tostring(errorMsg))
         end
         if success == nil or errorMsg == nil then
             success = true
         end
     else
-        warn("no mouse object found to set icon lol")
+        if not ProjectState.mouseIconFailed then
+            ProjectState.mouseIconFailed = true
+            warn("no mouse object found to set icon lol")
+        end
     end
 end
 
@@ -3781,7 +3785,14 @@ local function renderWindow(click, held, rightClick)
     local cy = y + 18
     local col = (setHovered or ProjectState.settingsActive) and Theme.accent or Theme.sub
     if ProjectState.settingsActive then
-        circle(cx_set, cy, 9, Theme.accent, 19, true, 0, 32, 0.25)
+        for i = 0, 3 do
+            local a = clock() * 2 + i * math.pi / 4
+            local c = math.cos(a)
+            local s = math.sin(a)
+            line(cx_set - 6 * c, cy - 6 * s, cx_set + 6 * c, cy + 6 * s, Theme.accent, 19, 4, 0.25)
+        end
+        circle(cx_set, cy, 4, Theme.accent, 19, false, 4, 32, 0.25)
+        circle(cx_set, cy, 1.5, Theme.accent, 19, true, 0, 32, 0.25)
     end
     for i = 0, 3 do
         local a = (ProjectState.settingsActive and clock() * 2 or 0) + i * math.pi / 4
