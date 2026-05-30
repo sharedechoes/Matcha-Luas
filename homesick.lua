@@ -749,9 +749,14 @@ local function drawImage(data, x, y, w, h, z, trans)
 end
 
 local function drawLockIcon(x, y, color, z, trans, unlocked)
+    -- Body: wide solid rect (main lock body)
     rect(x + 1, y + 4, 8, 6, color, z, 2, trans)
+    -- Shackle: narrow U sitting on top of body center
+    -- Left arm: x+3, from y+4 up to y+2
     line(x + 3, y + 4, x + 3, y + 2, color, z, 1.5, trans)
+    -- Top bar connecting arms: x+3 to x+6, at y+2
     line(x + 3, y + 2, x + 6, y + 2, color, z, 1.5, trans)
+    -- Right arm: locked = down to y+4 (closed), unlocked = only to y+3 (open/lifted)
     if unlocked then
         line(x + 6, y + 2, x + 6, y + 3, color, z, 1.5, trans)
     else
@@ -760,29 +765,40 @@ local function drawLockIcon(x, y, color, z, trans, unlocked)
 end
 
 local function drawExportIcon(x, y, color, z, trans)
+    -- Shaft: center x+5, from y+9 up to y+3
     line(x + 5, y + 9, x + 5, y + 3, color, z, 1.5, trans)
+    -- Left wing of arrowhead: (x+2, y+6) -> (x+5, y+3)
     line(x + 2, y + 6, x + 5, y + 3, color, z, 1.5, trans)
+    -- Right wing of arrowhead: (x+8, y+6) -> (x+5, y+3)
     line(x + 8, y + 6, x + 5, y + 3, color, z, 1.5, trans)
+    -- Bar at bottom
     line(x + 2, y + 11, x + 8, y + 11, color, z, 1.5, trans)
 end
 
 local function drawImportIcon(x, y, color, z, trans)
+    -- Shaft: center x+5, from y+3 down to y+9
     line(x + 5, y + 3, x + 5, y + 9, color, z, 1.5, trans)
+    -- Left wing of arrowhead: (x+2, y+6) -> (x+5, y+9)
     line(x + 2, y + 6, x + 5, y + 9, color, z, 1.5, trans)
+    -- Right wing of arrowhead: (x+8, y+6) -> (x+5, y+9)
     line(x + 8, y + 6, x + 5, y + 9, color, z, 1.5, trans)
+    -- Bar at bottom
     line(x + 2, y + 11, x + 8, y + 11, color, z, 1.5, trans)
 end
 
 local function drawTrashIcon(x, y, color, z, trans)
+    -- Handle nub (small centered bar at top)
     line(x + 4, y + 1, x + 6, y + 1, color, z, 1.5, trans)
+    -- Lid bar (full width, sits below handle)
     line(x + 2, y + 3, x + 8, y + 3, color, z, 1.5, trans)
+    -- Body: stroked rounded rect below the lid
     strokeRect(x + 2, y + 4, 6, 6, color, z, 2, trans)
 end
 
 local function renderNotifications()
     local notifications = ProjectState.notifications or {}
-    local width = 300
-    local height = 64
+    local width = 280
+    local height = 52
     local i = 1
     while i <= #notifications do
         local n = notifications[i]
@@ -790,8 +806,8 @@ local function renderNotifications()
         if n.elapsed >= n.duration then
             table.remove(notifications, i)
         else
-            n.targetX = select(1, viewportSize()) - width - 20
-            n.targetY = (select(2, viewportSize()) - 20) - i * (height + 10)
+            n.targetX = select(1, viewportSize()) - width - 16
+            n.targetY = (select(2, viewportSize()) - 16) - i * (height + 8)
             if not n.currentX then
                 n.currentX = select(1, viewportSize())
             end
@@ -803,43 +819,54 @@ local function renderNotifications()
             local nx = n.currentX
             local ny = n.currentY
             local z = 300
-            
+
             local isWarn = n.title == "warning" or n.title == "warn"
-            local displayTitle = n.title
-            if displayTitle == "print" or displayTitle == "warning" or displayTitle == "warn" or displayTitle == "notification" then
-                displayTitle = "homesick"
-            end
             local accentCol = isWarn and Theme.red or Theme.accent
 
-            rect(nx, ny, width, height, Theme.surface2, z, 8, 0.95)
-            strokeRect(nx, ny, width, height, Theme.border, z + 1, 8, 0.95)
-            rect(nx + 6, ny + 6, 3, height - 12, accentCol, z + 2, 1, 0.95)
+            -- Background + border
+            rect(nx, ny, width, height, Theme.surface2, z, 6, 0.97)
+            strokeRect(nx, ny, width, height, Theme.border, z + 1, 6, 0.97)
 
-            local textX = nx + 16
-            if n.image and n.image ~= "" then
-                drawImage(n.image, nx + 14, ny + 12, 40, 40, z + 2, 0.95)
-                textX = nx + 64
-            else
-                textX = nx + 44
-                local cx = nx + 24
-                local cy = ny + 32
-                if isWarn then
-                    triangle(V2(cx, cy - 8), V2(cx - 9, cy + 8), V2(cx + 9, cy + 8), accentCol, z + 2, true, 0.95)
-                    txt("!", cx, cy + 2, Theme.bg, 11, FontBold, z + 3, true)
-                else
-                    circle(cx, cy, 9, accentCol, z + 2, false, 2, 32, 0.95)
-                    txt("i", cx, cy, accentCol, 12, FontBold, z + 3, true)
+            -- Dot indicator (small circle, left side)
+            local dotX = nx + 14
+            local dotY = ny + height / 2
+            circle(dotX, dotY, 3, accentCol, z + 2, true, 0, 16, 0.97)
+
+            -- Source label (tab name / "homesick") in sub color, right aligned
+            local displaySource = n.title
+            if displaySource == "print" or displaySource == "warning" or displaySource == "warn" or displaySource == "notification" then
+                displaySource = ProjectState.title or "homesick"
+            end
+            local srcW = textWidth(displaySource, 11, FontUI)
+            txt(displaySource, nx + width - 12 - srcW, ny + 12, Theme.sub, 11, FontUI, z + 2)
+
+            -- Description text
+            txt(n.description, nx + 26, ny + 10, Theme.text, 12, FontSystem, z + 2, false, false, width - srcW - 44)
+
+            -- Progress track (full width, at bottom)
+            local barY = ny + height - 4
+            local barX0 = nx + 2
+            local barX1 = nx + width - 2
+            local barW = barX1 - barX0
+            local prog = clamp(1 - (n.elapsed / n.duration), 0, 1)
+            local barFillW = barW * prog
+
+            -- Track
+            rect(barX0, barY, barW, 2, Theme.surface3, z + 2, 1, 0.97)
+
+            -- Gradient fill: draw multiple segments fading from transparent on left to solid on right
+            if barFillW > 1 then
+                local segments = 16
+                local segW = barFillW / segments
+                for si = 1, segments do
+                    local t = si / segments  -- 0..1 left to right
+                    local segX = barX0 + (si - 1) * segW
+                    -- left = transparent, right = solid accent
+                    local segAlpha = t * t * 0.97
+                    rect(segX, barY, segW + 1, 2, accentCol, z + 3, 1, segAlpha)
                 end
             end
 
-            txt(displayTitle, textX, ny + 12, Theme.accent, 13, FontBold, z + 2)
-            txt(n.description, textX, ny + 28, Theme.text, 11, FontUI, z + 2, false, false, width - (textX - nx) - 12)
-            line(textX, ny + height - 5, nx + width - 16, ny + height - 5, Theme.surface3, z + 2, 2, 0.95)
-            if n.elapsed < n.duration then
-                line(textX, ny + height - 5, textX + ((nx + width - 16) - textX) * clamp(1 - (n.elapsed / n.duration), 0, 1), ny + height - 5, accentCol, z + 3, 4, 0.25)
-                line(textX, ny + height - 5, textX + ((nx + width - 16) - textX) * clamp(1 - (n.elapsed / n.duration), 0, 1), ny + height - 5, accentCol, z + 4, 2, 0.95)
-            end
-            
             i = i + 1
         end
     end
@@ -1933,14 +1960,14 @@ local function renderTooltip()
     txt(textValue, x + 8, textTop(y, 28, 12), Theme.text, 12, FontUI, 142, false, false, width - 16)
 end
 
-local function renderDropdown(click)
+local function renderDropdown(click, rightClick)
     local dd = ProjectState.dropdown
     if not dd then
-        return click
+        return click, rightClick
     end
 
     local isMulti = dd.multi == true
-    local headerH = isMulti and 24 or 0
+    local headerH = 0  -- no header buttons anymore
     local maxRows = floor((dd.h - 6 - headerH) / 22)
     dd.scrollOffset = dd.scrollOffset or 0
 
@@ -1963,55 +1990,6 @@ local function renderDropdown(click)
 
     rect(dd.x - 1, dd.y - 1, dd.w + 2, dd.h + 2, Theme.border, 110, 4)
     rect(dd.x, dd.y, dd.w, dd.h, Theme.surface, 111, 4)
-
-    if isMulti then
-        local btnW = (dd.w - 12) / 2
-        local btnY = dd.y + 4
-        local btnH = 18
-
-        local selectAllX = dd.x + 4
-        local clearAllX = dd.x + 8 + btnW
-
-        local hoverSelectAll = over(selectAllX, btnY, btnW, btnH)
-        local hoverClearAll = over(clearAllX, btnY, btnW, btnH)
-
-        rect(selectAllX, btnY, btnW, btnH, hoverSelectAll and Theme.surface3 or Theme.surface2, 112, 4)
-        strokeRect(selectAllX, btnY, btnW, btnH, hoverSelectAll and Theme.accent or Theme.border, 113, 4)
-        txt("Select All", selectAllX + btnW / 2, centerY(btnY, btnH), Theme.text, 11, FontUI, 113, true)
-
-        rect(clearAllX, btnY, btnW, btnH, hoverClearAll and Theme.surface3 or Theme.surface2, 112, 4)
-        strokeRect(clearAllX, btnY, btnW, btnH, hoverClearAll and Theme.accent or Theme.border, 113, 4)
-        txt("Clear All", clearAllX + btnW / 2, centerY(btnY, btnH), Theme.text, 11, FontUI, 113, true)
-
-        line(dd.x + 4, dd.y + 25, dd.x + dd.w - 4, dd.y + 25, Theme.border, 113)
-
-        if click then
-            if hoverSelectAll then
-                if dd.item then
-                    setDropdownValue(dd.item, dd.choices, true)
-                else
-                    for vi = #dd.value, 1, -1 do
-                        dd.value[vi] = nil
-                    end
-                    for i = 1, #dd.choices do
-                        dd.value[i] = dd.choices[i]
-                    end
-                    safeCallback(dd.callback, dd.value)
-                end
-                click = false
-            elseif hoverClearAll then
-                if dd.item then
-                    setDropdownValue(dd.item, {}, true)
-                else
-                    for vi = #dd.value, 1, -1 do
-                        dd.value[vi] = nil
-                    end
-                    safeCallback(dd.callback, dd.value)
-                end
-                click = false
-            end
-        end
-    end
 
     if dd.scrollOffset > 0 then
         triangle(V2(dd.x + dd.w - 14, dd.y + headerH + 8), V2(dd.x + dd.w - 6, dd.y + headerH + 8), V2(dd.x + dd.w - 10, dd.y + headerH + 4), Theme.sub, 115, true)
@@ -2115,16 +2093,67 @@ local function renderDropdown(click)
                 end
                 ProjectState.dropdown = nil
             end
-            return false
+            return false, rightClick
+        end
+    end
+
+    -- Right-click on multi-dropdown: show select all / clear all context
+    if isMulti and rightClick and isHoveredDropdown then
+        -- inline mini context: show select all and clear all as overlay rows
+        if not dd._ctxMenu then
+            dd._ctxMenu = true
+            dd._ctxY = clamp(ProjectState.mouseY, dd.y, dd.y + dd.h - 44)
+        end
+        rightClick = false
+    end
+
+    if dd._ctxMenu then
+        local ctxX = dd.x
+        local ctxY = dd._ctxY or dd.y
+        local ctxW = dd.w
+        rect(ctxX, ctxY, ctxW, 44, Theme.surface2, 116, 4)
+        strokeRect(ctxX, ctxY, ctxW, 44, Theme.border, 117, 4)
+
+        local hoverAll = over(ctxX + 2, ctxY + 2, ctxW - 4, 18)
+        local hoverClear = over(ctxX + 2, ctxY + 24, ctxW - 4, 18)
+
+        rect(ctxX + 2, ctxY + 2, ctxW - 4, 18, hoverAll and Theme.surface3 or Theme.surface, 117, 3)
+        txt("Select All", ctxX + 10, ctxY + 4, hoverAll and Theme.accent or Theme.text, 12, FontUI, 118)
+        rect(ctxX + 2, ctxY + 24, ctxW - 4, 18, hoverClear and Theme.surface3 or Theme.surface, 117, 3)
+        txt("Clear All", ctxX + 10, ctxY + 26, hoverClear and Theme.accent or Theme.text, 12, FontUI, 118)
+
+        if click then
+            if hoverAll then
+                if dd.item then
+                    setDropdownValue(dd.item, dd.choices, true)
+                else
+                    for vi = #dd.value, 1, -1 do dd.value[vi] = nil end
+                    for ci = 1, #dd.choices do dd.value[ci] = dd.choices[ci] end
+                    safeCallback(dd.callback, dd.value)
+                end
+                dd._ctxMenu = nil
+                click = false
+            elseif hoverClear then
+                if dd.item then
+                    setDropdownValue(dd.item, {}, true)
+                else
+                    for vi = #dd.value, 1, -1 do dd.value[vi] = nil end
+                    safeCallback(dd.callback, dd.value)
+                end
+                dd._ctxMenu = nil
+                click = false
+            else
+                dd._ctxMenu = nil
+            end
         end
     end
 
     if click and not isHoveredDropdown then
         ProjectState.dropdown = nil
-        return false
+        return false, rightClick
     end
 
-    return click
+    return click, rightClick
 end
 
 local function renderColorpicker(click, held)
