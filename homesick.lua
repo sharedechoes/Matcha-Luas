@@ -24,12 +24,12 @@ local sin = math.sin
 local clock = os.clock
 local remove = table.remove
 local concat = table.concat
-_G.homesickOriginals = _G.homesickOriginals or {
-    print = print,
-    warn = warn,
-    printl = printl,
-    notify = notify,
-    isrbxactive = isrbxactive
+_G.homesickOriginals = {
+    print = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.print and not _G.homesickOriginals.print.isHomesick) and _G.homesickOriginals.print or print,
+    warn = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.warn and not _G.homesickOriginals.warn.isHomesick) and _G.homesickOriginals.warn or warn,
+    printl = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.printl and not _G.homesickOriginals.printl.isHomesick) and _G.homesickOriginals.printl or printl,
+    notify = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.notify and not _G.homesickOriginals.notify.isHomesick) and _G.homesickOriginals.notify or notify,
+    isrbxactive = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.isrbxactive and not _G.homesickOriginals.isrbxactive.isHomesick) and _G.homesickOriginals.isrbxactive or isrbxactive
 }
 local exportConfig, importConfig, exportTheme, importTheme, smoothValue, toHex
 
@@ -4569,7 +4569,7 @@ local function step()
     local held = Input.m1.held
     local rightClick = Input.m2.click
 
-    if not ProjectState.open or not ProjectState.focusedWindow or #ProjectState.tabs == 0 then
+    if not ProjectState.open or #ProjectState.tabs == 0 then
         renderWatermark(click, held)
         renderNotifications()
         hideUnused()
@@ -4634,6 +4634,9 @@ local function runStepSafe()
         ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
         if now - ProjectState.lastErrorAt > 1 then
             ProjectState.lastErrorAt = now
+            if _G.homesickOriginals and _G.homesickOriginals.warn then
+                _G.homesickOriginals.warn("homesick step crashed rip " .. tostring(err))
+            end
         end
         setrobloxinput(true)
         ProjectState.inputState = true
@@ -4699,7 +4702,7 @@ homesick.createWindow = function(title, width, height)
                 local widgetWrap = {
                     id = id,
                     type = "Toggle",
-                    rawItem = sSelf.rawSec:Checkbox(label, default, callback)
+                    rawItem = sSelf.rawSec:Toggle(label, default, callback)
                 }
                 
                 widgetWrap.addTooltip = function(wSelf, text)
@@ -4886,49 +4889,82 @@ homesick.createWindow = function(title, width, height)
     return windowWrap
 end
 
-_G.print = function(...)
+local newPrint
+newPrint = function(...)
     local strArgs = {}
     for i = 1, select("#", ...) do
         strArgs[i] = string.lower(tostring(select(i, ...)))
     end
     UI:Notify("print", table.concat(strArgs, " "), 5)
-    return _G.homesickOriginals.print(unpack(strArgs))
+    local orig = _G.homesickOriginals.print
+    if orig and orig ~= newPrint and not orig.isHomesick then
+        return orig(unpack(strArgs))
+    end
 end
-_G.warn = function(...)
+newPrint.isHomesick = true
+_G.print = newPrint
+
+local newWarn
+newWarn = function(...)
     local strArgs = {}
     for i = 1, select("#", ...) do
         strArgs[i] = string.lower(tostring(select(i, ...)))
     end
     UI:Notify("warning", table.concat(strArgs, " "), 5)
-    return _G.homesickOriginals.warn(unpack(strArgs))
+    local orig = _G.homesickOriginals.warn
+    if orig and orig ~= newWarn and not orig.isHomesick then
+        return orig(unpack(strArgs))
+    end
 end
+newWarn.isHomesick = true
+_G.warn = newWarn
+
 if type(printl) == "function" then
-    _G.homesickOriginals.printl = _G.homesickOriginals.printl or printl
-    _G.printl = function(...)
+    local newPrintl
+    newPrintl = function(...)
         local strArgs = {}
         for i = 1, select("#", ...) do
             strArgs[i] = string.lower(tostring(select(i, ...)))
         end
         UI:Notify("print", table.concat(strArgs, " "), 5)
-        return _G.homesickOriginals.printl(unpack(strArgs))
+        local orig = _G.homesickOriginals.printl
+        if orig and orig ~= newPrintl and not orig.isHomesick then
+            return orig(unpack(strArgs))
+        end
     end
+    newPrintl.isHomesick = true
+    _G.printl = newPrintl
 end
+
 if type(notify) == "function" then
-    _G.homesickOriginals.notify = _G.homesickOriginals.notify or notify
-    _G.notify = function(message, title, duration)
+    local newNotify
+    newNotify = function(message, title, duration)
         local lowerMsg = string.lower(tostring(message or ""))
         local lowerTitle = string.lower(tostring(title or "notification"))
         UI:Notify(lowerTitle, lowerMsg, duration or 5)
-        return _G.homesickOriginals.notify(message, title, duration)
+        local orig = _G.homesickOriginals.notify
+        if orig and orig ~= newNotify and not orig.isHomesick then
+            return orig(message, title, duration)
+        end
     end
+    newNotify.isHomesick = true
+    _G.notify = newNotify
 end
+
 if _G.homesickOriginals and type(_G.homesickOriginals.isrbxactive) == "function" then
-    _G.isrbxactive = function()
+    local newIsRbxActive
+    newIsRbxActive = function()
         if ProjectState.isrbxactiveOverride then
             return true
         end
-        return _G.homesickOriginals.isrbxactive()
+        local orig = _G.homesickOriginals.isrbxactive
+        if orig and orig ~= newIsRbxActive and not orig.isHomesick then
+            return orig()
+        end
+        return true
     end
+    newIsRbxActive.isHomesick = true
+    _G.isrbxactive = newIsRbxActive
 end
 
 return homesick
