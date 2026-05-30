@@ -824,17 +824,24 @@ local function renderNotifications()
             if displaySource == "print" or displaySource == "warning" or displaySource == "warn" or displaySource == "notification" then
                 displaySource = ProjectState.activeTab and ProjectState.activeTab.name or ProjectState.title or "homesick"
             end
-            rect(nx, ny, width, height, Theme.surface2, z, 6, 0.97)
-            strokeRect(nx, ny, width, height, Theme.border, z + 1, 6, 0.97)
-            txt(displaySource, nx + 14, ny + 10, n.title == "warning" and Theme.red or Theme.accent, 11, FontUI, z + 2, false, false, width - 28, 0.97)
-            txt(n.description, nx + 14, ny + 26, Theme.text, 11, FontSystem, z + 2, false, false, width - 28, 0.97)
+            local fadeAlpha = 1
+            if n.elapsed < 0.25 then
+                fadeAlpha = n.elapsed / 0.25
+            elseif n.duration - n.elapsed < 0.35 then
+                fadeAlpha = (n.duration - n.elapsed) / 0.35
+            end
+            fadeAlpha = clamp(fadeAlpha, 0, 1)
+            rect(nx, ny, width, height, Theme.surface2, z, 6, 0.85 * fadeAlpha)
+            strokeRect(nx, ny, width, height, Theme.border, z + 1, 6, 0.85 * fadeAlpha)
+            txt(displaySource, nx + 14, ny + 10, n.title == "warning" and Theme.red or Theme.accent, 11, FontUI, z + 2, false, false, width - 28, 0.95 * fadeAlpha)
+            txt(n.description, nx + 14, ny + 26, Theme.text, 11, FontSystem, z + 2, false, false, width - 28, 0.95 * fadeAlpha)
             local barY = ny + height - 4
             local barX = nx + 6
             local barW = width - 12
             local barFillW = barW * clamp(1 - (n.elapsed / n.duration), 0, 1)
-            rect(barX, barY, barW, 2, Theme.surface3, z + 2, 1, 0.97)
+            rect(barX, barY, barW, 2, Theme.surface3, z + 2, 1, 0.95 * fadeAlpha)
             if barFillW > 1 then
-                rect(barX, barY, barFillW, 2, n.title == "warning" and Theme.red or Theme.accent, z + 3, 1, 0.97)
+                rect(barX, barY, barFillW, 2, n.title == "warning" and Theme.red or Theme.accent, z + 3, 1, 0.95 * fadeAlpha)
             end
             i = i + 1
         end
@@ -2401,6 +2408,8 @@ local function renderTabs(click, px, py, pw)
         local active = ProjectState.activeTab == tab
         local screenX = contentX + tab.currentX - scrollX
         local hovered = over(screenX, py, tabW, TAB_H)
+        local targetHover = hovered and 1 or 0
+        tab.hoverAnim = smoothValue(tab.hoverAnim or targetHover, targetHover, 18)
 
         if click and hovered and not ProjectState.draggedTab then
             if ProjectState.activeTab ~= tab then
@@ -2460,7 +2469,9 @@ local function renderTabs(click, px, py, pw)
         if visible then
             local active = ProjectState.activeTab == tab
             local hovered = over(tx, py, tabW, TAB_H)
-            
+            if not active and tab.hoverAnim and tab.hoverAnim > 0.05 then
+                rect(tx + 4, py + 3, tabW - 8, TAB_H - 6, Theme.surface3, 20, 10, 0.05 * tab.hoverAnim)
+            end
             if active then
                 targetPillX = tab.currentX - scrollX + 4
                 targetPillW = tabW - 8
@@ -2487,6 +2498,7 @@ local function renderTabs(click, px, py, pw)
     if ProjectState.currentPillX and ProjectState.currentPillW then
         rect(contentX + ProjectState.currentPillX, py + 3, ProjectState.currentPillW, TAB_H - 6, Theme.accent, 21, 10, 0.08)
         strokeRect(contentX + ProjectState.currentPillX, py + 3, ProjectState.currentPillW, TAB_H - 6, Theme.accent, 22, 10)
+        rect(contentX + ProjectState.currentPillX + 6, py + TAB_H - 2, ProjectState.currentPillW - 12, 2, Theme.accent, 23, 1)
     end
 
     return click
