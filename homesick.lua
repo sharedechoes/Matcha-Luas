@@ -859,7 +859,7 @@ local function renderCustomBoxes(click, held)
             local currentY = by + 8
             if box.showTopbar and box.title then
                 txt(box.title, bx + bw / 2, currentY, box.titleColor, 12, FontUI, 102, true)
-                line(V2(bx + 8, currentY + 16), V2(bx + bw - 8, currentY + 16), Theme.border, 101, 1)
+                line(bx + 8, currentY + 16, bx + bw - 8, currentY + 16, Theme.border, 101, 1)
                 currentY = currentY + 22
             end
             for j = 1, #box.elementOrder do
