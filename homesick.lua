@@ -749,49 +749,36 @@ local function drawImage(data, x, y, w, h, z, trans)
 end
 
 local function drawLockIcon(x, y, color, z, trans, unlocked)
-    -- Body: 8x6 rect centered at x+1..x+9, y+4..y+10
-    rect(x + 1, y + 4, 8, 6, color, z, 2, trans)
-    -- Shackle: arc-like with two verticals and a top bar
-    line(x + 2, y + 4, x + 2, y + 1, color, z, 1.5, trans)
-    line(x + 2, y + 1, x + 8, y + 1, color, z, 1.5, trans)
+    rect(x + 1, y + 5, 8, 5, color, z, 2, trans)
+    line(x + 2, y + 5, x + 2, y + 2, color, z, 1.5, trans)
+    line(x + 2, y + 2, x + 7, y + 2, color, z, 1.5, trans)
     if unlocked then
-        line(x + 8, y + 1, x + 8, y + 2, color, z, 1.5, trans)
+        line(x + 7, y + 2, x + 7, y + 3, color, z, 1.5, trans)
     else
-        line(x + 8, y + 1, x + 8, y + 4, color, z, 1.5, trans)
+        line(x + 7, y + 2, x + 7, y + 5, color, z, 1.5, trans)
     end
 end
 
 local function drawExportIcon(x, y, color, z, trans)
-    -- Arrow pointing up: vertical shaft + arrowhead
     line(x + 5, y + 8, x + 5, y + 2, color, z, 1.5, trans)
     line(x + 2, y + 5, x + 5, y + 2, color, z, 1.5, trans)
     line(x + 8, y + 5, x + 5, y + 2, color, z, 1.5, trans)
-    -- Bar at bottom
     line(x + 1, y + 10, x + 9, y + 10, color, z, 1.5, trans)
 end
 
 local function drawImportIcon(x, y, color, z, trans)
-    -- Arrow pointing down: vertical shaft + arrowhead
     line(x + 5, y + 2, x + 5, y + 8, color, z, 1.5, trans)
     line(x + 2, y + 5, x + 5, y + 8, color, z, 1.5, trans)
     line(x + 8, y + 5, x + 5, y + 8, color, z, 1.5, trans)
-    -- Bar at bottom
     line(x + 1, y + 10, x + 9, y + 10, color, z, 1.5, trans)
 end
 
 local function drawTrashIcon(x, y, color, z, trans)
-    -- Lid handle
-    line(x + 3, y, x + 7, y, color, z, 1.5, trans)
-    -- Lid bar
-    line(x + 1, y + 2, x + 9, y + 2, color, z, 1.5, trans)
-    -- Left wall
-    line(x + 2, y + 3, x + 2, y + 9, color, z, 1.5, trans)
-    -- Right wall
-    line(x + 8, y + 3, x + 8, y + 9, color, z, 1.5, trans)
-    -- Bottom
-    line(x + 2, y + 9, x + 8, y + 9, color, z, 1.5, trans)
-    -- Inner line (center)
-    line(x + 5, y + 4, x + 5, y + 8, color, z, 1.5, trans)
+    line(x + 4, y, x + 6, y, color, z, 1.5, trans)
+    line(x + 2, y + 2, x + 8, y + 2, color, z, 1.5, trans)
+    line(x + 3, y + 3, x + 3, y + 9, color, z, 1.5, trans)
+    line(x + 7, y + 3, x + 7, y + 9, color, z, 1.5, trans)
+    line(x + 3, y + 9, x + 7, y + 9, color, z, 1.5, trans)
 end
 
 local function renderNotifications()
@@ -2424,6 +2411,9 @@ local function renderTabs(click, px, py, pw)
         local hovered = over(screenX, py, tabW, TAB_H)
 
         if click and hovered and not ProjectState.draggedTab then
+            if ProjectState.activeTab ~= tab then
+                ProjectState.contentFade = 0
+            end
             ProjectState.activeTab = tab
             ProjectState.activeIndex = i
             ProjectState.dropdown = nil
@@ -2806,7 +2796,12 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     end
                     
                 elseif item.type == "checkbox" then
-                    item.animState = smoothValue(item.animState or (item.value and 1 or 0), item.value and 1 or 0, 18)
+                    local targetAnim = item.value and 1 or 0
+                    if ProjectState.hoverEffects == false then
+                        item.animState = targetAnim
+                    else
+                        item.animState = smoothValue(item.animState or targetAnim, targetAnim, 18)
+                    end
                     local cbX, cbY = rowX + 4, rowY + 6
                     rect(cbX, cbY, 14, 14, Theme.surface3, z + 12, 4, trans)
                     strokeRect(cbX, cbY, 14, 14, Theme.border, z + 13, 4, trans)
@@ -3646,10 +3641,7 @@ local function initSettings()
     generalSec:Checkbox("Grid Locking", true, function(val)
         ProjectState.gridLocking = val
     end)
-    generalSec:Checkbox("Smooth Scrolling", true, function(val)
-        ProjectState.smoothScrolling = val
-    end)
-    generalSec:Checkbox("Hover Effects", true, function(val)
+    generalSec:Checkbox("Checkbox Animations", true, function(val)
         ProjectState.hoverEffects = val
     end)
 
@@ -3690,7 +3682,12 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
     
     if item.type == "checkbox" then
-        item.animState = smoothValue(item.animState or (item.value and 1 or 0), item.value and 1 or 0, 18)
+        local targetAnim = item.value and 1 or 0
+        if ProjectState.hoverEffects == false then
+            item.animState = targetAnim
+        else
+            item.animState = smoothValue(item.animState or targetAnim, targetAnim, 18)
+        end
         rect(rowX + 4, rowY + 6, 14, 14, Theme.surface3, z + 12, 4, trans)
         strokeRect(rowX + 4, rowY + 6, 14, 14, Theme.border, z + 13, 4, trans)
         
@@ -4148,6 +4145,7 @@ local function renderWindow(click, held, rightClick)
     local setHovered = over(x + w - 30, y + 6, 20, 24)
     if click and setHovered then
         ProjectState.settingsActive = not ProjectState.settingsActive
+        ProjectState.contentFade = 0
         if ProjectState.settingsActive then
             ProjectState.searchBar.active = false
             ProjectState.searchBar.value = ""
@@ -4193,6 +4191,7 @@ local function renderWindow(click, held, rightClick)
     local iconHovered = over(x + w - 52, y + 6, 20, 24)
     if click and iconHovered then
         ProjectState.searchBar.active = not ProjectState.searchBar.active
+        ProjectState.contentFade = 0
         if ProjectState.searchBar.active then
             ProjectState.settingsActive = false
             ProjectState.focus = ProjectState.searchBar
@@ -4286,6 +4285,11 @@ local function renderWindow(click, held, rightClick)
         return click, held, rightClick
     end
 
+    local fade = ProjectState.contentFade or 1
+    if fade < 1 then
+        ProjectState.contentFade = smoothValue(fade, 1, 16)
+    end
+
     if ProjectState.searchBar.active and ProjectState.searchBar.value ~= "" then
         baseClick, baseHeld, baseRightClick = renderSearchResults(baseClick, baseHeld, baseRightClick, px, py, pw, ph)
         if ProjectState.focus and baseClick and not over(px, py, pw, ph) and not over(x + w - 56 - ProjectState.searchBar.width, y + 8, ProjectState.searchBar.width, 20) and not over(x + w - 52, y + 6, 20, 24) and not over(x + w - 30, y + 6, 20, 24) then
@@ -4303,12 +4307,6 @@ local function renderWindow(click, held, rightClick)
 
         local contY = py + TAB_H + 8
         local contH = ph - TAB_H - 8
-
-        local fade = ProjectState.contentFade or 1
-        if fade < 1 then
-            fade = smoothValue(fade, 1, 16)
-            ProjectState.contentFade = fade
-        end
 
         baseClick, baseHeld, baseRightClick = renderSections(ProjectState.activeTab, baseClick, baseHeld, baseRightClick, px, contY, pw, contH)
 
