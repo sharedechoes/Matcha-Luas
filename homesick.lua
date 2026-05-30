@@ -749,36 +749,49 @@ local function drawImage(data, x, y, w, h, z, trans)
 end
 
 local function drawLockIcon(x, y, color, z, trans, unlocked)
-    rect(x + 2, y + 5, 8, 6, color, z, 1, trans)
-    line(x + 3, y + 5, x + 3, y + 2, color, z, 1.5, trans)
-    line(x + 3, y + 2, x + 9, y + 2, color, z, 1.5, trans)
+    -- Body: 8x6 rect centered at x+1..x+9, y+4..y+10
+    rect(x + 1, y + 4, 8, 6, color, z, 2, trans)
+    -- Shackle: arc-like with two verticals and a top bar
+    line(x + 2, y + 4, x + 2, y + 1, color, z, 1.5, trans)
+    line(x + 2, y + 1, x + 8, y + 1, color, z, 1.5, trans)
     if unlocked then
-        line(x + 9, y + 2, x + 9, y + 3, color, z, 1.5, trans)
+        line(x + 8, y + 1, x + 8, y + 2, color, z, 1.5, trans)
     else
-        line(x + 9, y + 2, x + 9, y + 5, color, z, 1.5, trans)
+        line(x + 8, y + 1, x + 8, y + 4, color, z, 1.5, trans)
     end
 end
 
 local function drawExportIcon(x, y, color, z, trans)
-    line(x + 5, y + 1, x + 5, y + 7, color, z, 1.5, trans)
-    line(x + 2, y + 4, x + 5, y + 1, color, z, 1.5, trans)
-    line(x + 8, y + 4, x + 5, y + 1, color, z, 1.5, trans)
-    line(x + 1, y + 9, x + 9, y + 9, color, z, 1.5, trans)
+    -- Arrow pointing up: vertical shaft + arrowhead
+    line(x + 5, y + 8, x + 5, y + 2, color, z, 1.5, trans)
+    line(x + 2, y + 5, x + 5, y + 2, color, z, 1.5, trans)
+    line(x + 8, y + 5, x + 5, y + 2, color, z, 1.5, trans)
+    -- Bar at bottom
+    line(x + 1, y + 10, x + 9, y + 10, color, z, 1.5, trans)
 end
 
 local function drawImportIcon(x, y, color, z, trans)
-    line(x + 5, y + 1, x + 5, y + 7, color, z, 1.5, trans)
-    line(x + 2, y + 4, x + 5, y + 7, color, z, 1.5, trans)
-    line(x + 8, y + 4, x + 5, y + 7, color, z, 1.5, trans)
-    line(x + 1, y + 9, x + 9, y + 9, color, z, 1.5, trans)
+    -- Arrow pointing down: vertical shaft + arrowhead
+    line(x + 5, y + 2, x + 5, y + 8, color, z, 1.5, trans)
+    line(x + 2, y + 5, x + 5, y + 8, color, z, 1.5, trans)
+    line(x + 8, y + 5, x + 5, y + 8, color, z, 1.5, trans)
+    -- Bar at bottom
+    line(x + 1, y + 10, x + 9, y + 10, color, z, 1.5, trans)
 end
 
 local function drawTrashIcon(x, y, color, z, trans)
+    -- Lid handle
+    line(x + 3, y, x + 7, y, color, z, 1.5, trans)
+    -- Lid bar
     line(x + 1, y + 2, x + 9, y + 2, color, z, 1.5, trans)
-    line(x + 4, y, x + 6, y, color, z, 1.5, trans)
-    line(x + 2, y + 3, x + 3, y + 9, color, z, 1.5, trans)
-    line(x + 8, y + 3, x + 7, y + 9, color, z, 1.5, trans)
-    line(x + 3, y + 9, x + 7, y + 9, color, z, 1.5, trans)
+    -- Left wall
+    line(x + 2, y + 3, x + 2, y + 9, color, z, 1.5, trans)
+    -- Right wall
+    line(x + 8, y + 3, x + 8, y + 9, color, z, 1.5, trans)
+    -- Bottom
+    line(x + 2, y + 9, x + 8, y + 9, color, z, 1.5, trans)
+    -- Inner line (center)
+    line(x + 5, y + 4, x + 5, y + 8, color, z, 1.5, trans)
 end
 
 local function renderNotifications()
@@ -2050,9 +2063,29 @@ local function renderDropdown(click)
             textX = dd.x + 20
             rect(dd.x + 10, rowY + 5, 2, 12, Theme.accent, 114)
         end
-        txt(tostring(choice), textX, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontSystem, 113, false, false, dd.w - 24)
 
-        if click and hovered then
+        local isDeletable = dd.item and dd.item.deletable
+        local textMaxW = dd.w - 24 - (isDeletable and 20 or 0)
+        txt(tostring(choice), textX, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontSystem, 113, false, false, textMaxW)
+
+        if isDeletable then
+            local trashW = 18
+            local trashBtnX = dd.x + dd.w - trashW - 2
+            local trashHovered = over(trashBtnX, rowY + 2, trashW, 18)
+            if hovered or trashHovered then
+                rect(trashBtnX, rowY + 2, trashW, 18, trashHovered and Theme.surface or Theme.surface2, 113, 3)
+                drawTrashIcon(trashBtnX + 4, rowY + 4, trashHovered and Theme.red or Theme.sub, 114, 1)
+            end
+            if click and trashHovered then
+                if dd.item.onDelete then dd.item.onDelete(choice) end
+                dd.choices = copyArray(dd.item.choices)
+                dd.value = copyArray(dd.item.value)
+                dd.scrollOffset = clamp(dd.scrollOffset, 0, max(0, #dd.choices - maxRows))
+                return false
+            end
+        end
+
+        if click and hovered and not (isDeletable and over(dd.x + dd.w - 20, rowY + 2, 18, 18)) then
             if dd.kind == "keymode" then
                 dd.keybind.mode = choice
                 safeCallback(dd.keybind.callback, dd.keybind.value and Input[dd.keybind.value] and Input[dd.keybind.value].id or nil, dd.keybind.mode)
@@ -2668,21 +2701,22 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             
             local showLock = section.allowLocking ~= false
             
+            local iconY = sy + 9
             draw9Dot(colX + colW - 20, sy + 10, (showLock and section.locked) and C3(80, 75, 73) or Theme.sub, z + 2, hTrans)
             if showLock then
-                drawLockIcon(colX + colW - 38, sy + 10, section.locked and Theme.accent or Theme.sub, z + 2, section.locked and hTrans or hTrans * 0.5, not section.locked)
+                drawLockIcon(colX + colW - 38, iconY, section.locked and Theme.accent or Theme.sub, z + 2, section.locked and hTrans or hTrans * 0.5, not section.locked)
             end
 
             if section.name == "Configs" or section.name == "Themes" then
                 local expX = colX + colW - 54
-                local expHovered = not popupBlocking and over(expX - 3, sy + 4, 14, 14) and headerTrans > 0.5
+                local expHovered = not popupBlocking and over(expX - 2, sy + 4, 14, 20) and headerTrans > 0.5
                 local expColor = expHovered and Theme.accent or Theme.sub
-                drawExportIcon(expX - 2, sy + 10, expColor, z + 2, hTrans * (expHovered and 1 or 0.6))
+                drawExportIcon(expX - 2, iconY, expColor, z + 2, hTrans * (expHovered and 1 or 0.6))
 
                 local impX = colX + colW - 70
-                local impHovered = not popupBlocking and over(impX - 3, sy + 4, 14, 14) and headerTrans > 0.5
+                local impHovered = not popupBlocking and over(impX - 2, sy + 4, 14, 20) and headerTrans > 0.5
                 local impColor = impHovered and Theme.accent or Theme.sub
-                drawImportIcon(impX - 2, sy + 10, impColor, z + 2, hTrans * (impHovered and 1 or 0.6))
+                drawImportIcon(impX - 2, iconY, impColor, z + 2, hTrans * (impHovered and 1 or 0.6))
 
                 if not isFloating and click and headerTrans > 0.5 then
                     if expHovered then
@@ -2933,19 +2967,6 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     local dx, dw = rowX + 4, rowW - 8
                     local dy_box = rowY + 18
                     local boxH = 22
-                    
-                    if item.deletable then
-                        dw = dw - 24
-                        local trashX = dx + dw + 4
-                        local trashHovered = over(trashX, dy_box, 20, boxH)
-                        rect(trashX, dy_box, 20, boxH, trashHovered and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
-                        strokeRect(trashX, dy_box, 20, boxH, trashHovered and Theme.red or Theme.border, z + 13, 4, trans)
-                        drawTrashIcon(trashX + 5, dy_box + 5, trashHovered and Theme.red or Theme.sub, z + 14, trans)
-                        if click and trashHovered and not popupBlocking and not disabled and trans > 0.5 then
-                            if item.onDelete then item.onDelete(item.value[1]) end
-                            click = false
-                        end
-                    end
                     
                     rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
                     strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
@@ -3616,19 +3637,19 @@ local function initSettings()
     end)
 
     local generalSec = createSection(settingsTab, "General Settings", "Full")
-    generalSec:Toggle("Spoof window focus", false, function(val)
+    generalSec:Checkbox("Spoof window focus", false, function(val)
         ProjectState.isrbxactiveOverride = val
     end)
-    generalSec:Toggle("Tab Animations", true, function(val)
+    generalSec:Checkbox("Tab Animations", true, function(val)
         ProjectState.tabAnimations = val
     end)
-    generalSec:Toggle("Grid Locking", true, function(val)
+    generalSec:Checkbox("Grid Locking", true, function(val)
         ProjectState.gridLocking = val
     end)
-    generalSec:Toggle("Smooth Scrolling", true, function(val)
+    generalSec:Checkbox("Smooth Scrolling", true, function(val)
         ProjectState.smoothScrolling = val
     end)
-    generalSec:Toggle("Hover Effects", true, function(val)
+    generalSec:Checkbox("Hover Effects", true, function(val)
         ProjectState.hoverEffects = val
     end)
 
@@ -3733,7 +3754,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             doColorPicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, item)
             click = false
         elseif rightClick and hovered and not popupBlocking and not disabled and trans > 0.5 then
-            doDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
+            dDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
                 if choice and choice[1] == "Copy" then
                     ProjectState.copiedColor = item.value
                     pcall(setclipboard, "#" .. toHex(item.value))
@@ -3805,19 +3826,6 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         local dy_box = rowY + 18
         local boxH = 22
         
-        if item.deletable then
-            dw = dw - 24
-            local trashX = dx + dw + 4
-            local trashHovered = over(trashX, dy_box, 20, boxH)
-            rect(trashX, dy_box, 20, boxH, trashHovered and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
-            strokeRect(trashX, dy_box, 20, boxH, trashHovered and Theme.red or Theme.border, z + 13, 4, trans)
-            drawTrashIcon(trashX + 5, dy_box + 5, trashHovered and Theme.red or Theme.sub, z + 14, trans)
-            if click and trashHovered and not popupBlocking and not disabled and trans > 0.5 then
-                if item.onDelete then item.onDelete(item.value[1]) end
-                click = false
-            end
-        end
-        
         rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
         strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
         
@@ -3837,7 +3845,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         end
         
         if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
-            doDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
+            dDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
             click = false
         end
         
