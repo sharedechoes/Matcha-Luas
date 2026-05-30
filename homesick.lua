@@ -24,7 +24,7 @@ local sin = math.sin
 local clock = os.clock
 local remove = table.remove
 local concat = table.concat
-_G.homesickOriginals = {
+_G.homesickOriginals = _G.homesickOriginals or {
     print = print,
     warn = warn,
     printl = printl,
@@ -4903,7 +4903,7 @@ _G.warn = function(...)
     return _G.homesickOriginals.warn(unpack(strArgs))
 end
 if type(printl) == "function" then
-    _G.homesickOriginals.printl = printl
+    _G.homesickOriginals.printl = _G.homesickOriginals.printl or printl
     _G.printl = function(...)
         local strArgs = {}
         for i = 1, select("#", ...) do
@@ -4914,7 +4914,7 @@ if type(printl) == "function" then
     end
 end
 if type(notify) == "function" then
-    _G.homesickOriginals.notify = notify
+    _G.homesickOriginals.notify = _G.homesickOriginals.notify or notify
     _G.notify = function(message, title, duration)
         local lowerMsg = string.lower(tostring(message or ""))
         local lowerTitle = string.lower(tostring(title or "notification"))
