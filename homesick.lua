@@ -196,6 +196,8 @@ local ProjectState = {
     hoverEffects = true,
     settingsTargetH = nil,
     preSettingsH = nil,
+    settingsTargetW = nil,
+    preSettingsW = nil,
     gridSnapLines = nil,
 }
 
@@ -602,6 +604,49 @@ local function trimText(value, maxWidth, size, font)
     return string.sub(value, 1, maxChars - 2) .. ".."
 end
 
+-- wrap text into lines that fit maxWidth; returns table of lines and total count
+local function wrapLines(value, maxWidth, size, font)
+    value = tostring(value or "")
+    local multiplier = FontWidths[font] or 0.52
+    local charW = (size or 13) * multiplier
+    local maxChars = math.max(1, floor(maxWidth / charW))
+    local lines = {}
+    -- split by spaces and wrap
+    local words = {}
+    for w in string.gmatch(value, "%S+") do
+        words[#words + 1] = w
+    end
+    if #words == 0 then
+        return {""}
+    end
+    local currentLine = ""
+    for i = 1, #words do
+        local word = words[i]
+        local candidate = currentLine == "" and word or (currentLine .. " " .. word)
+        if #candidate <= maxChars then
+            currentLine = candidate
+        else
+            if currentLine ~= "" then
+                lines[#lines + 1] = currentLine
+            end
+            -- if single word too long, break it
+            if #word > maxChars then
+                while #word > maxChars do
+                    lines[#lines + 1] = string.sub(word, 1, maxChars)
+                    word = string.sub(word, maxChars + 1)
+                end
+                currentLine = word
+            else
+                currentLine = word
+            end
+        end
+    end
+    if currentLine ~= "" then
+        lines[#lines + 1] = currentLine
+    end
+    return lines
+end
+
 local function txt(value, x, y, color, size, font, z, centered, outline, maxWidth, transparency)
     if value == nil or value == "" then
         return
@@ -707,31 +752,49 @@ local function drawImage(data, x, y, w, h, z, trans)
     return obj
 end
 
-local IconCache = {}
-local IconUrls = {
-    lock = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/lock.png",
-    unlock = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/unlock.png",
-    search = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/magnifying-glass.png",
-    menu = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/menu.png",
-    setting = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/setting.png",
-    import_icon = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/import.png",
-    export_icon = "https://raw.githubusercontent.com/sharedechoes/Matcha-Luas/main/images/export.png",
-}
-
-task.spawn(function()
-    for name, url in pairs(IconUrls) do
-        local ok, data = pcall(function()
-            return game:HttpGet(url)
-        end)
-        if ok and data and #data > 100 then
-            IconCache[name] = data
-        end
+-- Primitive icon drawing helpers (no image loading, no flicker)
+local function drawLockIcon(x, y, color, z, trans, unlocked)
+    if unlocked then
+        line(x + 3, y + 5, x + 3, y + 2, color, z, 1.5, trans)
+        line(x + 3, y + 2, x + 7, y + 2, color, z, 1.5, trans)
+        line(x + 7, y + 2, x + 7, y + 4, color, z, 1.5, trans)
+    else
+        line(x + 3, y + 5, x + 3, y + 2, color, z, 1.5, trans)
+        line(x + 3, y + 2, x + 7, y + 2, color, z, 1.5, trans)
+        line(x + 7, y + 2, x + 7, y + 5, color, z, 1.5, trans)
     end
-end)
+    rect(x + 1, y + 5, 8, 6, color, z, 2, trans)
+    circle(x + 5, y + 8, 1, Theme.bg, z + 1, true, 0, 8, trans)
+end
 
-local function drawIconImg(name, x, y, size, z, trans)
-    if not IconCache[name] then return end
-    drawImage(IconCache[name], x, y, size, size, z, trans or 1)
+local function drawExportIcon(x, y, color, z, trans)
+    line(x + 5, y + 1, x + 5, y + 7, color, z, 1.5, trans)
+    line(x + 2, y + 4, x + 5, y + 1, color, z, 1.5, trans)
+    line(x + 8, y + 4, x + 5, y + 1, color, z, 1.5, trans)
+    line(x + 1, y + 8, x + 1, y + 11, color, z, 1.5, trans)
+    line(x + 9, y + 8, x + 9, y + 11, color, z, 1.5, trans)
+    line(x + 1, y + 11, x + 9, y + 11, color, z, 1.5, trans)
+end
+
+local function drawImportIcon(x, y, color, z, trans)
+    line(x + 5, y + 1, x + 5, y + 7, color, z, 1.5, trans)
+    line(x + 2, y + 4, x + 5, y + 7, color, z, 1.5, trans)
+    line(x + 8, y + 4, x + 5, y + 7, color, z, 1.5, trans)
+    line(x + 1, y + 8, x + 1, y + 11, color, z, 1.5, trans)
+    line(x + 9, y + 8, x + 9, y + 11, color, z, 1.5, trans)
+    line(x + 1, y + 11, x + 9, y + 11, color, z, 1.5, trans)
+end
+
+local function drawTrashIcon(x, y, color, z, trans)
+    line(x + 1, y + 2, x + 9, y + 2, color, z, 1.5, trans)
+    line(x + 4, y, x + 6, y, color, z, 1.5, trans)
+    line(x + 4, y, x + 4, y + 2, color, z, 1.5, trans)
+    line(x + 6, y, x + 6, y + 2, color, z, 1.5, trans)
+    line(x + 2, y + 3, x + 2, y + 10, color, z, 1.5, trans)
+    line(x + 8, y + 3, x + 8, y + 10, color, z, 1.5, trans)
+    line(x + 2, y + 10, x + 8, y + 10, color, z, 1.5, trans)
+    line(x + 4, y + 4, x + 4, y + 9, color, z, 1, trans * 0.7)
+    line(x + 6, y + 4, x + 6, y + 9, color, z, 1, trans * 0.7)
 end
 
 local function renderNotifications()
@@ -1463,40 +1526,32 @@ end
 local function processTextInput()
     if Input.tab.click then
         local items = getFocusableItems()
-        if #items > 0 then
-            local currentIdx = nil
-            for i = 1, #items do
-                if items[i] == ProjectState.focus then
-                    currentIdx = i
-                    break
-                end
+        -- only cycle if already focused on a textbox
+        local currentIdx = nil
+        for i = 1, #items do
+            if items[i] == ProjectState.focus then
+                currentIdx = i
+                break
             end
-
-            local nextIdx
+        end
+        if currentIdx and #items > 1 then
             local shifted = Input.shift.held or Input.lshift.held or Input.rshift.held
-            if currentIdx then
-                if shifted then
-                    nextIdx = currentIdx - 1
-                    if nextIdx < 1 then
-                        nextIdx = #items
-                    end
-                else
-                    nextIdx = currentIdx + 1
-                    if nextIdx > #items then
-                        nextIdx = 1
-                    end
-                end
+            local nextIdx
+            if shifted then
+                nextIdx = currentIdx - 1
+                if nextIdx < 1 then nextIdx = #items end
             else
-                nextIdx = shifted and #items or 1
+                nextIdx = currentIdx + 1
+                if nextIdx > #items then nextIdx = 1 end
             end
-
-            local nextItem = items[nextIdx]
-            ProjectState.focus = nextItem
-            if type(nextItem) == "table" and nextItem.type == "slider" then
-                nextItem._directValue = tostring(nextItem.value)
-            end
+            ProjectState.focus = items[nextIdx]
+            Input.tab.click = false
+        elseif currentIdx then
+            -- only one textbox, unfocus on tab
+            ProjectState.focus = nil
             Input.tab.click = false
         end
+        -- if not focused on anything, tab does nothing (don't auto-focus first textbox)
     end
 
     local item = ProjectState.focus
@@ -2538,6 +2593,10 @@ local function getItemHeight(item)
         return 44
     elseif item.type == "textbox" then
         return 44
+    elseif item.type == "label" then
+        -- use cached line count if available (set during render)
+        local lineCount = item._cachedLineCount or 1
+        return math.max(28, lineCount * 16 + 8)
     end
     return 28
 end
@@ -2636,19 +2695,24 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, hTrans)
             
             local showLock = section.allowLocking ~= false
-            drawIconImg("menu", colX + colW - 22, sy + 8, 12, z + 2, hTrans * 0.6)
+            -- 9-dot grab handle (primitive)
+            draw9Dot(colX + colW - 20, sy + 10, (showLock and section.locked) and C3(80, 75, 73) or Theme.sub, z + 2, hTrans)
             if showLock then
-                drawIconImg(section.locked and "lock" or "unlock", colX + colW - 38, sy + 6, 14, z + 2, section.locked and hTrans or hTrans * 0.5)
+                drawLockIcon(colX + colW - 38, sy + 8, section.locked and Theme.accent or Theme.sub, z + 2, section.locked and hTrans or hTrans * 0.5, not section.locked)
             end
 
             if section.name == "Configs" or section.name == "Themes" then
+                -- export icon (up arrow with tray)
                 local expX = colX + colW - 54
-                local expHovered = not popupBlocking and over(expX - 3, sy + 6, 16, 14) and headerTrans > 0.5
-                drawIconImg("export_icon", expX - 2, sy + 4, 14, z + 2, expHovered and hTrans or hTrans * 0.5)
-                
+                local expHovered = not popupBlocking and over(expX - 3, sy + 4, 14, 14) and headerTrans > 0.5
+                local expColor = expHovered and Theme.accent or Theme.sub
+                drawExportIcon(expX - 2, sy + 3, expColor, z + 2, hTrans * (expHovered and 1 or 0.6))
+
+                -- import icon (down arrow with tray)
                 local impX = colX + colW - 70
-                local impHovered = not popupBlocking and over(impX - 3, sy + 6, 16, 14) and headerTrans > 0.5
-                drawIconImg("import_icon", impX - 2, sy + 4, 14, z + 2, impHovered and hTrans or hTrans * 0.5)
+                local impHovered = not popupBlocking and over(impX - 3, sy + 4, 14, 14) and headerTrans > 0.5
+                local impColor = impHovered and Theme.accent or Theme.sub
+                drawImportIcon(impX - 2, sy + 3, impColor, z + 2, hTrans * (impHovered and 1 or 0.6))
 
                 if not isFloating and click and headerTrans > 0.5 then
                     if expHovered then
@@ -2731,11 +2795,32 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             
             if trans > 0 then
                 if item.type == "label" then
-                    txt(item.label, rowX, textTop(rowY, itemH - 2, 13), item.color or Theme.text, 13, FontSystem, z + 12, false, false, rowW, trans)
+                    -- wrapped label rendering - cache line count for getItemHeight
+                    local labelLines = wrapLines(item.label, rowW, 13, FontSystem)
+                    item._cachedLineCount = #labelLines
+                    for li = 1, #labelLines do
+                        txt(labelLines[li], rowX, rowY + (li - 1) * 16 + 4, item.color or Theme.text, 13, FontSystem, z + 12, false, false, rowW, trans)
+                    end
                     
                 elseif item.type == "checkbox" then
-                    rect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
-                    strokeRect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
+                    -- toggle animation: ripple from center on value change
+                    if item._prevValue ~= item.value then
+                        item._toggleAnimAt = clock()
+                        item._prevValue = item.value
+                    end
+                    local toggleAnimT = 0
+                    if item._toggleAnimAt and (ProjectState.hoverEffects ~= false) then
+                        toggleAnimT = clamp((clock() - item._toggleAnimAt) / 0.25, 0, 1)
+                    end
+                    local cbX, cbY = rowX + 4, rowY + 6
+                    local cbCX, cbCY = cbX + 7, cbY + 7
+                    rect(cbX, cbY, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
+                    strokeRect(cbX, cbY, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
+                    if toggleAnimT > 0 and toggleAnimT < 1 then
+                        local rippleR = toggleAnimT * 10
+                        local rippleTrans = trans * (1 - toggleAnimT) * 0.6
+                        circle(cbCX, cbCY, rippleR, item.value and Theme.accent or Theme.sub, z + 14, false, 1.5, 24, rippleTrans)
+                    end
                     
                     local cbExtra = 6
                     if item.colorpicker then cbExtra = cbExtra + 20 end
@@ -2767,8 +2852,23 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     end
                     
                 elseif item.type == "toggle" then
-                    rect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
-                    strokeRect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
+                    if item._prevValue ~= item.value then
+                        item._toggleAnimAt = clock()
+                        item._prevValue = item.value
+                    end
+                    local toggleAnimT = 0
+                    if item._toggleAnimAt and (ProjectState.hoverEffects ~= false) then
+                        toggleAnimT = clamp((clock() - item._toggleAnimAt) / 0.25, 0, 1)
+                    end
+                    local tgX, tgY = rowX + 4, rowY + 6
+                    local tgCX, tgCY = tgX + 7, tgY + 7
+                    rect(tgX, tgY, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
+                    strokeRect(tgX, tgY, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
+                    if toggleAnimT > 0 and toggleAnimT < 1 then
+                        local rippleR = toggleAnimT * 10
+                        local rippleTrans = trans * (1 - toggleAnimT) * 0.6
+                        circle(tgCX, tgCY, rippleR, item.value and Theme.accent or Theme.sub, z + 14, false, 1.5, 24, rippleTrans)
+                    end
                     
                     local tgExtra = 6
                     if item.colorpicker then tgExtra = tgExtra + 20 end
@@ -3495,6 +3595,15 @@ local function initSettings()
             end
         end
     end)
+    configSection:Button("Delete Selected", function()
+        local name = configDropdown.item.value[1]
+        if name and name ~= "" then
+            pcall(delfile, "homesick/" .. name .. ".json")
+            configDropdown:UpdateChoices(getConfigsList())
+            configDropdown:Set({})
+            warn("deleted config " .. name .. " rip")
+        end
+    end)
 
     local themeSection = createSection(settingsTab, "Themes", "Right")
     local themeDropdown = themeSection:Dropdown("Theme List", getThemesList(), getThemesList())
@@ -3533,6 +3642,15 @@ local function initSettings()
                 themeDropdown:UpdateChoices(getThemesList())
                 warn("saved theme " .. name .. " lol")
             end
+        end
+    end)
+    themeSection:Button("Delete Selected", function()
+        local name = themeDropdown.item.value[1]
+        if name and name ~= "" then
+            pcall(delfile, "homesick/themes/" .. name .. ".json")
+            themeDropdown:UpdateChoices(getThemesList())
+            themeDropdown:Set({})
+            warn("deleted theme " .. name .. " rip")
         end
     end)
 
@@ -4020,15 +4138,42 @@ local function renderWindow(click, held, rightClick)
         if ProjectState.settingsActive then
             ProjectState.searchBar.active = false
             ProjectState.searchBar.value = ""
+            -- save original size and target a wider window
             ProjectState.preSettingsH = ProjectState.h
-            local contentH = 0
+            ProjectState.preSettingsW = ProjectState.w
+            -- target: enough width for left+right columns to be comfortably visible
+            local targetW = math.max(ProjectState.w, 500)
+            local targetH = ProjectState.h
+            -- estimate content height from sections
             if ProjectState.settingsTab then
+                local leftH, rightH = 0, 0
                 for _, sec in ipairs(ProjectState.settingsTab.sections) do
-                    contentH = contentH + (sec.customHeight or 160)
+                    local secH = 28
+                    for _, item in ipairs(sec.items) do
+                        secH = secH + (sec.customHeight and 0 or getItemHeight(item))
+                    end
+                    secH = secH + 6
+                    if sec.side == "Right" then
+                        rightH = rightH + secH + 10
+                    elseif sec.side == "Full" then
+                        leftH = math.max(leftH, rightH) + secH + 10
+                        rightH = leftH
+                    else
+                        leftH = leftH + secH + 10
+                    end
+                end
+                local needed = math.max(leftH, rightH)
+                -- content area = h - TITLE_H - PAD*2 - TAB_H - 8 - 24
+                local contentArea = ProjectState.h - 36 - 20 - 30 - 8 - 24
+                if needed > contentArea then
+                    targetH = math.min(ProjectState.h + (needed - contentArea) + 20, 750)
                 end
             end
-            ProjectState.settingsTargetH = math.max(ProjectState.h, math.min(contentH + 80, 700))
+            ProjectState.settingsTargetW = targetW
+            ProjectState.settingsTargetH = targetH
         else
+            -- restore original size
+            ProjectState.settingsTargetW = ProjectState.preSettingsW or ProjectState.w
             ProjectState.settingsTargetH = ProjectState.preSettingsH or ProjectState.defaultH or ProjectState.h
         end
         click = false
@@ -4052,6 +4197,18 @@ local function renderWindow(click, held, rightClick)
         baseClick = false
     end
 
+    -- smooth settings window resize (both width and height)
+    if ProjectState.settingsTargetW then
+        ProjectState.w = smoothValue(ProjectState.w, ProjectState.settingsTargetW, 14)
+        if math.abs(ProjectState.w - ProjectState.settingsTargetW) < 0.5 then
+            ProjectState.w = ProjectState.settingsTargetW
+            if not ProjectState.settingsActive then
+                ProjectState.settingsTargetW = nil
+            end
+        end
+        clampWindow()
+        x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
+    end
     if ProjectState.settingsTargetH then
         ProjectState.h = smoothValue(ProjectState.h, ProjectState.settingsTargetH, 14)
         if math.abs(ProjectState.h - ProjectState.settingsTargetH) < 0.5 then
@@ -4069,10 +4226,7 @@ local function renderWindow(click, held, rightClick)
         local searchX = x + w - 56 - searchW
         rect(searchX, y + 8, searchW, 20, Theme.surface, 15, 6)
         strokeRect(searchX, y + 8, searchW, 20, (ProjectState.focus == ProjectState.searchBar) and Theme.accent or Theme.border, 16, 6)
-        local searchFocused = ProjectState.focus == ProjectState.searchBar
-        local searchEmpty = ProjectState.searchBar.value == ""
-        local searchPlaceholderTrans = (searchFocused and searchEmpty) and 0.25 or 1
-        txt(searchEmpty and "Search..." or ProjectState.searchBar.value, searchX + 8, textTop(y + 8, 20, 12), searchEmpty and Theme.sub or Theme.text, 12, FontUI, 17, false, false, searchW - 16, searchPlaceholderTrans)
+        txt((ProjectState.searchBar.value == "") and "Search..." or ProjectState.searchBar.value, searchX + 8, textTop(y + 8, 20, 12), (ProjectState.searchBar.value == "") and Theme.sub or Theme.text, 12, FontUI, 17, false, false, searchW - 16)
         if ProjectState.focus == ProjectState.searchBar then
             local cursorX = searchX + 8
             if not (ProjectState.searchBar.value == "") then
@@ -4765,7 +4919,7 @@ end
 if _G.homesickOriginals and type(_G.homesickOriginals.isrbxactive) == "function" then
     _G.isrbxactive = function()
         if ProjectState.isrbxactiveOverride then
-            return true
+            return false
         end
         return _G.homesickOriginals.isrbxactive()
     end
