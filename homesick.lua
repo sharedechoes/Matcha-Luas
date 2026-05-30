@@ -503,7 +503,7 @@ local function removeDrawingList(list)
         if object then
             pcall(function()
                 object.Visible = false
-                object:table.remove()
+                object:Remove()
             end)
             list[i] = nil
         end
@@ -760,7 +760,7 @@ local function renderNotifications()
         local n = notifications[i]
         n.elapsed = n.elapsed + (state.dt or 1/60)
         if n.elapsed >= n.duration then
-            table.table.remove(notifications, i)
+            table.remove(notifications, i)
         else
             n.targetX = select(1, viewportSize()) - 280 - 16
             n.targetY = (select(2, viewportSize()) - 16) - i * 60
@@ -1259,7 +1259,7 @@ function ui:RegisterActivity(callback)
     state.activities[#state.activities + 1] = activity
 
     return {
-        table.remove = function()
+        Remove = function()
             activity.alive = false
         end,
     }
@@ -1296,7 +1296,7 @@ local function finalDestroy()
         for i = 1, #state.cpPaletteSquares do
             pcall(function()
                 state.cpPaletteSquares[i].obj.Visible = false
-                state.cpPaletteSquares[i].obj:table.remove()
+                state.cpPaletteSquares[i].obj:Remove()
             end)
         end
         state.cpPaletteSquares = nil
@@ -1467,7 +1467,7 @@ local function pushHistory(item, prevValue)
         item._historyIndex = 1
     else
         while #item._history > item._historyIndex do
-            table.table.remove(item._history)
+            table.remove(item._history)
         end
         if item._history[item._historyIndex] ~= prevValue then
             item._historyIndex = item._historyIndex + 1
@@ -4895,7 +4895,7 @@ homesick.createWindow = function(title, width, height)
         ui:SetOpen(wSelf.visible == true)
     end
     
-    windowWrap.table.remove = function(wSelf)
+    windowWrap.Remove = function(wSelf)
         ui:Destroy()
     end
     
@@ -4926,7 +4926,7 @@ _G.print = function(...)
     for i = 1, select("#", ...) do
         strArgs[i] = string.lower(tostring(select(i, ...)))
     end
-    ui:Notify("print", table.table.concat(strArgs, " "), 5)
+    ui:Notify("print", table.concat(strArgs, " "), 5)
     return _G.homesickOriginals.print(unpack(strArgs))
 end
 _G.warn = function(...)
@@ -4934,7 +4934,7 @@ _G.warn = function(...)
     for i = 1, select("#", ...) do
         strArgs[i] = string.lower(tostring(select(i, ...)))
     end
-    ui:Notify("warning", table.table.concat(strArgs, " "), 5)
+    ui:Notify("warning", table.concat(strArgs, " "), 5)
     return _G.homesickOriginals.warn(unpack(strArgs))
 end
 if type(printl) == "function" then
@@ -4944,7 +4944,7 @@ if type(printl) == "function" then
         for i = 1, select("#", ...) do
             strArgs[i] = string.lower(tostring(select(i, ...)))
         end
-        ui:Notify("print", table.table.concat(strArgs, " "), 5)
+        ui:Notify("print", table.concat(strArgs, " "), 5)
         return _G.homesickOriginals.printl(unpack(strArgs))
     end
 end
