@@ -118,9 +118,6 @@ local Theme = {
     yellow = C3(255, 204, 0),
     unsafe = C3(255, 226, 84),
     border = C3(60, 55, 52),
-    toggleOn = C3(232, 208, 162),
-    toggleOff = C3(60, 55, 52),
-    knob = C3(255, 255, 255),
     white = C3(255, 255, 255),
     black = C3(0, 0, 0),
 }
@@ -829,16 +826,15 @@ local function renderNotifications()
             end
             rect(nx, ny, width, height, Theme.surface2, z, 6, 0.97)
             strokeRect(nx, ny, width, height, Theme.border, z + 1, 6, 0.97)
-            txt(displaySource, nx + width - 12 - textWidth(displaySource, 11, FontUI), ny + 12, Theme.sub, 11, FontUI, z + 2)
-            txt(n.description, nx + 14, ny + 10, Theme.text, 12, FontSystem, z + 2, false, false, width - textWidth(displaySource, 11, FontUI) - 32)
+            txt(displaySource, nx + 14, ny + 10, n.title == "warning" and Theme.red or Theme.accent, 11, FontUI, z + 2, false, false, width - 28, 0.97)
+            txt(n.description, nx + 14, ny + 26, Theme.text, 11, FontSystem, z + 2, false, false, width - 28, 0.97)
             local barY = ny + height - 4
-            local barX0 = nx + 2
-            local barFillW = ((nx + width - 2) - barX0) * clamp(1 - (n.elapsed / n.duration), 0, 1)
-            rect(barX0, barY, (nx + width - 2) - barX0, 2, Theme.surface3, z + 2, 1, 0.97)
+            local barX = nx + 6
+            local barW = width - 12
+            local barFillW = barW * clamp(1 - (n.elapsed / n.duration), 0, 1)
+            rect(barX, barY, barW, 2, Theme.surface3, z + 2, 1, 0.97)
             if barFillW > 1 then
-                for si = 1, 16 do
-                    rect(barX0 + (si - 1) * (barFillW / 16), barY, (barFillW / 16) + 1, 2, n.title == "warning" and Theme.red or Theme.accent, z + 3, 1, (1 - (si / 16) * (si / 16)) * 0.97)
-                end
+                rect(barX, barY, barFillW, 2, n.title == "warning" and Theme.red or Theme.accent, z + 3, 1, 0.97)
             end
             i = i + 1
         end
@@ -896,8 +892,6 @@ local function setItemValue(item, value, fire)
     if item.type == "slider" then
         value = tonumber(value) or item.value or item.min or 0
         value = snapValue(value, item)
-    elseif item.type == "toggle" then
-        value = value == true
     elseif item.type == "textbox" then
         value = tostring(value or "")
     elseif item.type == "checkbox" then
@@ -930,7 +924,7 @@ local function makeItem(section, item)
         return self
     end
 
-    if item.type == "toggle" or item.type == "checkbox" then
+    if item.type == "checkbox" then
         function handle:AddKeybind(defaultKey, mode, canChange, callback)
             local keybind = {
                 value = normalizeKey(defaultKey),
@@ -1033,7 +1027,7 @@ local function createSection(tab, name, side, allowLocking, defaultLock)
 
     function sectionApi:Toggle(label, default, callback, unsafe, tooltip)
         return makeItem(section, {
-            type = "toggle",
+            type = "checkbox",
             label = tostring(label or "Toggle"),
             value = default == true,
             callback = callback,
@@ -1796,7 +1790,7 @@ local function processKeybinds()
     for i = 1, #keybindItems do
         local item = keybindItems[i]
         local keybind = item.keybind
-        if (item.type == "toggle" or item.type == "checkbox") and keybind and keybind.value and not keybind.listening and not isItemDisabled(item) then
+        if item.type == "checkbox" and keybind and keybind.value and not keybind.listening and not isItemDisabled(item) then
             local input = Input[keybind.value]
             if input then
                 if keybind.mode == "Always" then
@@ -2838,42 +2832,6 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         end
                     end
                     
-                elseif item.type == "toggle" then
-                    item.animState = smoothValue(item.animState or (item.value and 1 or 0), item.value and 1 or 0, 18)
-                    local tgX, tgY = rowX + 4, rowY + 6
-                    rect(tgX, tgY + 1, 24, 12, lerpColor(Theme.surface3, Theme.accent, item.animState), z + 12, 6, trans)
-                    strokeRect(tgX, tgY + 1, 24, 12, lerpColor(Theme.border, Theme.accent, item.animState), z + 13, 6, trans)
-                    circle(tgX + 6 + 12 * item.animState, tgY + 7, 4, Theme.text, z + 14, true, 0, 32, trans)
-                    
-                    local tgExtra = 16
-                    if item.colorpicker then tgExtra = tgExtra + 20 end
-                    if item.keybind then tgExtra = tgExtra + 64 end
-                    if item.tooltip then tgExtra = tgExtra + 18 end
-                    txt(item.label, rowX + 36, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 36 - tgExtra, trans)
-                    
-                    if not isFloating then
-                        click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
-                    end
-                    
-                    if item.tooltip and not isFloating then
-                        local qHovered = over(rowX + rowW - 16, rowY + 6, 12, 12)
-                        txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
-                        if qHovered and not disabled then
-                            tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
-                        end
-                    end
-                    
-                    if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled and trans > 0.5 then
-                        local onKeybind = item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)
-                        local onColor = item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)
-                        local onQ = item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)
-                        local on9Dot = over(colX + colW - 22, sy + 8, 14, 14)
-                        if not onKeybind and not onColor and not onQ and not on9Dot then
-                            setItemValue(item, not item.value, true)
-                            click = false
-                        end
-                    end
-                    
                 elseif item.type == "colorpicker" then
                     txt(item.label, rowX + 4, textTop(rowY, itemH - 2, 13), Theme.text, 13, FontSystem, z + 12, false, false, rowW - 28, trans)
                     local cpX = rowX + rowW - 16
@@ -3711,30 +3669,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
                 click = false
             end
         end
-        
-    elseif item.type == "toggle" then
-        item.animState = smoothValue(item.animState or (item.value and 1 or 0), item.value and 1 or 0, 18)
-        rect(rowX + 4, rowY + 7, 24, 12, lerpColor(Theme.surface3, Theme.accent, item.animState), z + 12, 6, trans)
-        strokeRect(rowX + 4, rowY + 7, 24, 12, lerpColor(Theme.border, Theme.accent, item.animState), z + 13, 6, trans)
-        circle(rowX + 10 + 12 * item.animState, rowY + 13, 4, Theme.text, z + 14, true, 0, 32, trans)
-        
-        txt(item.label, rowX + 36, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 36 - (6 + (item.colorpicker and 20 or 0) + (item.keybind and 64 or 0) + (item.tooltip and 18 or 0)), trans)
-        
-        click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
-        
-        if item.tooltip then
-            txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), over(rowX + rowW - 16, rowY + 6, 12, 12) and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
-            if over(rowX + rowW - 16, rowY + 6, 12, 12) and not disabled then
-                tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
-            end
-        end
-        
-        if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled and trans > 0.5 then
-            if not (item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)) and not (item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)) and not (item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)) then
-                setItemValue(item, not item.value, true)
-                click = false
-            end
-        end
+
         
     elseif item.type == "colorpicker" then
         txt(item.label, rowX + 4, textTop(rowY, itemH - 2, 13), Theme.text, 13, FontSystem, z + 12, false, false, rowW - 28, trans)
