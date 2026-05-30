@@ -3764,7 +3764,6 @@ local function initSettings()
     end)
 
     local colorsSec = createSection(settingsTab, "Theme Colors", "Full")
-    colorsSec:Label("Customize UI theme colors below:")
     ProjectState.themeColorPickers = {}
     local pickers = {"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border"}
     for idx = 1, #pickers do
