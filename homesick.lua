@@ -484,13 +484,6 @@ local function resetPool()
     PoolIndex.ci = 0
     PoolIndex.tr = 0
     PoolIndex.im = 0
-
-    ExternalPoolIndex.sq = 0
-    ExternalPoolIndex.tx = 0
-    ExternalPoolIndex.ln = 0
-    ExternalPoolIndex.ci = 0
-    ExternalPoolIndex.tr = 0
-    ExternalPoolIndex.im = 0
 end
 
 local function getDrawing(kind)
@@ -558,18 +551,6 @@ local function hideUnused()
         end
         if current > high then
             PoolHighWater[kind] = current
-        end
-    end
-    for kind, list in pairs(ExternalPool) do
-        local current = ExternalPoolIndex[kind]
-        local high = ExternalPoolHighWater[kind]
-        if current < high then
-            for i = current + 1, high do
-                list[i].Visible = false
-            end
-        end
-        if current > high then
-            ExternalPoolHighWater[kind] = current
         end
     end
 end
@@ -3763,7 +3744,17 @@ local function initSettings()
         ProjectState.hoverEffects = val
     end)
 
-    local colorsSec = createSection(settingsTab, "Theme Colors", "Full")
+    local colorsSec = createSection(settingsTab, "Theming", "Full")
+    local fontNames = {"System", "UI", "SystemBold"}
+    local fontMap = {System = FontSystem, UI = FontUI, SystemBold = FontBold}
+    colorsSec:Dropdown("Font", {"System"}, fontNames, false, function(picked)
+        if picked and #picked > 0 then
+            local f = fontMap[picked[1]]
+            if f then
+                FontSystem = f
+            end
+        end
+    end)
     ProjectState.themeColorPickers = {}
     local pickers = {"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border"}
     for idx = 1, #pickers do
