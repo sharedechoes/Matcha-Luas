@@ -779,8 +779,29 @@ local function drawTrashIcon(x, y, color, z, trans)
     strokeRect(x + 2, y + 4, 6, 6, color, z, 2, trans)
 end
 
+local function drawSideGlow(x1, y1, x2, y2, mx, my, color, z)
+    local isHoriz = abs(y1 - y2) < 1
+    local px = isHoriz and clamp(mx, min(x1, x2), max(x1, x2)) or x1
+    local py = isHoriz and y1 or clamp(my, min(y1, y2), max(y1, y2))
+    local dist = math.sqrt((mx - px)^2 + (my - py)^2)
+    if dist < 80 then
+        for si = 1, 24 do
+            local alpha = (1 - abs(-40 + (si - 0.5) * 3.333) / 40) * (1 - dist / 80)
+            if alpha > 0 then
+                if isHoriz then
+                    line(clamp(px - 40 + (si - 1) * 3.333, min(x1, x2), max(x1, x2)), y1, clamp(px - 40 + si * 3.333, min(x1, x2), max(x1, x2)), y1, color, z, 2, alpha)
+                else
+                    line(x1, clamp(py - 40 + (si - 1) * 3.333, min(y1, y2), max(y1, y2)), x1, clamp(py - 40 + si * 3.333, min(y1, y2), max(y1, y2)), color, z, 2, alpha)
+                end
+            end
+        end
+    end
+end
+
 local function renderNotifications()
     local notifications = ProjectState.notifications or {}
+    local width = 280
+    local height = 52
     local i = 1
     while i <= #notifications do
         local n = notifications[i]
@@ -788,8 +809,8 @@ local function renderNotifications()
         if n.elapsed >= n.duration then
             table.remove(notifications, i)
         else
-            n.targetX = select(1, viewportSize()) - 280 - 16
-            n.targetY = (select(2, viewportSize()) - 16) - i * 60
+            n.targetX = select(1, viewportSize()) - width - 16
+            n.targetY = (select(2, viewportSize()) - 16) - i * (height + 8)
             if not n.currentX then
                 n.currentX = select(1, viewportSize())
             end
@@ -800,41 +821,24 @@ local function renderNotifications()
             n.currentY = smoothValue(n.currentY, n.targetY, 12)
             local nx = n.currentX
             local ny = n.currentY
-
-            local accentCol = (n.title == "warning" or n.title == "warn") and Theme.red or Theme.accent
-
-            rect(nx, ny, 280, 52, Theme.surface2, 300, 6, 0.97)
-            strokeRect(nx, ny, 280, 52, Theme.border, 301, 6, 0.97)
-
-            circle(nx + 14, ny + 26, 3, accentCol, 302, true, 0, 16, 0.97)
-
+            local z = 300
             local displaySource = n.title
-            if displaySource == "print" or displaySource == "warning" or displaySource == "warn" or displaySource == "notification" or displaySource == "luau" then
-                displaySource = (ProjectState.activeTab and ProjectState.activeTab.name) or ProjectState.title or "homesick"
+            if displaySource == "print" or displaySource == "warning" or displaySource == "warn" or displaySource == "notification" then
+                displaySource = ProjectState.activeTab and ProjectState.activeTab.name or ProjectState.title or "homesick"
             end
-            local srcW = textWidth(displaySource, 11, FontUI)
-
-            if n.title == "print" or n.title == "warning" or n.title == "warn" or n.title == "notification" or n.title == "luau" then
-                txt(displaySource, nx + 280 - 12 - srcW, ny + 18, Theme.sub, 11, FontUI, 302, false, false, nil, 0.97)
-                txt(n.description, nx + 26, ny + 18, Theme.text, 12, FontSystem, 302, false, false, 280 - srcW - 44, 0.97)
-            else
-                txt(displaySource, nx + 280 - 12 - srcW, ny + 10, Theme.sub, 11, FontUI, 302, false, false, nil, 0.97)
-                txt(n.title, nx + 26, ny + 10, Theme.accent, 12, FontBold, 302, false, false, 280 - srcW - 44, 0.97)
-                txt(n.description, nx + 26, ny + 26, Theme.text, 11, FontSystem, 302, false, false, 280 - srcW - 44, 0.97)
-            end
-
-            local prog = clamp(1 - (n.elapsed / n.duration), 0, 1)
-            local barFillW = 276 * prog
-
-            rect(nx + 2, ny + 48, 276, 2, Theme.surface3, 302, 1, 0.97)
-
+            rect(nx, ny, width, height, Theme.surface2, z, 6, 0.97)
+            strokeRect(nx, ny, width, height, Theme.border, z + 1, 6, 0.97)
+            txt(displaySource, nx + width - 12 - textWidth(displaySource, 11, FontUI), ny + 12, Theme.sub, 11, FontUI, z + 2)
+            txt(n.description, nx + 14, ny + 10, Theme.text, 12, FontSystem, z + 2, false, false, width - textWidth(displaySource, 11, FontUI) - 32)
+            local barY = ny + height - 4
+            local barX0 = nx + 2
+            local barFillW = ((nx + width - 2) - barX0) * clamp(1 - (n.elapsed / n.duration), 0, 1)
+            rect(barX0, barY, (nx + width - 2) - barX0, 2, Theme.surface3, z + 2, 1, 0.97)
             if barFillW > 1 then
-                local segW = barFillW / 16
                 for si = 1, 16 do
-                    rect(nx + 2 + (si - 1) * segW, ny + 48, segW + 1, 2, accentCol, 303, 1, (1 - (si / 16) * (si / 16)) * 0.97)
+                    rect(barX0 + (si - 1) * (barFillW / 16), barY, (barFillW / 16) + 1, 2, n.title == "warning" and Theme.red or Theme.accent, z + 3, 1, (1 - (si / 16) * (si / 16)) * 0.97)
                 end
             end
-
             i = i + 1
         end
     end
@@ -4037,37 +4041,6 @@ task.spawn(function()
     end
 end)
 
-local function drawSideGlow(x1, y1, x2, y2, mx, my, color, z)
-    local cx = (x1 == x2) and x1 or clamp(mx, min(x1, x2), max(x1, x2))
-    local cy = (x1 == x2) and clamp(my, min(y1, y2), max(y1, y2)) or y1
-    local factor = clamp(1 - math.sqrt((mx - cx) * (mx - cx) + (my - cy) * (my - cy)) / 100, 0, 1)
-    if factor > 0 then
-        if x1 == x2 then
-            local startY = max(min(y1, y2), cy - 40)
-            local endY = min(max(y1, y2), cy + 40)
-            if endY > startY then
-                local segH = (endY - startY) / 16
-                for si = 1, 16 do
-                    local sy1 = startY + (si - 1) * segH
-                    local sy2 = startY + si * segH
-                    line(x1, sy1, x1, sy2, color, z, 2, factor * clamp(1 - abs(((sy1 + sy2) / 2) - cy) / 40, 0, 1))
-                end
-            end
-        else
-            local startX = max(min(x1, x2), cx - 40)
-            local endX = min(max(x1, x2), cx + 40)
-            if endX > startX then
-                local segW = (endX - startX) / 16
-                for si = 1, 16 do
-                    local sx1 = startX + (si - 1) * segW
-                    local sx2 = startX + si * segW
-                    line(sx1, y1, sx2, y1, color, z, 2, factor * clamp(1 - abs(((sx1 + sx2) / 2) - cx) / 40, 0, 1))
-                end
-            end
-        end
-    end
-end
-
 local function renderWindow(click, held, rightClick)
     local x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
     local popupOpen = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil or ProjectState.importModal ~= nil
@@ -4613,6 +4586,67 @@ local function step()
     hideUnused()
 end
 
+function UI:Demo()
+    if ProjectState.demoLoaded then
+        return self
+    end
+
+    ProjectState.demoLoaded = true
+    self:SetTitle("homesick")
+    self:SetSize(400, 500)
+    self:Center()
+
+    local playground = self:Tab("Playground")
+    local controls = playground:Section("Section 1")
+
+    controls:Label("homesick Test", Theme.accent)
+    local toggleOne = controls:Toggle("Toggle #1", false, nil, true, "This feature has a tooltip")
+    local key = toggleOne:AddKeybind(nil, "Hold", true)
+    local toggleTwo = controls:Toggle("Toggle #2", false)
+    local color = toggleTwo:AddColorpicker("ESP Color", Theme.white, true)
+    local textBox = controls:Textbox("Hint", "")
+    local slider = controls:Slider("Drag me", 10, 1, 1, 360, "deg")
+    local dropdown = controls:Dropdown("Pick me", {"1"}, {"1", "2", "3", "4", "5", "verybigitem"}, false)
+    local multi = controls:Dropdown("Multi pick", {"A"}, {"A", "B", "C"}, true)
+
+    controls:Divider("Actions")
+    controls:Button("Rollback", function()
+        toggleOne:Set(false)
+        key:Set(nil, "Hold")
+        toggleTwo:Set(false)
+        color:Set(Theme.white)
+        textBox:Set("")
+        slider:Set(100)
+        dropdown:Set({"1"})
+        multi:Set({"A"})
+    end)
+
+    local anims = playground:Section("Section 2")
+    local shouldAnimate = false
+    local animToggle = anims:Toggle("Playing", shouldAnimate, function(value)
+        shouldAnimate = value
+    end)
+    local animSlider = anims:Slider("Meter", 0, 1, -100, 100, "%")
+    anims:Button("Stop", function()
+        animToggle:Set(false)
+    end)
+
+    self:RegisterActivity(function()
+        if shouldAnimate then
+            animSlider:Set(floor(sin(clock() * 8) * 100 + 0.0001))
+        end
+    end)
+
+    playground:Section("Section 3")
+    playground:Section("Section 4")
+    self:Tab("Another tab")
+    self:Tab("Tabs")
+
+    applyInputState(true)
+
+    return self
+end
+
 local RunService = game:GetService("RunService")
 
 local function runStepSafe()
@@ -4634,9 +4668,6 @@ local function runStepSafe()
         ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
         if now - ProjectState.lastErrorAt > 1 then
             ProjectState.lastErrorAt = now
-            if _G.homesickOriginals and _G.homesickOriginals.warn then
-                _G.homesickOriginals.warn("homesick step crashed rip " .. tostring(err))
-            end
         end
         setrobloxinput(true)
         ProjectState.inputState = true
@@ -4967,4 +4998,5 @@ if _G.homesickOriginals and type(_G.homesickOriginals.isrbxactive) == "function"
     _G.isrbxactive = newIsRbxActive
 end
 
+_G.homesick = homesick
 return homesick
