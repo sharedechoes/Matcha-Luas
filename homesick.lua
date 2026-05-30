@@ -61,6 +61,10 @@ local Players = game:GetService("Players")
 local Workspace = workspace
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer and LocalPlayer:GetMouse()
+local homesickInstanceId = tick()
+if LocalPlayer then
+    LocalPlayer:SetAttribute("homesickRunning", homesickInstanceId)
+end
 
 local mouseScroll = 0
 local uis = game:GetService("UserInputService")
@@ -600,6 +604,12 @@ local function removeAllDrawings()
     removeDrawingList(Cleanup.drawings.ci)
     removeDrawingList(Cleanup.drawings.tr)
     removeDrawingList(Cleanup.drawings.im)
+    removeDrawingList(ExternalPool.sq)
+    removeDrawingList(ExternalPool.tx)
+    removeDrawingList(ExternalPool.ln)
+    removeDrawingList(ExternalPool.ci)
+    removeDrawingList(ExternalPool.tr)
+    removeDrawingList(ExternalPool.im)
 end
 
 local function rect(x, y, w, h, color, z, radius, transparency)
@@ -4741,6 +4751,9 @@ end
 local RunService = game:GetService("RunService")
 
 local function runStepSafe()
+    if LocalPlayer and LocalPlayer:GetAttribute("homesickRunning") ~= homesickInstanceId then
+        ProjectState.alive = false
+    end
     if not ProjectState.alive then
         if stepConnection then
             stepConnection:Disconnect()
