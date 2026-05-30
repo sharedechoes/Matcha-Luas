@@ -48,6 +48,15 @@ local function bool(value)
     return value == true
 end
 
+local function parseColor(c)
+    if type(c) == "string" then
+        return C3HEX(string.sub(c, 1, 1) == "#" and c or "#" .. c)
+    elseif type(c) == "table" then
+        return C3(c[1] or 255, c[2] or 255, c[3] or 255)
+    end
+    return c
+end
+
 local Players = game:GetService("Players")
 local Workspace = workspace
 local LocalPlayer = Players.LocalPlayer
@@ -237,6 +246,10 @@ local PoolHighWater = {
     tr = 0,
     im = 0,
 }
+
+local ExternalPool = { sq = {}, tx = {}, ln = {}, ci = {}, tr = {}, im = {} }
+local ExternalPoolIndex = { sq = 0, tx = 0, ln = 0, ci = 0, tr = 0, im = 0 }
+local ExternalPoolHighWater = { sq = 0, tx = 0, ln = 0, ci = 0, tr = 0, im = 0 }
 
 local Cleanup = {
     drawings = Pool,
@@ -469,6 +482,13 @@ local function resetPool()
     PoolIndex.ci = 0
     PoolIndex.tr = 0
     PoolIndex.im = 0
+
+    ExternalPoolIndex.sq = 0
+    ExternalPoolIndex.tx = 0
+    ExternalPoolIndex.ln = 0
+    ExternalPoolIndex.ci = 0
+    ExternalPoolIndex.tr = 0
+    ExternalPoolIndex.im = 0
 end
 
 local function getDrawing(kind)
@@ -498,6 +518,33 @@ local function getDrawing(kind)
     return object
 end
 
+local function getExternalDrawing(kind)
+    if not ProjectState.alive or ProjectState.destroyed then
+        return nil
+    end
+
+    ExternalPoolIndex[kind] = ExternalPoolIndex[kind] + 1
+    local index = ExternalPoolIndex[kind]
+    local list = ExternalPool[kind]
+    local object = list[index]
+
+    if not object then
+        local ok, created = pcall(DrawingNew, TypeMap[kind])
+        if not ok or not created then
+            return nil
+        end
+        object = created
+        list[index] = object
+    end
+
+    if index > ExternalPoolHighWater[kind] then
+        ExternalPoolHighWater[kind] = index
+    end
+
+    object.Visible = true
+    return object
+end
+
 local function hideUnused()
     for kind, list in pairs(Pool) do
         local current = PoolIndex[kind]
@@ -509,6 +556,18 @@ local function hideUnused()
         end
         if current > high then
             PoolHighWater[kind] = current
+        end
+    end
+    for kind, list in pairs(ExternalPool) do
+        local current = ExternalPoolIndex[kind]
+        local high = ExternalPoolHighWater[kind]
+        if current < high then
+            for i = current + 1, high do
+                list[i].Visible = false
+            end
+        end
+        if current > high then
+            ExternalPoolHighWater[kind] = current
         end
     end
 end
@@ -796,8 +855,97 @@ local function drawSideGlow(x1, y1, x2, y2, mx, my, color, z)
     end
 end
 
+local function renderCustomBoxes(click, held)
+    local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
+    local boxes = ProjectState.customBoxes or {}
+    for i = 1, #boxes do
+        local box = boxes[i]
+        if box.visible then
+            local bx = box.position.X
+            local by = box.position.Y
+            local bw = box.size.X
+            local bh = box.size.Y
+            rect(bx, by, bw, bh, box.bgColor, 100, 6, 0.95)
+            strokeRect(bx, by, bw, bh, box.borderColor, 101, 6, 0.95)
+            local currentY = by + 8
+            if box.showTopbar and box.title then
+                txt(box.title, bx + bw / 2, currentY, box.titleColor, 12, FontUI, 102, true)
+                line(V2(bx + 8, currentY + 16), V2(bx + bw - 8, currentY + 16), Theme.border, 101, 1)
+                currentY = currentY + 22
+            end
+            for j = 1, #box.elementOrder do
+                local el = box.elements[box.elementOrder[j]]
+                if el then
+                    if el.type == "text" then
+                        txt(el.text, bx + bw / 2, currentY, el.color, el.size, el.font, 102, el.alignment == "center")
+                        currentY = currentY + el.size + 4
+                    elseif el.type == "timer" then
+                        rect(bx + 10, currentY + 4, bw - 20, 2, Theme.surface3, 102, 1, 0.95)
+                        rect(bx + 10, currentY + 4, (bw - 20) * clamp(el.value / max(0.0001, el.maxValue), 0, 1), 2, el.color, 103, 1, 0.95)
+                        currentY = currentY + 8
+                    elseif el.type == "button" then
+                        local hovered = over(bx + 10, currentY, bw - 20, 20) and not popupBlocking
+                        rect(bx + 10, currentY, bw - 20, 20, hovered and Theme.surface3 or Theme.surface2, 102, 4, 0.95)
+                        strokeRect(bx + 10, currentY, bw - 20, 20, hovered and Theme.accent or Theme.border, 103, 4, 0.95)
+                        txt(el.label, bx + bw / 2, currentY + 3, Theme.text, 11, FontSystem, 104, true)
+                        if click and hovered then
+                            safeCallback(el.callback)
+                            click = false
+                        end
+                        currentY = currentY + 24
+                    elseif el.type == "checkbox" then
+                        local cbX, cbY = bx + 10, currentY + 3
+                        rect(cbX, cbY, 14, 14, Theme.surface3, 102, 4, 0.95)
+                        strokeRect(cbX, cbY, 14, 14, Theme.border, 103, 4, 0.95)
+                        local targetAnim = el.value and 1 or 0
+                        el.animState = smoothValue(el.animState or targetAnim, targetAnim, 18)
+                        if el.animState > 0.05 then
+                            local offset = 7 * (1 - el.animState)
+                            rect(cbX + offset, cbY + offset, 14 * el.animState, 14 * el.animState, Theme.accent, 104, 4 * el.animState, 0.95)
+                        end
+                        txt(el.label, bx + 30, currentY, el.value and Theme.text or Theme.sub, 11, FontSystem, 102, false)
+                        local hovered = over(bx + 10, currentY, bw - 20, 20) and not popupBlocking
+                        if click and hovered then
+                            el.value = not el.value
+                            safeCallback(el.callback, el.value)
+                            click = false
+                        end
+                        currentY = currentY + 20
+                    elseif el.type == "slider" then
+                        txt(el.label, bx + 10, currentY, Theme.text, 11, FontSystem, 102, false)
+                        local valStr = tostring(el.value)
+                        txt(valStr, bx + bw - 10 - textWidth(valStr, 11, FontUI), currentY, Theme.text, 11, FontUI, 102, false)
+                        local barY = currentY + 14
+                        local barW = bw - 20
+                        rect(bx + 10, barY, barW, 4, Theme.surface3, 102, 2, 0.95)
+                        rect(bx + 10, barY, barW * clamp((el.value - el.min) / max(0.0001, el.max - el.min), 0, 1), 4, Theme.accent, 103, 2, 0.95)
+                        circle(bx + 10 + barW * clamp((el.value - el.min) / max(0.0001, el.max - el.min), 0, 1), barY + 2, 4, Theme.text, 104, true, 0, 16, 0.95)
+                        local hovered = over(bx + 10, barY - 4, barW, 12) and not popupBlocking
+                        if held and (hovered or ProjectState.sliderDrag == el) then
+                            ProjectState.sliderDrag = el
+                            local newVal = el.min + clamp((ProjectState.mouseX - (bx + 10)) / barW, 0, 1) * (el.max - el.min)
+                            if el.step then
+                                newVal = math.floor(newVal / el.step + 0.5) * el.step
+                            end
+                            if el.value ~= newVal then
+                                el.value = newVal
+                                safeCallback(el.callback, newVal)
+                            end
+                        end
+                        currentY = currentY + 24
+                    end
+                end
+            end
+        end
+    end
+    return click
+end
+
 local function renderNotifications()
     local notifications = ProjectState.notifications or {}
+    while #notifications > 10 do
+        table.remove(notifications, 1)
+    end
     local width = 280
     local height = 52
     local i = 1
@@ -1222,7 +1370,7 @@ function UI:SetValue(path, value)
 end
 
 function UI:GetDrawing(kind)
-    return getDrawing(kind)
+    return getExternalDrawing(kind)
 end
 
 function UI:SetTitle(text)
@@ -2408,8 +2556,6 @@ local function renderTabs(click, px, py, pw)
         local active = ProjectState.activeTab == tab
         local screenX = contentX + tab.currentX - scrollX
         local hovered = over(screenX, py, tabW, TAB_H)
-        local targetHover = hovered and 1 or 0
-        tab.hoverAnim = smoothValue(tab.hoverAnim or targetHover, targetHover, 18)
 
         if click and hovered and not ProjectState.draggedTab then
             if ProjectState.activeTab ~= tab then
@@ -2469,9 +2615,6 @@ local function renderTabs(click, px, py, pw)
         if visible then
             local active = ProjectState.activeTab == tab
             local hovered = over(tx, py, tabW, TAB_H)
-            if not active and tab.hoverAnim and tab.hoverAnim > 0.05 then
-                rect(tx + 4, py + 3, tabW - 8, TAB_H - 6, Theme.surface3, 20, 10, 0.05 * tab.hoverAnim)
-            end
             if active then
                 targetPillX = tab.currentX - scrollX + 4
                 targetPillW = tabW - 8
@@ -2498,7 +2641,6 @@ local function renderTabs(click, px, py, pw)
     if ProjectState.currentPillX and ProjectState.currentPillW then
         rect(contentX + ProjectState.currentPillX, py + 3, ProjectState.currentPillW, TAB_H - 6, Theme.accent, 21, 10, 0.08)
         strokeRect(contentX + ProjectState.currentPillX, py + 3, ProjectState.currentPillW, TAB_H - 6, Theme.accent, 22, 10)
-        rect(contentX + ProjectState.currentPillX + 6, py + TAB_H - 2, ProjectState.currentPillW - 12, 2, Theme.accent, 23, 1)
     end
 
     return click
@@ -4531,6 +4673,7 @@ local function step()
     end
 
     renderNotifications()
+    click = renderCustomBoxes(click, held)
     hideUnused()
 end
 
@@ -4650,6 +4793,158 @@ local homesick = {}
 homesick.GetDrawing = function(self, kind)
     return UI:GetDrawing(kind)
 end
+
+homesick.CreateBox = function(self, config)
+    config = config or {}
+    local box = {
+        title = config.title,
+        showTopbar = config.showTopbar ~= false,
+        position = config.position or V2(100, 100),
+        size = config.size or V2(220, 75),
+        bgColor = parseColor(config.bgColor or Theme.surface),
+        borderColor = parseColor(config.borderColor or Theme.accent),
+        titleColor = parseColor(config.titleColor or Theme.text),
+        visible = config.visible == true,
+        elements = {},
+        elementOrder = {},
+    }
+    
+    function box:SetVisible(v)
+        self.visible = v == true
+        return self
+    end
+    
+    function box:SetPosition(pos)
+        self.position = pos
+        return self
+    end
+
+    function box:SetSize(sz)
+        self.size = sz
+        return self
+    end
+
+    function box:SetColor(bg, border)
+        if bg then
+            self.bgColor = parseColor(bg)
+        end
+        if border then
+            self.borderColor = parseColor(border)
+        end
+        return self
+    end
+    
+    function box:AddText(id, text, color, size, font, alignment)
+        if not self.elements[id] then
+            table.insert(self.elementOrder, id)
+        end
+        self.elements[id] = {
+            type = "text",
+            text = text or "",
+            color = parseColor(color or Theme.text),
+            size = size or 13,
+            font = font or FontSystem,
+            alignment = alignment or "center",
+        }
+        return self
+    end
+    
+    function box:SetText(id, text, color)
+        local el = self.elements[id]
+        if el then
+            el.text = text or el.text
+            if color then
+                el.color = parseColor(color)
+            end
+        end
+        return self
+    end
+    
+    function box:AddTimer(id, value, maxValue, color)
+        if not self.elements[id] then
+            table.insert(self.elementOrder, id)
+        end
+        self.elements[id] = {
+            type = "timer",
+            value = value or 0,
+            maxValue = maxValue or 1,
+            color = parseColor(color or Theme.accent),
+        }
+        return self
+    end
+    
+    function box:SetTimer(id, value, maxValue)
+        local el = self.elements[id]
+        if el then
+            el.value = value or el.value
+            el.maxValue = maxValue or el.maxValue
+        end
+        return self
+    end
+
+    function box:AddButton(id, label, callback)
+        if not self.elements[id] then
+            table.insert(self.elementOrder, id)
+        end
+        self.elements[id] = {
+            type = "button",
+            label = tostring(label or "Button"),
+            callback = callback,
+        }
+        return self
+    end
+
+    function box:AddCheckbox(id, label, default, callback)
+        if not self.elements[id] then
+            table.insert(self.elementOrder, id)
+        end
+        self.elements[id] = {
+            type = "checkbox",
+            label = tostring(label or "Checkbox"),
+            value = default == true,
+            callback = callback,
+            animState = default == true and 1 or 0,
+        }
+        return self
+    end
+
+    function box:AddSlider(id, label, default, minValue, maxValue, step, callback)
+        if not self.elements[id] then
+            table.insert(self.elementOrder, id)
+        end
+        self.elements[id] = {
+            type = "slider",
+            label = tostring(label or "Slider"),
+            value = tonumber(default) or tonumber(minValue) or 0,
+            min = tonumber(minValue) or 0,
+            max = tonumber(maxValue) or 100,
+            step = tonumber(step),
+            callback = callback,
+        }
+        return self
+    end
+    
+    function box:SetCheckbox(id, value)
+        local el = self.elements[id]
+        if el and el.type == "checkbox" then
+            el.value = value == true
+        end
+        return self
+    end
+    
+    function box:SetSlider(id, value)
+        local el = self.elements[id]
+        if el and el.type == "slider" then
+            el.value = clamp(tonumber(value) or el.value, el.min, el.max)
+        end
+        return self
+    end
+
+    ProjectState.customBoxes = ProjectState.customBoxes or {}
+    table.insert(ProjectState.customBoxes, box)
+    return box
+end
+homesick.CreateElement = homesick.CreateBox
 
 homesick.createWindow = function(title, width, height)
     UI:SetTitle(title)
