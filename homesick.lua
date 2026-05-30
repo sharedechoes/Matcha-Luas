@@ -24,12 +24,13 @@ local sin = math.sin
 local clock = os.clock
 local remove = table.remove
 local concat = table.concat
+_G.homesickFunctions = _G.homesickFunctions or {}
 _G.homesickOriginals = {
-    print = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.print and not _G.homesickOriginals.print.isHomesick) and _G.homesickOriginals.print or print,
-    warn = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.warn and not _G.homesickOriginals.warn.isHomesick) and _G.homesickOriginals.warn or warn,
-    printl = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.printl and not _G.homesickOriginals.printl.isHomesick) and _G.homesickOriginals.printl or printl,
-    notify = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.notify and not _G.homesickOriginals.notify.isHomesick) and _G.homesickOriginals.notify or notify,
-    isrbxactive = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.isrbxactive and not _G.homesickOriginals.isrbxactive.isHomesick) and _G.homesickOriginals.isrbxactive or isrbxactive
+    print = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.print and not _G.homesickFunctions[_G.homesickOriginals.print]) and _G.homesickOriginals.print or print,
+    warn = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.warn and not _G.homesickFunctions[_G.homesickOriginals.warn]) and _G.homesickOriginals.warn or warn,
+    printl = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.printl and not _G.homesickFunctions[_G.homesickOriginals.printl]) and _G.homesickOriginals.printl or printl,
+    notify = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.notify and not _G.homesickFunctions[_G.homesickOriginals.notify]) and _G.homesickOriginals.notify or notify,
+    isrbxactive = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.isrbxactive and not _G.homesickFunctions[_G.homesickOriginals.isrbxactive]) and _G.homesickOriginals.isrbxactive or isrbxactive
 }
 local exportConfig, importConfig, exportTheme, importTheme, smoothValue, toHex
 
@@ -4928,11 +4929,11 @@ newPrint = function(...)
     end
     UI:Notify("print", table.concat(strArgs, " "), 5)
     local orig = _G.homesickOriginals.print
-    if orig and orig ~= newPrint and not orig.isHomesick then
+    if orig and orig ~= newPrint and not _G.homesickFunctions[orig] then
         return orig(unpack(strArgs))
     end
 end
-newPrint.isHomesick = true
+_G.homesickFunctions[newPrint] = true
 _G.print = newPrint
 
 local newWarn
@@ -4943,11 +4944,11 @@ newWarn = function(...)
     end
     UI:Notify("warning", table.concat(strArgs, " "), 5)
     local orig = _G.homesickOriginals.warn
-    if orig and orig ~= newWarn and not orig.isHomesick then
+    if orig and orig ~= newWarn and not _G.homesickFunctions[orig] then
         return orig(unpack(strArgs))
     end
 end
-newWarn.isHomesick = true
+_G.homesickFunctions[newWarn] = true
 _G.warn = newWarn
 
 if type(printl) == "function" then
@@ -4959,11 +4960,11 @@ if type(printl) == "function" then
         end
         UI:Notify("print", table.concat(strArgs, " "), 5)
         local orig = _G.homesickOriginals.printl
-        if orig and orig ~= newPrintl and not orig.isHomesick then
+        if orig and orig ~= newPrintl and not _G.homesickFunctions[orig] then
             return orig(unpack(strArgs))
         end
     end
-    newPrintl.isHomesick = true
+    _G.homesickFunctions[newPrintl] = true
     _G.printl = newPrintl
 end
 
@@ -4974,11 +4975,11 @@ if type(notify) == "function" then
         local lowerTitle = string.lower(tostring(title or "notification"))
         UI:Notify(lowerTitle, lowerMsg, duration or 5)
         local orig = _G.homesickOriginals.notify
-        if orig and orig ~= newNotify and not orig.isHomesick then
+        if orig and orig ~= newNotify and not _G.homesickFunctions[orig] then
             return orig(message, title, duration)
         end
     end
-    newNotify.isHomesick = true
+    _G.homesickFunctions[newNotify] = true
     _G.notify = newNotify
 end
 
@@ -4989,12 +4990,12 @@ if _G.homesickOriginals and type(_G.homesickOriginals.isrbxactive) == "function"
             return true
         end
         local orig = _G.homesickOriginals.isrbxactive
-        if orig and orig ~= newIsRbxActive and not orig.isHomesick then
+        if orig and orig ~= newIsRbxActive and not _G.homesickFunctions[orig] then
             return orig()
         end
         return true
     end
-    newIsRbxActive.isHomesick = true
+    _G.homesickFunctions[newIsRbxActive] = true
     _G.isrbxactive = newIsRbxActive
 end
 
