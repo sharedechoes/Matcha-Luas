@@ -76,16 +76,15 @@ if uis then
     end)
 end
 
-
 local Fonts = (type(Drawing) == "table" and Drawing.Fonts) or {}
 local FontSystem = Fonts.System or Fonts.UI or 0
 local FontBold = Fonts.SystemBold or FontSystem
 local FontUI = Fonts.UI or FontSystem
 
 local FontWidths = {}
-FontWidths[FontSystem] = 0.52
-FontWidths[FontBold] = 0.56
-FontWidths[FontUI] = 0.54
+FontWidths[FontSystem] = 0.48
+FontWidths[FontBold] = 0.52
+FontWidths[FontUI] = 0.50
 
 local DRAW_VISIBLE = 1
 local FRAME_WAIT = 1 / 240
@@ -581,7 +580,7 @@ local function strokeRect(x, y, w, h, color, z, radius, transparency)
 end
 
 local function textWidth(value, size, font)
-    local multiplier = FontWidths[font] or 0.52
+    local multiplier = FontWidths[font] or 0.48
     return #tostring(value or "") * ((size or 13) * multiplier)
 end
 
@@ -590,7 +589,7 @@ local function trimText(value, maxWidth, size, font)
     if maxWidth <= 0 then
         return ""
     end
-    local multiplier = FontWidths[font] or 0.52
+    local multiplier = FontWidths[font] or 0.48
     local maxChars = floor(maxWidth / ((size or 13) * multiplier))
     if maxChars <= 0 then
         return ""
@@ -604,14 +603,12 @@ local function trimText(value, maxWidth, size, font)
     return string.sub(value, 1, maxChars - 2) .. ".."
 end
 
--- wrap text into lines that fit maxWidth; returns table of lines and total count
 local function wrapLines(value, maxWidth, size, font)
     value = tostring(value or "")
-    local multiplier = FontWidths[font] or 0.52
+    local multiplier = FontWidths[font] or 0.48
     local charW = (size or 13) * multiplier
     local maxChars = math.max(1, floor(maxWidth / charW))
     local lines = {}
-    -- split by spaces and wrap
     local words = {}
     for w in string.gmatch(value, "%S+") do
         words[#words + 1] = w
@@ -629,7 +626,6 @@ local function wrapLines(value, maxWidth, size, font)
             if currentLine ~= "" then
                 lines[#lines + 1] = currentLine
             end
-            -- if single word too long, break it
             if #word > maxChars then
                 while #word > maxChars do
                     lines[#lines + 1] = string.sub(word, 1, maxChars)
@@ -752,49 +748,37 @@ local function drawImage(data, x, y, w, h, z, trans)
     return obj
 end
 
--- Primitive icon drawing helpers (no image loading, no flicker)
 local function drawLockIcon(x, y, color, z, trans, unlocked)
+    rect(x + 2, y + 5, 8, 6, color, z, 1, trans)
+    line(x + 3, y + 5, x + 3, y + 2, color, z, 1.5, trans)
+    line(x + 3, y + 2, x + 9, y + 2, color, z, 1.5, trans)
     if unlocked then
-        line(x + 3, y + 5, x + 3, y + 2, color, z, 1.5, trans)
-        line(x + 3, y + 2, x + 7, y + 2, color, z, 1.5, trans)
-        line(x + 7, y + 2, x + 7, y + 4, color, z, 1.5, trans)
+        line(x + 9, y + 2, x + 9, y + 3, color, z, 1.5, trans)
     else
-        line(x + 3, y + 5, x + 3, y + 2, color, z, 1.5, trans)
-        line(x + 3, y + 2, x + 7, y + 2, color, z, 1.5, trans)
-        line(x + 7, y + 2, x + 7, y + 5, color, z, 1.5, trans)
+        line(x + 9, y + 2, x + 9, y + 5, color, z, 1.5, trans)
     end
-    rect(x + 1, y + 5, 8, 6, color, z, 2, trans)
-    circle(x + 5, y + 8, 1, Theme.bg, z + 1, true, 0, 8, trans)
 end
 
 local function drawExportIcon(x, y, color, z, trans)
     line(x + 5, y + 1, x + 5, y + 7, color, z, 1.5, trans)
     line(x + 2, y + 4, x + 5, y + 1, color, z, 1.5, trans)
     line(x + 8, y + 4, x + 5, y + 1, color, z, 1.5, trans)
-    line(x + 1, y + 8, x + 1, y + 11, color, z, 1.5, trans)
-    line(x + 9, y + 8, x + 9, y + 11, color, z, 1.5, trans)
-    line(x + 1, y + 11, x + 9, y + 11, color, z, 1.5, trans)
+    line(x + 1, y + 9, x + 9, y + 9, color, z, 1.5, trans)
 end
 
 local function drawImportIcon(x, y, color, z, trans)
     line(x + 5, y + 1, x + 5, y + 7, color, z, 1.5, trans)
     line(x + 2, y + 4, x + 5, y + 7, color, z, 1.5, trans)
     line(x + 8, y + 4, x + 5, y + 7, color, z, 1.5, trans)
-    line(x + 1, y + 8, x + 1, y + 11, color, z, 1.5, trans)
-    line(x + 9, y + 8, x + 9, y + 11, color, z, 1.5, trans)
-    line(x + 1, y + 11, x + 9, y + 11, color, z, 1.5, trans)
+    line(x + 1, y + 9, x + 9, y + 9, color, z, 1.5, trans)
 end
 
 local function drawTrashIcon(x, y, color, z, trans)
     line(x + 1, y + 2, x + 9, y + 2, color, z, 1.5, trans)
     line(x + 4, y, x + 6, y, color, z, 1.5, trans)
-    line(x + 4, y, x + 4, y + 2, color, z, 1.5, trans)
-    line(x + 6, y, x + 6, y + 2, color, z, 1.5, trans)
-    line(x + 2, y + 3, x + 2, y + 10, color, z, 1.5, trans)
-    line(x + 8, y + 3, x + 8, y + 10, color, z, 1.5, trans)
-    line(x + 2, y + 10, x + 8, y + 10, color, z, 1.5, trans)
-    line(x + 4, y + 4, x + 4, y + 9, color, z, 1, trans * 0.7)
-    line(x + 6, y + 4, x + 6, y + 9, color, z, 1, trans * 0.7)
+    line(x + 2, y + 3, x + 3, y + 9, color, z, 1.5, trans)
+    line(x + 8, y + 3, x + 7, y + 9, color, z, 1.5, trans)
+    line(x + 3, y + 9, x + 7, y + 9, color, z, 1.5, trans)
 end
 
 local function renderNotifications()
@@ -918,6 +902,8 @@ local function setItemValue(item, value, fire)
         value = value == true
     elseif item.type == "textbox" then
         value = tostring(value or "")
+    elseif item.type == "checkbox" then
+        value = value == true
     end
 
     local changed = item.value ~= value
@@ -1526,7 +1512,6 @@ end
 local function processTextInput()
     if Input.tab.click then
         local items = getFocusableItems()
-        -- only cycle if already focused on a textbox
         local currentIdx = nil
         for i = 1, #items do
             if items[i] == ProjectState.focus then
@@ -1547,11 +1532,9 @@ local function processTextInput()
             ProjectState.focus = items[nextIdx]
             Input.tab.click = false
         elseif currentIdx then
-            -- only one textbox, unfocus on tab
             ProjectState.focus = nil
             Input.tab.click = false
         end
-        -- if not focused on anything, tab does nothing (don't auto-focus first textbox)
     end
 
     local item = ProjectState.focus
@@ -1900,17 +1883,6 @@ local function dDropdown(kind, x, y, w, choices, value, multi, callback, item, k
     }
     ProjectState.colorpicker = nil
 end
-
-local PRESET_SWATCHES = {
-    C3(0, 122, 255),
-    C3(114, 178, 21),
-    C3(255, 69, 58),
-    C3(255, 204, 0),
-    C3(255, 105, 180),
-    C3(160, 32, 240),
-    C3(255, 255, 255),
-    C3(0, 0, 0)
-}
 
 local function doColorPicker(x, y, picker)
     local h, s, v = toHsv(picker.value)
@@ -2586,7 +2558,7 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
     return click, rightClick
 end
 
-local function getItemHeight(item)
+local function getItemHeight(item, rowW)
     if item.type == "slider" then
         return 38
     elseif item.type == "dropdown" then
@@ -2594,9 +2566,9 @@ local function getItemHeight(item)
     elseif item.type == "textbox" then
         return 44
     elseif item.type == "label" then
-        -- use cached line count if available (set during render)
-        local lineCount = item._cachedLineCount or 1
-        return math.max(28, lineCount * 16 + 8)
+        local labelLines = wrapLines(item.label, rowW or 1000, 13, FontSystem)
+        item._cachedLineCount = #labelLines
+        return math.max(28, #labelLines * 16 + 8)
     end
     return 28
 end
@@ -2604,7 +2576,7 @@ end
 local function draw9Dot(x, y, color, z, trans)
     for row = 0, 2 do
         for col = 0, 2 do
-            circle(x + col * 3, y + row * 3, 1, color, z, true, 0, 8, trans)
+            circle(x + col * 3 + 1, y + row * 3 + 1, 1, color, z, true, 0, 8, trans)
         end
     end
 end
@@ -2695,24 +2667,22 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             txt(section.name, colX + 12, sy + 8, Theme.accent, 13, FontBold, z + 2, false, false, nil, hTrans)
             
             local showLock = section.allowLocking ~= false
-            -- 9-dot grab handle (primitive)
+            
             draw9Dot(colX + colW - 20, sy + 10, (showLock and section.locked) and C3(80, 75, 73) or Theme.sub, z + 2, hTrans)
             if showLock then
-                drawLockIcon(colX + colW - 38, sy + 8, section.locked and Theme.accent or Theme.sub, z + 2, section.locked and hTrans or hTrans * 0.5, not section.locked)
+                drawLockIcon(colX + colW - 38, sy + 10, section.locked and Theme.accent or Theme.sub, z + 2, section.locked and hTrans or hTrans * 0.5, not section.locked)
             end
 
             if section.name == "Configs" or section.name == "Themes" then
-                -- export icon (up arrow with tray)
                 local expX = colX + colW - 54
                 local expHovered = not popupBlocking and over(expX - 3, sy + 4, 14, 14) and headerTrans > 0.5
                 local expColor = expHovered and Theme.accent or Theme.sub
-                drawExportIcon(expX - 2, sy + 3, expColor, z + 2, hTrans * (expHovered and 1 or 0.6))
+                drawExportIcon(expX - 2, sy + 10, expColor, z + 2, hTrans * (expHovered and 1 or 0.6))
 
-                -- import icon (down arrow with tray)
                 local impX = colX + colW - 70
                 local impHovered = not popupBlocking and over(impX - 3, sy + 4, 14, 14) and headerTrans > 0.5
                 local impColor = impHovered and Theme.accent or Theme.sub
-                drawImportIcon(impX - 2, sy + 3, impColor, z + 2, hTrans * (impHovered and 1 or 0.6))
+                drawImportIcon(impX - 2, sy + 10, impColor, z + 2, hTrans * (impHovered and 1 or 0.6))
 
                 if not isFloating and click and headerTrans > 0.5 then
                     if expHovered then
@@ -2786,7 +2756,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
         
         for ii = 1, #section.items do
             local item = section.items[ii]
-            local itemH = getItemHeight(item)
+            local itemH = getItemHeight(item, rowW)
             local disabled = isItemDisabled(item)
             local trans = (disabled and 0.4 or 1) * cardTrans * min(clamp((rowY - cardClipTop) / 16, 0, 1), clamp((cardClipBottom - (rowY + itemH)) / 16, 0, 1))
             if rowY + itemH > sy + secH - 4 then
@@ -2795,7 +2765,6 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             
             if trans > 0 then
                 if item.type == "label" then
-                    -- wrapped label rendering - cache line count for getItemHeight
                     local labelLines = wrapLines(item.label, rowW, 13, FontSystem)
                     item._cachedLineCount = #labelLines
                     for li = 1, #labelLines do
@@ -2803,23 +2772,14 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     end
                     
                 elseif item.type == "checkbox" then
-                    -- toggle animation: ripple from center on value change
-                    if item._prevValue ~= item.value then
-                        item._toggleAnimAt = clock()
-                        item._prevValue = item.value
-                    end
-                    local toggleAnimT = 0
-                    if item._toggleAnimAt and (ProjectState.hoverEffects ~= false) then
-                        toggleAnimT = clamp((clock() - item._toggleAnimAt) / 0.25, 0, 1)
-                    end
+                    item.animState = smoothValue(item.animState or (item.value and 1 or 0), item.value and 1 or 0, 18)
                     local cbX, cbY = rowX + 4, rowY + 6
-                    local cbCX, cbCY = cbX + 7, cbY + 7
-                    rect(cbX, cbY, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
-                    strokeRect(cbX, cbY, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
-                    if toggleAnimT > 0 and toggleAnimT < 1 then
-                        local rippleR = toggleAnimT * 10
-                        local rippleTrans = trans * (1 - toggleAnimT) * 0.6
-                        circle(cbCX, cbCY, rippleR, item.value and Theme.accent or Theme.sub, z + 14, false, 1.5, 24, rippleTrans)
+                    rect(cbX, cbY, 14, 14, Theme.surface3, z + 12, 4, trans)
+                    strokeRect(cbX, cbY, 14, 14, Theme.border, z + 13, 4, trans)
+                    
+                    if item.animState > 0.05 then
+                        local offset = 7 * (1 - item.animState)
+                        rect(cbX + offset, cbY + offset, 14 * item.animState, 14 * item.animState, Theme.accent, z + 14, 4 * item.animState, trans)
                     end
                     
                     local cbExtra = 6
@@ -2852,29 +2812,17 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     end
                     
                 elseif item.type == "toggle" then
-                    if item._prevValue ~= item.value then
-                        item._toggleAnimAt = clock()
-                        item._prevValue = item.value
-                    end
-                    local toggleAnimT = 0
-                    if item._toggleAnimAt and (ProjectState.hoverEffects ~= false) then
-                        toggleAnimT = clamp((clock() - item._toggleAnimAt) / 0.25, 0, 1)
-                    end
+                    item.animState = smoothValue(item.animState or (item.value and 1 or 0), item.value and 1 or 0, 18)
                     local tgX, tgY = rowX + 4, rowY + 6
-                    local tgCX, tgCY = tgX + 7, tgY + 7
-                    rect(tgX, tgY, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
-                    strokeRect(tgX, tgY, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
-                    if toggleAnimT > 0 and toggleAnimT < 1 then
-                        local rippleR = toggleAnimT * 10
-                        local rippleTrans = trans * (1 - toggleAnimT) * 0.6
-                        circle(tgCX, tgCY, rippleR, item.value and Theme.accent or Theme.sub, z + 14, false, 1.5, 24, rippleTrans)
-                    end
+                    rect(tgX, tgY + 1, 24, 12, lerpColor(Theme.surface3, Theme.accent, item.animState), z + 12, 6, trans)
+                    strokeRect(tgX, tgY + 1, 24, 12, lerpColor(Theme.border, Theme.accent, item.animState), z + 13, 6, trans)
+                    circle(tgX + 6 + 12 * item.animState, tgY + 7, 4, Theme.text, z + 14, true, 0, 32, trans)
                     
-                    local tgExtra = 6
+                    local tgExtra = 16
                     if item.colorpicker then tgExtra = tgExtra + 20 end
                     if item.keybind then tgExtra = tgExtra + 64 end
                     if item.tooltip then tgExtra = tgExtra + 18 end
-                    txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - tgExtra, trans)
+                    txt(item.label, rowX + 36, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 36 - tgExtra, trans)
                     
                     if not isFloating then
                         click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
@@ -2986,6 +2934,19 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     local dy_box = rowY + 18
                     local boxH = 22
                     
+                    if item.deletable then
+                        dw = dw - 24
+                        local trashX = dx + dw + 4
+                        local trashHovered = over(trashX, dy_box, 20, boxH)
+                        rect(trashX, dy_box, 20, boxH, trashHovered and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
+                        strokeRect(trashX, dy_box, 20, boxH, trashHovered and Theme.red or Theme.border, z + 13, 4, trans)
+                        drawTrashIcon(trashX + 5, dy_box + 5, trashHovered and Theme.red or Theme.sub, z + 14, trans)
+                        if click and trashHovered and not popupBlocking and not disabled and trans > 0.5 then
+                            if item.onDelete then item.onDelete(item.value[1]) end
+                            click = false
+                        end
+                    end
+                    
                     rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
                     strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
                     
@@ -3096,10 +3057,12 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     local leftTotal = 0
     for i = 1, #leftSecs do
         local sec = leftSecs[i]
+        local colW = (sec.side == "Full") and pw or floor((pw - 10) / 2)
+        local rowW = colW - 24
         local secH = sec.customHeight or 28
         if not sec.customHeight then
             for ii = 1, #sec.items do
-                secH = secH + getItemHeight(sec.items[ii])
+                secH = secH + getItemHeight(sec.items[ii], rowW)
             end
             secH = secH + 6
         end
@@ -3110,10 +3073,12 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     local rightTotal = 0
     for i = 1, #rightSecs do
         local sec = rightSecs[i]
+        local colW = (sec.side == "Full") and pw or floor((pw - 10) / 2)
+        local rowW = colW - 24
         local secH = sec.customHeight or 28
         if not sec.customHeight then
             for ii = 1, #sec.items do
-                secH = secH + getItemHeight(sec.items[ii])
+                secH = secH + getItemHeight(sec.items[ii], rowW)
             end
             secH = secH + 6
         end
@@ -3563,6 +3528,17 @@ local function initSettings()
     local configSection = createSection(settingsTab, "Configs", "Left")
     local configDropdown = configSection:Dropdown("Config List", getConfigsList(), getConfigsList())
     configDropdown:Set("")
+    
+    configDropdown.item.deletable = true
+    configDropdown.item.onDelete = function(name)
+        if name and name ~= "" then
+            pcall(delfile, "homesick/" .. name .. ".json")
+            configDropdown:UpdateChoices(getConfigsList())
+            configDropdown:Set({})
+            if warn then warn("deleted config " .. name) end
+        end
+    end
+    
     local configNameBox = configSection:Textbox("Config Name", "")
     configNameBox:Set("")
 
@@ -3575,9 +3551,6 @@ local function initSettings()
             local ok, raw = pcall(readfile, "homesick/" .. name .. ".json")
             if ok and ok == ok and raw then
                 loadConfig(raw)
-                warn("loaded config " .. name .. " no cap")
-            else
-                warn("failed to load " .. name .. " sadge")
             end
         end
     end)
@@ -3591,23 +3564,24 @@ local function initSettings()
             if json and json ~= "" then
                 pcall(writefile, "homesick/" .. name .. ".json", json)
                 configDropdown:UpdateChoices(getConfigsList())
-                warn("saved config " .. name .. " lol")
             end
-        end
-    end)
-    configSection:Button("Delete Selected", function()
-        local name = configDropdown.item.value[1]
-        if name and name ~= "" then
-            pcall(delfile, "homesick/" .. name .. ".json")
-            configDropdown:UpdateChoices(getConfigsList())
-            configDropdown:Set({})
-            warn("deleted config " .. name .. " rip")
         end
     end)
 
     local themeSection = createSection(settingsTab, "Themes", "Right")
     local themeDropdown = themeSection:Dropdown("Theme List", getThemesList(), getThemesList())
     themeDropdown:Set("")
+    
+    themeDropdown.item.deletable = true
+    themeDropdown.item.onDelete = function(name)
+        if name and name ~= "" then
+            pcall(delfile, "homesick/themes/" .. name .. ".json")
+            themeDropdown:UpdateChoices(getThemesList())
+            themeDropdown:Set({})
+            if warn then warn("deleted theme " .. name) end
+        end
+    end
+    
     local themeNameBox = themeSection:Textbox("Theme Name", "")
     themeNameBox:Set("")
 
@@ -3620,9 +3594,6 @@ local function initSettings()
             local ok, raw = pcall(readfile, "homesick/themes/" .. name .. ".json")
             if ok and ok == ok and raw then
                 loadTheme(raw)
-                warn("loaded theme " .. name .. " lol")
-            else
-                warn("failed load " .. name .. " rip")
             end
         end
     end)
@@ -3640,17 +3611,7 @@ local function initSettings()
             if json and json ~= "" then
                 pcall(writefile, "homesick/themes/" .. name .. ".json", json)
                 themeDropdown:UpdateChoices(getThemesList())
-                warn("saved theme " .. name .. " lol")
             end
-        end
-    end)
-    themeSection:Button("Delete Selected", function()
-        local name = themeDropdown.item.value[1]
-        if name and name ~= "" then
-            pcall(delfile, "homesick/themes/" .. name .. ".json")
-            themeDropdown:UpdateChoices(getThemesList())
-            themeDropdown:Set({})
-            warn("deleted theme " .. name .. " rip")
         end
     end)
 
@@ -3699,19 +3660,49 @@ end
 local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightClick, clipTop, clipBottom)
     local z = 40
     local disabled = isItemDisabled(item)
-    local trans = (disabled and 0.4 or 1) * min(clamp((rowY - clipTop) / 16, 0, 1), clamp((clipBottom - (rowY + getItemHeight(item))) / 16, 0, 1))
+    local trans = (disabled and 0.4 or 1) * min(clamp((rowY - clipTop) / 16, 0, 1), clamp((clipBottom - (rowY + getItemHeight(item, rowW))) / 16, 0, 1))
     if trans <= 0 then
         return click, held, rightClick
     end
     
-    local itemH = getItemHeight(item)
+    local itemH = getItemHeight(item, rowW)
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
     
-    if item.type == "checkbox" or item.type == "toggle" then
-        rect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.surface3, z + 12, 4, trans)
-        strokeRect(rowX + 4, rowY + 6, 14, 14, item.value and Theme.accent or Theme.border, z + 13, 4, trans)
+    if item.type == "checkbox" then
+        item.animState = smoothValue(item.animState or (item.value and 1 or 0), item.value and 1 or 0, 18)
+        rect(rowX + 4, rowY + 6, 14, 14, Theme.surface3, z + 12, 4, trans)
+        strokeRect(rowX + 4, rowY + 6, 14, 14, Theme.border, z + 13, 4, trans)
+        
+        if item.animState > 0.05 then
+            local offset = 7 * (1 - item.animState)
+            rect(rowX + 4 + offset, rowY + 6 + offset, 14 * item.animState, 14 * item.animState, Theme.accent, z + 14, 4 * item.animState, trans)
+        end
         
         txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - (6 + (item.colorpicker and 20 or 0) + (item.keybind and 64 or 0) + (item.tooltip and 18 or 0)), trans)
+        
+        click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
+        
+        if item.tooltip then
+            txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), over(rowX + rowW - 16, rowY + 6, 12, 12) and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
+            if over(rowX + rowW - 16, rowY + 6, 12, 12) and not disabled then
+                tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
+            end
+        end
+        
+        if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled and trans > 0.5 then
+            if not (item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)) and not (item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)) and not (item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)) then
+                setItemValue(item, not item.value, true)
+                click = false
+            end
+        end
+        
+    elseif item.type == "toggle" then
+        item.animState = smoothValue(item.animState or (item.value and 1 or 0), item.value and 1 or 0, 18)
+        rect(rowX + 4, rowY + 7, 24, 12, lerpColor(Theme.surface3, Theme.accent, item.animState), z + 12, 6, trans)
+        strokeRect(rowX + 4, rowY + 7, 24, 12, lerpColor(Theme.border, Theme.accent, item.animState), z + 13, 6, trans)
+        circle(rowX + 10 + 12 * item.animState, rowY + 13, 4, Theme.text, z + 14, true, 0, 32, trans)
+        
+        txt(item.label, rowX + 36, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 36 - (6 + (item.colorpicker and 20 or 0) + (item.keybind and 64 or 0) + (item.tooltip and 18 or 0)), trans)
         
         click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
         
@@ -3813,6 +3804,19 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         local dx, dw = rowX + 4, rowW - 8
         local dy_box = rowY + 18
         local boxH = 22
+        
+        if item.deletable then
+            dw = dw - 24
+            local trashX = dx + dw + 4
+            local trashHovered = over(trashX, dy_box, 20, boxH)
+            rect(trashX, dy_box, 20, boxH, trashHovered and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
+            strokeRect(trashX, dy_box, 20, boxH, trashHovered and Theme.red or Theme.border, z + 13, 4, trans)
+            drawTrashIcon(trashX + 5, dy_box + 5, trashHovered and Theme.red or Theme.sub, z + 14, trans)
+            if click and trashHovered and not popupBlocking and not disabled and trans > 0.5 then
+                if item.onDelete then item.onDelete(item.value[1]) end
+                click = false
+            end
+        end
         
         rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
         strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
@@ -3917,7 +3921,7 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
             dummyY = dummyY + 18
             lastSec = match.section
         end
-        dummyY = dummyY + getItemHeight(match.item) + 6
+        dummyY = dummyY + getItemHeight(match.item, pw - 40) + 6
         if i < #matches then
             dummyY = dummyY + 6
         end
@@ -3982,10 +3986,11 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
             lastSec = match.section
         end
         
-        if min(currentY + getItemHeight(match.item), clipBottom) - max(currentY, clipTop) > 0 then
+        local itemH = getItemHeight(match.item, pw - 40)
+        if min(currentY + itemH, clipBottom) - max(currentY, clipTop) > 0 then
             click, held, rightClick = renderSearchFeature(match.item, px + 10, currentY, pw - 20, click, held, rightClick, clipTop, clipBottom)
         end
-        currentY = currentY + getItemHeight(match.item) + 6
+        currentY = currentY + itemH + 6
         
         if i < #matches then
             local divTrans = min(clamp((currentY - clipTop) / 16, 0, 1), clamp((clipBottom - (currentY + 6)) / 16, 0, 1))
@@ -4138,19 +4143,18 @@ local function renderWindow(click, held, rightClick)
         if ProjectState.settingsActive then
             ProjectState.searchBar.active = false
             ProjectState.searchBar.value = ""
-            -- save original size and target a wider window
             ProjectState.preSettingsH = ProjectState.h
             ProjectState.preSettingsW = ProjectState.w
-            -- target: enough width for left+right columns to be comfortably visible
             local targetW = math.max(ProjectState.w, 500)
             local targetH = ProjectState.h
-            -- estimate content height from sections
             if ProjectState.settingsTab then
                 local leftH, rightH = 0, 0
                 for _, sec in ipairs(ProjectState.settingsTab.sections) do
                     local secH = 28
+                    local colW = (sec.side == "Full") and targetW or floor((targetW - 10) / 2)
+                    local rowW = colW - 24
                     for _, item in ipairs(sec.items) do
-                        secH = secH + (sec.customHeight and 0 or getItemHeight(item))
+                        secH = secH + (sec.customHeight and 0 or getItemHeight(item, rowW))
                     end
                     secH = secH + 6
                     if sec.side == "Right" then
@@ -4163,7 +4167,6 @@ local function renderWindow(click, held, rightClick)
                     end
                 end
                 local needed = math.max(leftH, rightH)
-                -- content area = h - TITLE_H - PAD*2 - TAB_H - 8 - 24
                 local contentArea = ProjectState.h - 36 - 20 - 30 - 8 - 24
                 if needed > contentArea then
                     targetH = math.min(ProjectState.h + (needed - contentArea) + 20, 750)
@@ -4172,7 +4175,6 @@ local function renderWindow(click, held, rightClick)
             ProjectState.settingsTargetW = targetW
             ProjectState.settingsTargetH = targetH
         else
-            -- restore original size
             ProjectState.settingsTargetW = ProjectState.preSettingsW or ProjectState.w
             ProjectState.settingsTargetH = ProjectState.preSettingsH or ProjectState.defaultH or ProjectState.h
         end
@@ -4197,7 +4199,6 @@ local function renderWindow(click, held, rightClick)
         baseClick = false
     end
 
-    -- smooth settings window resize (both width and height)
     if ProjectState.settingsTargetW then
         ProjectState.w = smoothValue(ProjectState.w, ProjectState.settingsTargetW, 14)
         if math.abs(ProjectState.w - ProjectState.settingsTargetW) < 0.5 then
@@ -4647,7 +4648,6 @@ local function runStepSafe()
         ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
         if now - ProjectState.lastErrorAt > 1 then
             ProjectState.lastErrorAt = now
-            warn("homesick step error " .. tostring(err) .. " rip")
         end
         setrobloxinput(true)
         ProjectState.inputState = true
