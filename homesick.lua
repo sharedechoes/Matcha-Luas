@@ -4613,67 +4613,6 @@ local function step()
     hideUnused()
 end
 
-function UI:Demo()
-    if ProjectState.demoLoaded then
-        return self
-    end
-
-    ProjectState.demoLoaded = true
-    self:SetTitle("homesick")
-    self:SetSize(400, 500)
-    self:Center()
-
-    local playground = self:Tab("Playground")
-    local controls = playground:Section("Section 1")
-
-    controls:Label("homesick Test", Theme.accent)
-    local toggleOne = controls:Toggle("Toggle #1", false, nil, true, "This feature has a tooltip")
-    local key = toggleOne:AddKeybind(nil, "Hold", true)
-    local toggleTwo = controls:Toggle("Toggle #2", false)
-    local color = toggleTwo:AddColorpicker("ESP Color", Theme.white, true)
-    local textBox = controls:Textbox("Hint", "")
-    local slider = controls:Slider("Drag me", 10, 1, 1, 360, "deg")
-    local dropdown = controls:Dropdown("Pick me", {"1"}, {"1", "2", "3", "4", "5", "verybigitem"}, false)
-    local multi = controls:Dropdown("Multi pick", {"A"}, {"A", "B", "C"}, true)
-
-    controls:Divider("Actions")
-    controls:Button("Rollback", function()
-        toggleOne:Set(false)
-        key:Set(nil, "Hold")
-        toggleTwo:Set(false)
-        color:Set(Theme.white)
-        textBox:Set("")
-        slider:Set(100)
-        dropdown:Set({"1"})
-        multi:Set({"A"})
-    end)
-
-    local anims = playground:Section("Section 2")
-    local shouldAnimate = false
-    local animToggle = anims:Toggle("Playing", shouldAnimate, function(value)
-        shouldAnimate = value
-    end)
-    local animSlider = anims:Slider("Meter", 0, 1, -100, 100, "%")
-    anims:Button("Stop", function()
-        animToggle:Set(false)
-    end)
-
-    self:RegisterActivity(function()
-        if shouldAnimate then
-            animSlider:Set(floor(sin(clock() * 8) * 100 + 0.0001))
-        end
-    end)
-
-    playground:Section("Section 3")
-    playground:Section("Section 4")
-    self:Tab("Another tab")
-    self:Tab("Tabs")
-
-    applyInputState(true)
-
-    return self
-end
-
 local RunService = game:GetService("RunService")
 
 local function runStepSafe()
@@ -4986,4 +4925,10 @@ end
 if _G.homesickOriginals and type(_G.homesickOriginals.isrbxactive) == "function" then
     _G.isrbxactive = function()
         if ProjectState.isrbxactiveOverride then
-ride then
+            return true
+        end
+        return _G.homesickOriginals.isrbxactive()
+    end
+end
+
+return homesick
