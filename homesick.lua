@@ -62,9 +62,7 @@ local Workspace = workspace
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer and LocalPlayer:GetMouse()
 local homesickInstanceId = tick()
-if LocalPlayer then
-    LocalPlayer:SetAttribute("homesickRunning", homesickInstanceId)
-end
+_G.homesickInstanceId = homesickInstanceId
 
 local mouseScroll = 0
 local uis = game:GetService("UserInputService")
@@ -4751,7 +4749,7 @@ end
 local RunService = game:GetService("RunService")
 
 local function runStepSafe()
-    if LocalPlayer and LocalPlayer:GetAttribute("homesickRunning") ~= homesickInstanceId then
+    if _G.homesickInstanceId ~= homesickInstanceId then
         ProjectState.alive = false
     end
     if not ProjectState.alive then
