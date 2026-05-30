@@ -749,36 +749,34 @@ local function drawImage(data, x, y, w, h, z, trans)
 end
 
 local function drawLockIcon(x, y, color, z, trans, unlocked)
-    rect(x + 1, y + 5, 8, 5, color, z, 2, trans)
-    line(x + 2, y + 5, x + 2, y + 2, color, z, 1.5, trans)
-    line(x + 2, y + 2, x + 7, y + 2, color, z, 1.5, trans)
+    rect(x + 1, y + 4, 8, 6, color, z, 2, trans)
+    line(x + 3, y + 4, x + 3, y + 2, color, z, 1.5, trans)
+    line(x + 3, y + 2, x + 6, y + 2, color, z, 1.5, trans)
     if unlocked then
-        line(x + 7, y + 2, x + 7, y + 3, color, z, 1.5, trans)
+        line(x + 6, y + 2, x + 6, y + 3, color, z, 1.5, trans)
     else
-        line(x + 7, y + 2, x + 7, y + 5, color, z, 1.5, trans)
+        line(x + 6, y + 2, x + 6, y + 4, color, z, 1.5, trans)
     end
 end
 
 local function drawExportIcon(x, y, color, z, trans)
-    line(x + 5, y + 8, x + 5, y + 2, color, z, 1.5, trans)
-    line(x + 2, y + 5, x + 5, y + 2, color, z, 1.5, trans)
-    line(x + 8, y + 5, x + 5, y + 2, color, z, 1.5, trans)
-    line(x + 1, y + 10, x + 9, y + 10, color, z, 1.5, trans)
+    line(x + 5, y + 9, x + 5, y + 3, color, z, 1.5, trans)
+    line(x + 2, y + 6, x + 5, y + 3, color, z, 1.5, trans)
+    line(x + 8, y + 6, x + 5, y + 3, color, z, 1.5, trans)
+    line(x + 2, y + 11, x + 8, y + 11, color, z, 1.5, trans)
 end
 
 local function drawImportIcon(x, y, color, z, trans)
-    line(x + 5, y + 2, x + 5, y + 8, color, z, 1.5, trans)
-    line(x + 2, y + 5, x + 5, y + 8, color, z, 1.5, trans)
-    line(x + 8, y + 5, x + 5, y + 8, color, z, 1.5, trans)
-    line(x + 1, y + 10, x + 9, y + 10, color, z, 1.5, trans)
+    line(x + 5, y + 3, x + 5, y + 9, color, z, 1.5, trans)
+    line(x + 2, y + 6, x + 5, y + 9, color, z, 1.5, trans)
+    line(x + 8, y + 6, x + 5, y + 9, color, z, 1.5, trans)
+    line(x + 2, y + 11, x + 8, y + 11, color, z, 1.5, trans)
 end
 
 local function drawTrashIcon(x, y, color, z, trans)
-    line(x + 4, y, x + 6, y, color, z, 1.5, trans)
-    line(x + 2, y + 2, x + 8, y + 2, color, z, 1.5, trans)
-    line(x + 3, y + 3, x + 3, y + 9, color, z, 1.5, trans)
-    line(x + 7, y + 3, x + 7, y + 9, color, z, 1.5, trans)
-    line(x + 3, y + 9, x + 7, y + 9, color, z, 1.5, trans)
+    line(x + 4, y + 1, x + 6, y + 1, color, z, 1.5, trans)
+    line(x + 2, y + 3, x + 8, y + 3, color, z, 1.5, trans)
+    strokeRect(x + 2, y + 4, 6, 6, color, z, 2, trans)
 end
 
 local function renderNotifications()
@@ -4719,7 +4717,7 @@ homesick.createWindow = function(title, width, height)
                 local widgetWrap = {
                     id = id,
                     type = "Toggle",
-                    rawItem = sSelf.rawSec:Toggle(label, default, callback)
+                    rawItem = sSelf.rawSec:Checkbox(label, default, callback)
                 }
                 
                 widgetWrap.addTooltip = function(wSelf, text)
@@ -4818,6 +4816,26 @@ homesick.createWindow = function(title, width, height)
                 
                 widgetWrap.addTooltip = function(wSelf, text)
                     wSelf.rawItem.item.tooltip = text
+                    return wSelf
+                end
+                
+                return widgetWrap
+            end
+            
+            secWrap.addMultiDropdown = function(sSelf, id, label, choices, default, callback)
+                local widgetWrap = {
+                    id = id,
+                    type = "MultiDropdown",
+                    rawItem = sSelf.rawSec:Dropdown(label, default, choices, true, callback)
+                }
+                
+                widgetWrap.addTooltip = function(wSelf, text)
+                    wSelf.rawItem.item.tooltip = text
+                    return wSelf
+                end
+                
+                widgetWrap.updateChoices = function(wSelf, newChoices)
+                    wSelf.rawItem:UpdateChoices(newChoices)
                     return wSelf
                 end
                 
