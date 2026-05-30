@@ -74,7 +74,6 @@ font_widths[font_ui] = 0.50
 
 local menu_key = "p"
 
-
 local shadow_alpha = {0.10, 0.07, 0.05, 0.03, 0.015}
 local keybind_modes = {"Hold", "Toggle", "Always"}
 
@@ -581,7 +580,7 @@ local function wrapLines(value, maxWidth, size, font)
     value = tostring(value or "")
     local multiplier = font_widths[font] or 0.48
     local charW = (size or 13) * multiplier
-    local maxChars = math.math.max(1, math.floor(maxWidth / charW))
+    local maxChars = math.max(1, math.floor(maxWidth / charW))
     local lines = {}
     local words = {}
     for w in string.gmatch(value, "%S+") do
@@ -823,8 +822,8 @@ local function drawChevronUp(x, y, color, z, transparency)
 end
 
 local function snapValue(raw, item)
-    local minValue = item.math.min or 0
-    local maxValue = item.math.max or 100
+    local minValue = item.min or 0
+    local maxValue = item.max or 100
     local step = item.step or 1
     if step <= 0 then
         step = 1
@@ -863,7 +862,7 @@ local function setItemValue(item, value, fire)
     end
 
     if item.type == "slider" then
-        value = tonumber(value) or item.value or item.math.min or 0
+        value = tonumber(value) or item.value or item.min or 0
         value = snapValue(value, item)
     elseif item.type == "toggle" then
         value = value == true
@@ -1040,8 +1039,8 @@ local function createSection(tab, name, side, allowLocking, defaultLock)
             value = tonumber(default) or 0,
             defaultValue = tonumber(default) or 0,
             step = tonumber(step) or 1,
-            math.min = tonumber(minValue) or 0,
-            math.max = tonumber(maxValue) or 100,
+            min = tonumber(minValue) or 0,
+            max = tonumber(maxValue) or 100,
             suffix = suffix or "",
             callback = callback,
             tooltip = tooltip,
@@ -1568,7 +1567,7 @@ local function processTextInput()
 
     if input.enter.click then
         if item.type == "slider" then
-            local val = tonumber(item._directValue or "") or item.value or item.math.min or 0
+            local val = tonumber(item._directValue or "") or item.value or item.min or 0
             setItemValue(item, val, true)
             item._directValue = nil
         end
@@ -2142,7 +2141,7 @@ local function renderColorpicker(click, held)
         for gx = 3, palW - 4, 4 do
             for gy = 3, palH - 4, 4 do
                 local sq = Drawing.new("Square")
-                sq.Size = Vector2.new(math.math.min(4, palW - 3 - gx), math.math.min(4, palH - 3 - gy))
+                sq.Size = Vector2.new(math.min(4, palW - 3 - gx), math.min(4, palH - 3 - gy))
                 sq.Filled = true
                 sq.Corner = 0
                 sq.ZIndex = 113
@@ -2218,7 +2217,7 @@ local function renderColorpicker(click, held)
     local hexText = isFocusedCP and (cp._hexInput or "") or ("#" .. toHex(cp.value))
     txt(hexText, x + 16, textTop(y + 196, 22, 12), theme.text, 12, font_ui, 116, false, false, 188)
     if isFocusedCP then
-        txt("|", x + 16 + textWidth(hexText, 12, font_ui), textTop(y + 196, 22, 12), theme.text, 12, font_ui, 117, false, false, nil, clamp(0.5 + 0.5 * math.math.sin(os.clock() * 8), 0, 1))
+        txt("|", x + 16 + textWidth(hexText, 12, font_ui), textTop(y + 196, 22, 12), theme.text, 12, font_ui, 117, false, false, nil, clamp(0.5 + 0.5 * math.sin(os.clock() * 8), 0, 1))
     end
 
     if click and over(x + 10, y + 196, 200, 22) then
@@ -2558,7 +2557,7 @@ local function getItemHeight(item, rowW)
     elseif item.type == "label" then
         local labelLines = wrapLines(item.label, rowW or 1000, 13, font_system)
         item._cachedLineCount = #labelLines
-        return math.math.max(28, #labelLines * 16 + 8)
+        return math.max(28, #labelLines * 16 + 8)
     end
     return 28
 end
@@ -2578,22 +2577,22 @@ local function getPerimeterPoint(d, colX, renderY, colW, renderH)
         return colX + 8 + d, renderY
     elseif d < colW - 3.434 then
         local t = -1.5708 + (d - (colW - 16)) / 12.566 * 1.5708
-        return colX + colW - 8 + math.cos(t) * 8, renderY + 8 + math.math.sin(t) * 8
+        return colX + colW - 8 + math.cos(t) * 8, renderY + 8 + math.sin(t) * 8
     elseif d < colW + renderH - 19.434 then
         return colX + colW, renderY + 8 + (d - (colW - 3.434))
     elseif d < colW + renderH - 6.868 then
         local t = (d - (colW + renderH - 19.434)) / 12.566 * 1.5708
-        return colX + colW - 8 + math.cos(t) * 8, renderY + renderH - 8 + math.math.sin(t) * 8
+        return colX + colW - 8 + math.cos(t) * 8, renderY + renderH - 8 + math.sin(t) * 8
     elseif d < 2 * colW + renderH - 22.868 then
         return colX + colW - 8 - (d - (colW + renderH - 6.868)), renderY + renderH
     elseif d < 2 * colW + renderH - 10.302 then
         local t = 1.5708 + (d - (2 * colW + renderH - 22.868)) / 12.566 * 1.5708
-        return colX + 8 + math.cos(t) * 8, renderY + renderH - 8 + math.math.sin(t) * 8
+        return colX + 8 + math.cos(t) * 8, renderY + renderH - 8 + math.sin(t) * 8
     elseif d < 2 * colW + 2 * renderH - 26.302 then
         return colX, renderY + renderH - 8 - (d - (2 * colW + renderH - 10.302))
     else
         local t = 3.1416 + (d - (2 * colW + 2 * renderH - 26.302)) / 12.566 * 1.5708
-        return colX + 8 + math.cos(t) * 8, renderY + 8 + math.math.sin(t) * 8
+        return colX + 8 + math.cos(t) * 8, renderY + 8 + math.sin(t) * 8
     end
 end
 
@@ -2888,7 +2887,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     end
                     txt(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), valBoxX + boxW / 2, rowY + 9, theme.text, 12, font_ui, z + 14, true, false, boxW - 4, trans)
                     if isFocusedSlider then
-                        txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, font_ui) / 2, rowY + 9, theme.text, 12, font_ui, z + 15, true, false, nil, trans * clamp(0.5 + 0.5 * math.math.sin(os.clock() * 8), 0, 1))
+                        txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, font_ui) / 2, rowY + 9, theme.text, 12, font_ui, z + 15, true, false, nil, trans * clamp(0.5 + 0.5 * math.sin(os.clock() * 8), 0, 1))
                     end
  
                     if click and hoveredVal and trans > 0.5 then
@@ -2899,8 +2898,8 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     local sx, sw = rowX + 4, rowW - 8
                     local sy_bar = rowY + 22
-                    local denom = math.max(0.0001, (item.math.max or 100) - (item.math.min or 0))
-                    local frac = clamp(((item.value or 0) - (item.math.min or 0)) / denom, 0, 1)
+                    local denom = math.max(0.0001, (item.max or 100) - (item.min or 0))
+                    local frac = clamp(((item.value or 0) - (item.min or 0)) / denom, 0, 1)
                     
                     rect(sx, sy_bar, sw, 4, theme.surface3, z + 12, 2, trans)
                     if frac > 0 then
@@ -2916,7 +2915,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         click = false
                     end
                     if held and not popupBlocking and not disabled and (state.sliderDrag == item) then
-                        local snapped = snapValue((item.math.min or 0) + denom * clamp((state.mouseX - sx) / sw, 0, 1), item)
+                        local snapped = snapValue((item.min or 0) + denom * clamp((state.mouseX - sx) / sw, 0, 1), item)
                         if snapped ~= item.value then
                             item.value = snapped
                             safeCallback(item.callback, snapped)
@@ -2984,13 +2983,13 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     txt(is_empty and item.label or item.value, bx + 8, textTop(dy_box, boxH, 13), is_empty and theme.sub or theme.text, 13, font_ui, z + 14, false, false, bw - 16, textTrans)
                     if focused then
                         if item._selectedAll and not is_empty then
-                            rect(bx + 8, dy_box + 3, math.math.min(bw - 16, textWidth(item.value, 13, font_ui)), boxH - 6, theme.accent, z + 13, 2, trans * 0.4)
+                            rect(bx + 8, dy_box + 3, math.min(bw - 16, textWidth(item.value, 13, font_ui)), boxH - 6, theme.accent, z + 13, 2, trans * 0.4)
                         end
                         local cursorX = bx + 8
                         if not is_empty then
                             cursorX = cursorX + textWidth(item.value, 13, font_ui)
                         end
-                        txt("|", cursorX, textTop(dy_box, boxH, 13), theme.text, 13, font_ui, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.math.sin(os.clock() * 8), 0, 1))
+                        txt("|", cursorX, textTop(dy_box, boxH, 13), theme.text, 13, font_ui, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(os.clock() * 8), 0, 1))
                     end
                     
                     if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
@@ -3749,7 +3748,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         end
         txt(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), valBoxX + boxW / 2, rowY + 9, theme.text, 12, font_ui, z + 14, true, false, boxW - 4, trans)
         if isFocusedSlider then
-            txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, font_ui) / 2, rowY + 9, theme.text, 12, font_ui, z + 15, true, false, nil, trans * clamp(0.5 + 0.5 * math.math.sin(os.clock() * 8), 0, 1))
+            txt("|", valBoxX + boxW / 2 + textWidth(valStr, 12, font_ui) / 2, rowY + 9, theme.text, 12, font_ui, z + 15, true, false, nil, trans * clamp(0.5 + 0.5 * math.sin(os.clock() * 8), 0, 1))
         end
 
         if click and hoveredVal and trans > 0.5 then
@@ -3760,7 +3759,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         
         local sx, sw = rowX + 4, rowW - 8
         local sy_bar = rowY + 22
-        local frac = clamp(((item.value or 0) - (item.math.min or 0)) / math.max(0.0001, (item.math.max or 100) - (item.math.min or 0)), 0, 1)
+        local frac = clamp(((item.value or 0) - (item.min or 0)) / math.max(0.0001, (item.max or 100) - (item.min or 0)), 0, 1)
         
         rect(sx, sy_bar, sw, 4, theme.surface3, z + 12, 2, trans)
         if frac > 0 then
@@ -3776,7 +3775,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             click = false
         end
         if held and not popupBlocking and not disabled and (state.sliderDrag == item) then
-            local snapped = snapValue((item.math.min or 0) + math.max(0.0001, (item.math.max or 100) - (item.math.min or 0)) * clamp((state.mouseX - sx) / sw, 0, 1), item)
+            local snapped = snapValue((item.min or 0) + math.max(0.0001, (item.max or 100) - (item.min or 0)) * clamp((state.mouseX - sx) / sw, 0, 1), item)
             if snapped ~= item.value then
                 item.value = snapped
                 safeCallback(item.callback, snapped)
@@ -3841,13 +3840,13 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         txt((item.value == "") and item.label or item.value, bx + 8, textTop(dy_box, boxH, 13), (item.value == "") and theme.sub or theme.text, 13, font_ui, z + 14, false, false, bw - 16, trans)
         if focused then
             if item._selectedAll and not (item.value == "") then
-                rect(bx + 8, dy_box + 3, math.math.min(bw - 16, textWidth(item.value, 13, font_ui)), boxH - 6, theme.accent, z + 13, 2, trans * 0.4)
+                rect(bx + 8, dy_box + 3, math.min(bw - 16, textWidth(item.value, 13, font_ui)), boxH - 6, theme.accent, z + 13, 2, trans * 0.4)
             end
             local cursorX = bx + 8
             if not (item.value == "") then
                 cursorX = cursorX + textWidth(item.value, 13, font_ui)
             end
-            txt("|", cursorX, textTop(dy_box, boxH, 13), theme.text, 13, font_ui, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.math.sin(os.clock() * 8), 0, 1))
+            txt("|", cursorX, textTop(dy_box, boxH, 13), theme.text, 13, font_ui, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(os.clock() * 8), 0, 1))
         end
         
         if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
@@ -4166,7 +4165,7 @@ local function renderWindow(click, held, rightClick)
             state.searchBar.value = ""
             state.preSettingsH = state.h
             state.preSettingsW = state.w
-            local targetW = math.math.max(state.w, 500)
+            local targetW = math.max(state.w, 500)
             local targetH = state.h
             if state.settingsTab then
                 local leftH, rightH = 0, 0
@@ -4181,16 +4180,16 @@ local function renderWindow(click, held, rightClick)
                     if sec.side == "Right" then
                         rightH = rightH + secH + 10
                     elseif sec.side == "Full" then
-                        leftH = math.math.max(leftH, rightH) + secH + 10
+                        leftH = math.max(leftH, rightH) + secH + 10
                         rightH = leftH
                     else
                         leftH = leftH + secH + 10
                     end
                 end
-                local needed = math.math.max(leftH, rightH)
+                local needed = math.max(leftH, rightH)
                 local contentArea = state.h - 36 - 20 - 30 - 8 - 24
                 if needed > contentArea then
-                    targetH = math.math.min(state.h + (needed - contentArea) + 20, 750)
+                    targetH = math.min(state.h + (needed - contentArea) + 20, 750)
                 end
             end
             state.settingsTargetW = targetW
@@ -4223,7 +4222,7 @@ local function renderWindow(click, held, rightClick)
 
     if state.settingsTargetW then
         state.w = smoothValue(state.w, state.settingsTargetW, 14)
-        if math.math.abs(state.w - state.settingsTargetW) < 0.5 then
+        if math.abs(state.w - state.settingsTargetW) < 0.5 then
             state.w = state.settingsTargetW
             if not state.settingsActive then
                 state.settingsTargetW = nil
@@ -4234,7 +4233,7 @@ local function renderWindow(click, held, rightClick)
     end
     if state.settingsTargetH then
         state.h = smoothValue(state.h, state.settingsTargetH, 14)
-        if math.math.abs(state.h - state.settingsTargetH) < 0.5 then
+        if math.abs(state.h - state.settingsTargetH) < 0.5 then
             state.h = state.settingsTargetH
             if not state.settingsActive then
                 state.settingsTargetH = nil
@@ -4255,7 +4254,7 @@ local function renderWindow(click, held, rightClick)
             if not (state.searchBar.value == "") then
                 cursorX = cursorX + textWidth(state.searchBar.value, 12, font_ui)
             end
-            txt("|", cursorX, textTop(y + 8, 20, 12), theme.text, 12, font_ui, 18, false, false, nil, clamp(0.5 + 0.5 * math.math.sin(os.clock() * 8), 0, 1))
+            txt("|", cursorX, textTop(y + 8, 20, 12), theme.text, 12, font_ui, 18, false, false, nil, clamp(0.5 + 0.5 * math.sin(os.clock() * 8), 0, 1))
         end
         if click and over(searchX, y + 8, searchW, 20) then
             state.focus = state.searchBar
@@ -4274,7 +4273,7 @@ local function renderWindow(click, held, rightClick)
         for i = 0, 3 do
             local a = os.clock() * 2 + i * math.pi / 4
             local c = math.cos(a)
-            local s = math.math.sin(a)
+            local s = math.sin(a)
             line(cx_set - 6 * c, cy - 6 * s, cx_set + 6 * c, cy + 6 * s, theme.accent, 19, 4, 0.25)
         end
         circle(cx_set, cy, 4, theme.accent, 19, false, 4, 32, 0.25)
@@ -4283,7 +4282,7 @@ local function renderWindow(click, held, rightClick)
     for i = 0, 3 do
         local a = (state.settingsActive and os.clock() * 2 or 0) + i * math.pi / 4
         local c = math.cos(a)
-        local s = math.math.sin(a)
+        local s = math.sin(a)
         line(cx_set - 6 * c, cy - 6 * s, cx_set + 6 * c, cy + 6 * s, col, 20, 1.5)
     end
     circle(cx_set, cy, 4, theme.surface2, 21, true)
@@ -4368,13 +4367,13 @@ local function renderWindow(click, held, rightClick)
         
         if focused then
             if modalTextbox._selectedAll and not (modalTextbox.value == "") then
-                rect(bx + 8, dy_box + 3, math.math.min(bw - 16, textWidth(modalTextbox.value, 12, font_ui)), boxH - 6, theme.accent, mz + 3, 2, 0.4)
+                rect(bx + 8, dy_box + 3, math.min(bw - 16, textWidth(modalTextbox.value, 12, font_ui)), boxH - 6, theme.accent, mz + 3, 2, 0.4)
             end
             local cursorX = bx + 8
             if not (modalTextbox.value == "") then
                 cursorX = cursorX + textWidth(modalTextbox.value, 12, font_ui)
             end
-            txt("|", cursorX, textTop(dy_box, boxH, 12), theme.text, 12, font_ui, mz + 5, false, false, nil, clamp(0.5 + 0.5 * math.math.sin(os.clock() * 8), 0, 1))
+            txt("|", cursorX, textTop(dy_box, boxH, 12), theme.text, 12, font_ui, mz + 5, false, false, nil, clamp(0.5 + 0.5 * math.sin(os.clock() * 8), 0, 1))
         end
         
         if click and over(bx, dy_box, bw, boxH) then
@@ -4574,7 +4573,7 @@ local function step()
     if prevFocus and state.focus ~= prevFocus then
         prevFocus._selectedAll = false
         if prevFocus.type == "slider" and prevFocus._directValue then
-            setItemValue(prevFocus, tonumber(prevFocus._directValue) or prevFocus.value or prevFocus.math.min or 0, true)
+            setItemValue(prevFocus, tonumber(prevFocus._directValue) or prevFocus.value or prevFocus.min or 0, true)
             prevFocus._directValue = nil
         end
     end
