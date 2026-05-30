@@ -3750,7 +3750,7 @@ local function initSettings()
     end)
 
     local generalSec = createSection(settingsTab, "General Settings", "Full")
-    generalSec:Checkbox("Spoof window focus", false, function(val)
+    generalSec:Checkbox("isrbxactive()", false, function(val)
         ProjectState.isrbxactiveOverride = val
     end)
     generalSec:Checkbox("Tab Animations", true, function(val)
