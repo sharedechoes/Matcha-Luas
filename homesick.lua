@@ -60,9 +60,65 @@ end
 local Players = game:GetService("Players")
 local Workspace = workspace
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer and LocalPlayer:GetMouse()
+local Mouse = select(1, pcall(function() return LocalPlayer:GetMouse() end)) and LocalPlayer:GetMouse() or nil
 local homesickInstanceId = tick()
 _G.homesickInstanceId = homesickInstanceId
+
+local _clipboardBox = nil
+local _clipboardGui = nil
+local _clipboardPending = false
+local _clipboardResult = nil
+
+local function _initClipboardBox()
+    if _clipboardBox then return end
+    pcall(function()
+        local sg = Instance.new("ScreenGui")
+        sg.Name = "homesickClipboard"
+        sg.ResetOnSpawn = false
+        sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        local tb = Instance.new("TextBox", sg)
+        tb.Size = UDim2.new(0, 1, 0, 1)
+        tb.Position = UDim2.new(0, -10, 0, -10)
+        tb.BackgroundTransparency = 1
+        tb.TextTransparency = 1
+        tb.Text = ""
+        tb.ClearTextOnFocus = false
+        sg.Parent = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui") or game:GetService("CoreGui")
+        _clipboardGui = sg
+        _clipboardBox = tb
+        tb.FocusLost:Connect(function()
+            if _clipboardPending then
+                _clipboardResult = tb.Text
+                tb.Text = ""
+                _clipboardPending = false
+            end
+        end)
+    end)
+end
+
+local function _readClipboard(callback)
+    _initClipboardBox()
+    if not _clipboardBox then callback(nil) return end
+    _clipboardBox.Text = ""
+    _clipboardPending = true
+    _clipboardResult = nil
+    pcall(function() _clipboardBox:CaptureFocus() end)
+    pcall(function()
+        keypress(0x11)
+        keypress(0x56)
+        keyrelease(0x56)
+        keyrelease(0x11)
+    end)
+    task.delay(0.05, function()
+        pcall(function() _clipboardBox:ReleaseFocus() end)
+        task.delay(0.02, function()
+            local result = _clipboardResult
+            _clipboardPending = false
+            _clipboardResult = nil
+            callback(type(result) == "string" and result or nil)
+        end)
+    end)
+end
 
 local mouseScroll = 0
 local uis = game:GetService("UserInputService")
@@ -448,7 +504,7 @@ end
 local function getMouse()
     if not Mouse then
         LocalPlayer = Players.LocalPlayer
-        Mouse = LocalPlayer and LocalPlayer:GetMouse()
+        Mouse = select(1, pcall(function() return LocalPlayer:GetMouse() end)) and LocalPlayer:GetMouse() or nil
     end
     if Mouse then
         if not ProjectState.mouseConnected then
@@ -1474,6 +1530,12 @@ local function finalDestroy()
     setrobloxinput(true)
     ProjectState.inputState = true
 
+    if _clipboardGui then
+        pcall(function() _clipboardGui:Destroy() end)
+        _clipboardGui = nil
+        _clipboardBox = nil
+    end
+
     removeAllDrawings()
     pcall(function()
         game:GetService("ContextActionService"):UnbindAction("homesickFreezeMovement")
@@ -1771,22 +1833,35 @@ local function processTextInput()
             pcall(setclipboard, value)
             Input.c.click = false
         elseif Input.v.click then
-            local clip = nil
-            pcall(function()
-                clip = (type(getclipboard) == "function" and getclipboard()) or (type(get_clipboard) == "function" and get_clipboard())
+            local captureItem = item
+            local captureSelectedAll = item._selectedAll
+            local captureValue = value
+            _readClipboard(function(clip)
+                if type(clip) == "string" and clip ~= "" and ProjectState.focus == captureItem then
+                    if captureItem.type == "slider" then
+                        clip = clip:gsub("[^0-9%.%-]", "")
+                    end
+                    local newVal
+                    if captureSelectedAll then
+                        newVal = clip
+                        captureItem._selectedAll = false
+                    else
+                        newVal = captureValue .. clip
+                    end
+                    if captureItem.type == "textbox" then
+                        if newVal ~= captureItem.value then
+                            pushHistory(captureItem, captureItem.value)
+                            captureItem.value = newVal
+                            safeCallback(captureItem.callback, newVal)
+                        end
+                    else
+                        if newVal ~= captureItem._directValue then
+                            pushHistory(captureItem, captureItem._directValue or "")
+                            captureItem._directValue = newVal
+                        end
+                    end
+                end
             end)
-            if type(clip) == "string" then
-                if item.type == "slider" then
-                    clip = clip:gsub("[^0-9%.%-]", "")
-                end
-                if item._selectedAll then
-                    value = clip
-                    item._selectedAll = false
-                else
-                    value = value .. clip
-                end
-                changed = true
-            end
             Input.v.click = false
         elseif Input.z.click then
             if item._history and item._historyIndex > 0 then
