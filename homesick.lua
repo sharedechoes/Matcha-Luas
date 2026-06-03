@@ -263,6 +263,11 @@ local ProjectState = {
     settingsTargetW = nil,
     preSettingsW = nil,
     gridSnapLines = nil,
+    tabsPosition = "top",
+    layoutEditing = false,
+    hotkeyEnabled = false,
+    hotkeyPos = V2(100, 200),
+    hotkeyDrag = nil,
 }
 
 local function warn(msg)
@@ -1146,6 +1151,16 @@ local function makeItem(section, item)
                 safeCallback(keybind.callback, keybind.value and Input[keybind.value] and Input[keybind.value].id or nil, keybind.mode)
                 return self
             end
+            function keyHandle:AddToHotkey(label, toggle_id)
+                keybind.hotkeyLabel = label
+                keybind.hotkeyToggleId = toggle_id
+                return self
+            end
+            function keyHandle:RemoveFromHotkey()
+                keybind.hotkeyLabel = nil
+                keybind.hotkeyToggleId = nil
+                return self
+            end
             return keyHandle
         end
 
@@ -1658,11 +1673,11 @@ end
 
 local toHsv
 
-toHex = function(color)
-    local r = floor(color.R * 255 + 0.5)
-    local g = floor(color.G * 255 + 0.5)
-    local b = floor(color.B * 255 + 0.5)
-    return string.format("%02X%02X%02X", r, g, b)
+toHex = function(color, alpha)
+    if alpha then
+        return string.format("%02X%02X%02X%02X", floor(color.R * 255 + 0.5), floor(color.G * 255 + 0.5), floor(color.B * 255 + 0.5), floor(alpha * 255 + 0.5))
+    end
+    return string.format("%02X%02X%02X", floor(color.R * 255 + 0.5), floor(color.G * 255 + 0.5), floor(color.B * 255 + 0.5))
 end
 
 local function isItemDisabled(item)
@@ -1753,7 +1768,7 @@ local function processTextInput()
             local input = Input[name]
             if input.click and input.char then
                 local char = string.upper(input.char)
-                if (tonumber(char) or char:match("[A-F]")) and #value < 6 then
+                if (tonumber(char) or char:match("[A-F]")) and #value < 8 then
                     value = value .. char
                     changed = true
                 end
@@ -1766,16 +1781,23 @@ local function processTextInput()
         end
         if changed then
             cp._hexInput = value
-            if #value == 6 then
+            if #value == 8 then
+                local ok, newColor = pcall(C3HEX, "#" .. string.sub(value, 1, 6))
+                if ok and newColor and tonumber(string.sub(value, 7, 8), 16) then
+                    cp.hue, cp.sat, cp.val = toHsv(newColor)
+                    cp.value = newColor
+                    cp.alpha = tonumber(string.sub(value, 7, 8), 16) / 255
+                    cp.picker.value = newColor
+                    cp.picker.alpha = cp.alpha
+                    safeCallback(cp.picker.callback, newColor, cp.alpha)
+                end
+            elseif #value == 6 then
                 local ok, newColor = pcall(C3HEX, "#" .. value)
                 if ok and newColor then
-                    local h_v, s_v, v_v = toHsv(newColor)
-                    cp.hue = h_v
-                    cp.sat = s_v
-                    cp.val = v_v
+                    cp.hue, cp.sat, cp.val = toHsv(newColor)
                     cp.value = newColor
                     cp.picker.value = newColor
-                    safeCallback(cp.picker.callback, newColor)
+                    safeCallback(cp.picker.callback, newColor, cp.alpha)
                 end
             end
         end
@@ -2114,6 +2136,77 @@ local function doColorPicker(x, y, picker)
         _hexInput = nil,
     }
     ProjectState.dropdown = nil
+local function findItemValue(idOrLabel)
+    if string.find(tostring(idOrLabel or ""), "%.") then
+        local val = UI:GetValue(idOrLabel)
+        if val ~= nil then return val end
+    end
+    for _, t in ipairs(ProjectState.tabs) do
+        for _, s in ipairs(t.sections) do
+            for _, item in ipairs(s.items) do
+                if item.id == idOrLabel then
+                    return item.value
+                elseif item.label == idOrLabel then
+                    return item.value
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function renderHotkeyOverlay(click, held)
+    if not ProjectState.hotkeyEnabled then
+        return click
+    end
+    
+    local activeHotkeys = {}
+    for _, item in ipairs(keybindItems) do
+        if item.keybind and item.keybind.hotkeyLabel and item.keybind.value then
+            local toggleActive = findItemValue(item.keybind.hotkeyToggleId)
+            if toggleActive == true then
+                activeHotkeys[#activeHotkeys + 1] = item.keybind
+            end
+        end
+    end
+    
+    local hx, hy = ProjectState.hotkeyPos.X, ProjectState.hotkeyPos.Y
+    local hw = 180
+    local hh = 26 + math.max(1, #activeHotkeys) * 20
+    
+    local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
+    if click and over(hx, hy, hw, 22) and not popupBlocking then
+        ProjectState.hotkeyDrag = { ProjectState.mouseX - hx, ProjectState.mouseY - hy }
+        click = false
+    end
+    if held and ProjectState.hotkeyDrag then
+        ProjectState.hotkeyPos = V2(ProjectState.mouseX - ProjectState.hotkeyDrag[1], ProjectState.mouseY - ProjectState.hotkeyDrag[2])
+        hx, hy = ProjectState.hotkeyPos.X, ProjectState.hotkeyPos.Y
+    elseif not held then
+        ProjectState.hotkeyDrag = nil
+    end
+    
+    rect(hx, hy, hw, hh, Theme.surface, 150, 6, 0.85)
+    strokeRect(hx, hy, hw, hh, Theme.border, 151, 6)
+    
+    rect(hx + 2, hy + 2, hw - 4, 18, Theme.surface2, 152, 4)
+    txt("keybinds", hx + 10, textTop(hy + 2, 18, 11), Theme.accent, 11, FontBold, 153)
+    
+    if #activeHotkeys == 0 then
+        txt("-", hx + hw / 2, centerY(hy + 22, 20), Theme.sub, 11, FontSystem, 153, true)
+    else
+        for i = 1, #activeHotkeys do
+            local kb = activeHotkeys[i]
+            local rowY = hy + 22 + (i - 1) * 20
+            txt(kb.hotkeyLabel, hx + 10, textTop(rowY, 20, 11), Theme.text, 11, FontSystem, 153)
+            
+            local rightText = string.format("[%s] (%s)", kb.listening and "..." or string.upper(kb.value or "-"), kb.mode == "Toggle" and "T" or kb.mode == "Always" and "A" or "H")
+            local rightTextW = textWidth(rightText, 10, FontUI)
+            txt(rightText, hx + hw - 10 - rightTextW, textTop(rowY, 20, 10), Theme.sub, 10, FontUI, 153)
+        end
+    end
+    
+    return click
 end
 
 local function tooltip(text, x, y)
@@ -2459,7 +2552,7 @@ local function renderColorpicker(click, held)
     strokeRect(x + 10, y + 196, 200, 22, (ProjectState.focus == cp) and Theme.accent or Theme.border, 115, 4)
 
     local isFocusedCP = ProjectState.focus == cp
-    local hexText = isFocusedCP and (cp._hexInput or "") or ("#" .. toHex(cp.value))
+    local hexText = isFocusedCP and (cp._hexInput or "") or ("#" .. toHex(cp.value, cp.alpha))
     txt(hexText, x + 16, textTop(y + 196, 22, 12), Theme.text, 12, FontUI, 116, false, false, 188)
     if isFocusedCP then
         txt("|", x + 16 + textWidth(hexText, 12, FontUI), textTop(y + 196, 22, 12), Theme.text, 12, FontUI, 117, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
@@ -2467,7 +2560,7 @@ local function renderColorpicker(click, held)
 
     if click and over(x + 10, y + 196, 200, 22) then
         ProjectState.focus = (ProjectState.focus == cp) and nil or cp
-        cp._hexInput = toHex(cp.value)
+        cp._hexInput = toHex(cp.value, cp.alpha)
         click = false
     end
 
@@ -2543,12 +2636,185 @@ local function renderWatermark(click, held)
     txt(text, x + 10, textTop(y, h, 12), Theme.text, 12, FontUI, 152, false, false)
 end
 
-local function renderTabs(click, px, py, pw)
+local function renderTabs(click, px, py, pw, ph)
     local count = #ProjectState.tabs
     if count == 0 then
         return click
     end
 
+    local pos = ProjectState.tabsPosition or "top"
+    local isVertical = pos == "left" or pos == "right"
+    
+    if isVertical then
+        ProjectState.currentPillX = nil
+        ProjectState.currentPillW = nil
+        local tabH = 30
+        local totalH = count * tabH
+        local needsScroll = totalH > ph
+        local tabW = 85
+        local maxScroll = max(0, totalH - ph)
+        
+        local dtValue = ProjectState.dt or 1 / 60
+        if dtValue <= 0 then dtValue = 1 / 60 end
+        local target = clamp(ProjectState.tabTargetScrollX or 0, 0, maxScroll)
+        ProjectState.tabTargetScrollX = target
+        local current = ProjectState.tabScrollX or 0
+        local factor = 1 - math.exp(-18 * dtValue)
+        current = current + (target - current) * factor
+        current = clamp(current, 0, maxScroll)
+        ProjectState.tabScrollX = current
+        local scrollY = current
+        
+        local contentY = py + (needsScroll and 18 or 0)
+        local contentH = ph - (needsScroll and 36 or 0)
+        local tabX = pos == "left" and px or (px + pw - tabW)
+        
+        if needsScroll and scrollY > 1 then
+            local arrowHovered = over(tabX, py, tabW, 18)
+            rect(tabX, py, tabW, 18, arrowHovered and Theme.surface3 or Theme.surface, 26, 4)
+            local cx = centerY(tabX, tabW)
+            triangle(V2(cx, py + 6), V2(cx - 4, py + 12), V2(cx + 4, py + 12), Theme.sub, 27, true)
+            if click and arrowHovered then
+                ProjectState.tabTargetScrollX = max(0, target - tabH)
+                click = false
+            end
+        end
+        
+        if needsScroll and scrollY < maxScroll - 1 then
+            local ay = py + ph - 18
+            local arrowHovered = over(tabX, ay, tabW, 18)
+            rect(tabX, ay, tabW, 18, arrowHovered and Theme.surface3 or Theme.surface, 26, 4)
+            local cx = centerY(tabX, tabW)
+            triangle(V2(cx, ay + 12), V2(cx - 4, ay + 6), V2(cx + 4, ay + 6), Theme.sub, 27, true)
+            if click and arrowHovered then
+                ProjectState.tabTargetScrollX = min(maxScroll, target + tabH)
+                click = false
+            end
+        end
+        
+        if needsScroll and ProjectState.tabScrollToActive and ProjectState.activeTab then
+            local idx = ProjectState.activeIndex or 1
+            local tabStart = tabH * (idx - 1)
+            local tabEnd = tabStart + tabH
+            local visibleStart = scrollY
+            local visibleEnd = scrollY + contentH
+            if tabStart < visibleStart then
+                ProjectState.tabTargetScrollX = tabStart
+            elseif tabEnd > visibleEnd then
+                ProjectState.tabTargetScrollX = tabEnd - contentH
+            end
+            ProjectState.tabScrollToActive = false
+        end
+        
+        if Input.m1.released then
+            ProjectState.draggedTab = nil
+        end
+        
+        for i = 1, count do
+            local tab = ProjectState.tabs[i]
+            local localTy = tabH * (i - 1)
+            tab.targetY = localTy
+            if not tab.currentY then
+                tab.currentY = localTy
+            end
+            
+            local screenY = contentY + tab.currentY - scrollY
+            local hovered = over(tabX, screenY, tabW, tabH)
+            
+            if click and hovered and not ProjectState.draggedTab then
+                if ProjectState.activeTab ~= tab then
+                    ProjectState.contentFade = 0
+                end
+                ProjectState.activeTab = tab
+                ProjectState.activeIndex = i
+                ProjectState.dropdown = nil
+                ProjectState.colorpicker = nil
+                ProjectState.focus = nil
+                click = false
+                ProjectState.tabScrollToActive = true
+            end
+            
+            if ProjectState.draggedTab == tab then
+                if abs(ProjectState.mouseY - ProjectState.dragTabStartMouseY) > 5 then
+                    tab.currentY = clamp(ProjectState.mouseY - ProjectState.draggedTabOffset - contentY + scrollY, 0, totalH - tabH)
+                    
+                    local idx = i
+                    if idx > 1 then
+                        local prevTab = ProjectState.tabs[idx - 1]
+                        if tab.currentY < prevTab.currentY then
+                            ProjectState.tabs[idx], ProjectState.tabs[idx - 1] = ProjectState.tabs[idx - 1], ProjectState.tabs[idx]
+                            if ProjectState.activeIndex == idx then
+                                ProjectState.activeIndex = idx - 1
+                            elseif ProjectState.activeIndex == idx - 1 then
+                                ProjectState.activeIndex = idx
+                            end
+                        end
+                    end
+                    if idx < count then
+                        local nextTab = ProjectState.tabs[idx + 1]
+                        if tab.currentY > nextTab.currentY then
+                            ProjectState.tabs[idx], ProjectState.tabs[idx + 1] = ProjectState.tabs[idx + 1], ProjectState.tabs[idx]
+                            if ProjectState.activeIndex == idx then
+                                ProjectState.activeIndex = idx + 1
+                            elseif ProjectState.activeIndex == idx + 1 then
+                                ProjectState.activeIndex = idx
+                            end
+                        end
+                    end
+                else
+                    tab.currentY = smoothValue(tab.currentY, localTy, 18)
+                end
+            else
+                tab.currentY = smoothValue(tab.currentY, localTy, 18)
+            end
+        end
+        
+        local targetPillY = nil
+        local targetPillH = nil
+        
+        for i = 1, count do
+            local tab = ProjectState.tabs[i]
+            local ty = contentY + tab.currentY - scrollY
+            local visible = ty + tabH >= contentY and ty <= contentY + contentH
+            if visible then
+                local active = ProjectState.activeTab == tab
+                local hovered = over(tabX, ty, tabW, tabH)
+                if active then
+                    targetPillY = tab.currentY - scrollY + 3
+                    targetPillH = tabH - 6
+                    txt(tab.name, tabX + tabW / 2, centerY(ty, tabH), Theme.accent, 12, FontBold, 25, true, false, tabW - 8)
+                else
+                    txt(tab.name, tabX + tabW / 2, centerY(ty, tabH), hovered and Theme.text or Theme.sub, 12, FontSystem, 25, true, false, tabW - 8)
+                end
+            end
+        end
+        
+        if targetPillY and targetPillH then
+            if not ProjectState.currentPillY then
+                ProjectState.currentPillY = targetPillY
+                ProjectState.currentPillH = targetPillH
+            elseif ProjectState.tabAnimations == false then
+                ProjectState.currentPillY = targetPillY
+                ProjectState.currentPillH = targetPillH
+            else
+                ProjectState.currentPillY = smoothValue(ProjectState.currentPillY, targetPillY, 18)
+                ProjectState.currentPillH = smoothValue(ProjectState.currentPillH, targetPillH, 18)
+            end
+        end
+        
+        if ProjectState.currentPillY and ProjectState.currentPillH then
+            rect(tabX + 4, contentY + ProjectState.currentPillY, tabW - 8, ProjectState.currentPillH, Theme.accent, 21, 6, 0.08)
+            strokeRect(tabX + 4, contentY + ProjectState.currentPillY, tabW - 8, ProjectState.currentPillH, Theme.accent, 22, 6)
+        end
+        
+        local lineX = pos == "left" and (tabX + tabW + 4) or (tabX - 4)
+        line(lineX, py, lineX, py + ph, Theme.border, 24)
+        
+        return click
+    end
+
+    ProjectState.currentPillY = nil
+    ProjectState.currentPillH = nil
     local totalW = count * TAB_MIN_W
     local needsScroll = totalW > pw
     local tabW = needsScroll and TAB_MIN_W or (pw / count)
@@ -2774,11 +3040,13 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
             dDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
                 if choice and choice[1] == "Copy" then
                     ProjectState.copiedColor = item.colorpicker.value
-                    pcall(setclipboard, "#" .. toHex(item.colorpicker.value))
+                    ProjectState.copiedAlpha = item.colorpicker.alpha or 1
+                    pcall(setclipboard, "#" .. toHex(item.colorpicker.value, item.colorpicker.alpha))
                 elseif choice and choice[1] == "Paste" then
-                    if ProjectState.copiedColor and colorChanged(item.colorpicker.value, ProjectState.copiedColor) then
+                    if ProjectState.copiedColor then
                         item.colorpicker.value = ProjectState.copiedColor
-                        safeCallback(item.colorpicker.callback, item.colorpicker.value)
+                        item.colorpicker.alpha = ProjectState.copiedAlpha or 1
+                        safeCallback(item.colorpicker.callback, item.colorpicker.value, item.colorpicker.alpha)
                     else
                         warn("color clipboard empty lol")
                     end
@@ -3066,11 +3334,13 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         dDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
                             if choice and choice[1] == "Copy" then
                                 ProjectState.copiedColor = item.value
-                                pcall(setclipboard, "#" .. toHex(item.value))
+                                ProjectState.copiedAlpha = item.alpha or 1
+                                pcall(setclipboard, "#" .. toHex(item.value, item.alpha))
                             elseif choice and choice[1] == "Paste" then
-                                if ProjectState.copiedColor and colorChanged(item.value, ProjectState.copiedColor) then
+                                if ProjectState.copiedColor then
                                     item.value = ProjectState.copiedColor
-                                    safeCallback(item.callback, item.value)
+                                    item.alpha = ProjectState.copiedAlpha or 1
+                                    safeCallback(item.callback, item.value, item.alpha)
                                 else
                                     warn("color clipboard empty lol")
                                 end
@@ -3485,6 +3755,10 @@ end
 
 local function serializeConfigData()
     local configData = {}
+    configData._system = {
+        tabsPosition = ProjectState.tabsPosition,
+        hotkeyEnabled = ProjectState.hotkeyEnabled,
+    }
     for _, t in ipairs(ProjectState.tabs) do
         for _, s in ipairs(t.sections) do
             for _, item in ipairs(s.items) do
@@ -3528,6 +3802,10 @@ local function loadConfig(json)
     if not json or json == "" then return end
     local decodeOk, configData = pcall(game:GetService("HttpService").JSONDecode, game:GetService("HttpService"), json)
     if decodeOk and decodeOk == true and type(configData) == "table" then
+        if configData._system then
+            ProjectState.tabsPosition = configData._system.tabsPosition or "top"
+            ProjectState.hotkeyEnabled = configData._system.hotkeyEnabled == true
+        end
         for _, t in ipairs(ProjectState.tabs) do
             for _, s in ipairs(t.sections) do
                 for _, item in ipairs(s.items) do
@@ -3818,6 +4096,14 @@ local function initSettings()
     generalSec:Checkbox("Checkbox Animations", true, function(val)
         ProjectState.hoverEffects = val
     end)
+    generalSec:Checkbox("Hotkey Overlay", false, function(val)
+        ProjectState.hotkeyEnabled = val
+    end)
+    generalSec:Button("Toggle Layout Editor", function()
+        ProjectState.layoutEditing = true
+        ProjectState.settingsActive = false
+        ProjectState.contentFade = 0
+    end)
 
     local colorsSec = createSection(settingsTab, "Theming", "Full")
     local fontNames = {"System", "UI", "SystemBold"}
@@ -3914,11 +4200,13 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             dDropdown("colorctx", cpX - 34, rowY + 24, 80, {"Copy", "Paste"}, {}, false, function(choice)
                 if choice and choice[1] == "Copy" then
                     ProjectState.copiedColor = item.value
-                    pcall(setclipboard, "#" .. toHex(item.value))
+                    ProjectState.copiedAlpha = item.alpha or 1
+                    pcall(setclipboard, "#" .. toHex(item.value, item.alpha))
                 elseif choice and choice[1] == "Paste" then
-                    if ProjectState.copiedColor and colorChanged(item.value, ProjectState.copiedColor) then
+                    if ProjectState.copiedColor then
                         item.value = ProjectState.copiedColor
-                        safeCallback(item.callback, item.value)
+                        item.alpha = ProjectState.copiedAlpha or 1
+                        safeCallback(item.callback, item.value, item.alpha)
                     else
                         warn("color clipboard empty lol")
                     end
@@ -4462,6 +4750,23 @@ local function renderWindow(click, held, rightClick)
         return click, held, rightClick
     end
 
+    if ProjectState.layoutEditing then
+        local bannerY = py
+        local bannerH = 22
+        local bannerHovered = over(px, bannerY, pw, bannerH)
+        rect(px, bannerY, pw, bannerH, bannerHovered and Theme.surface3 or Theme.surface2, 100, 4)
+        strokeRect(px, bannerY, pw, bannerH, bannerHovered and Theme.accent or Theme.border, 101, 4)
+        txt("layout editor - drag tabs to snap. click here to exit", px + pw / 2, centerY(bannerY, bannerH), Theme.accent, 11, FontSystem, 102, true)
+        
+        if click and bannerHovered then
+            ProjectState.layoutEditing = false
+            click = false
+        end
+        
+        py = py + bannerH + 4
+        ph = ph - bannerH - 4
+    end
+
     local fade = ProjectState.contentFade or 1
     if fade < 1 then
         ProjectState.contentFade = smoothValue(fade, 1, 16)
@@ -4480,14 +4785,72 @@ local function renderWindow(click, held, rightClick)
             baseClick = false
         end
     else
-        baseClick = renderTabs(baseClick, px, py, pw)
-
-        local contY = py + TAB_H + 8
-        local contH = ph - TAB_H - 8
-
-        baseClick, baseHeld, baseRightClick = renderSections(ProjectState.activeTab, baseClick, baseHeld, baseRightClick, px, contY, pw, contH)
-
-        if ProjectState.focus and baseClick and not over(px, contY, pw, contH) then
+        local pos = ProjectState.tabsPosition or "top"
+        local tabW = 85
+        local tabH = TAB_H
+        
+        local tabsX, tabsY, tabsWidth, tabsHeight
+        local contX, contY, contW, contH
+        
+        if pos == "left" then
+            tabsX, tabsY, tabsWidth, tabsHeight = px, py, tabW, ph
+            contX, contY, contW, contH = px + tabW + 8, py, pw - tabW - 8, ph
+        elseif pos == "right" then
+            tabsX, tabsY, tabsWidth, tabsHeight = px + pw - tabW, py, tabW, ph
+            contX, contY, contW, contH = px, py, pw - tabW - 8, ph
+        elseif pos == "bottom" then
+            tabsX, tabsY, tabsWidth, tabsHeight = px, py + ph - tabH, pw, tabH
+            contX, contY, contW, contH = px, py, pw, ph - tabH - 8
+        else
+            tabsX, tabsY, tabsWidth, tabsHeight = px, py, pw, tabH
+            contX, contY, contW, contH = px, py + tabH + 8, pw, ph - tabH - 8
+        end
+        
+        if ProjectState.layoutEditing then
+            local isHoveredTabs = over(tabsX, tabsY, tabsWidth, tabsHeight)
+            if click and isHoveredTabs and not popupOpen then
+                ProjectState.tabsDrag = { ProjectState.mouseX - tabsX, ProjectState.mouseY - tabsY }
+                click = false
+            end
+            
+            if ProjectState.tabsDrag then
+                if held then
+                    local mx, my = ProjectState.mouseX, ProjectState.mouseY
+                    local snapTarget = "top"
+                    local previewX, previewY, previewW, previewH = px, py, pw, tabH
+                    
+                    if mx < px + pw * 0.25 then
+                        snapTarget = "left"
+                        previewX, previewY, previewW, previewH = px, py, tabW, ph
+                    elseif mx > px + pw * 0.75 then
+                        snapTarget = "right"
+                        previewX, previewY, previewW, previewH = px + pw - tabW, py, tabW, ph
+                    elseif my > py + ph * 0.75 then
+                        snapTarget = "bottom"
+                        previewX, previewY, previewW, previewH = px, py + ph - tabH, pw, tabH
+                    end
+                    
+                    rect(previewX, previewY, previewW, previewH, Theme.accent, 200, 6, 0.3)
+                    strokeRect(previewX, previewY, previewW, previewH, Theme.accent, 201, 6)
+                    
+                    ProjectState.lastSnapTarget = snapTarget
+                else
+                    if ProjectState.lastSnapTarget then
+                        ProjectState.tabsPosition = ProjectState.lastSnapTarget
+                        pcall(saveConfig)
+                        ProjectState.lastSnapTarget = nil
+                    end
+                    ProjectState.tabsDrag = nil
+                end
+            end
+            
+            strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.accent, 199, 6)
+        end
+        
+        baseClick = renderTabs(baseClick, tabsX, tabsY, tabsWidth, tabsHeight)
+        baseClick, baseHeld, baseRightClick = renderSections(ProjectState.activeTab, baseClick, baseHeld, baseRightClick, contX, contY, contW, contH)
+        
+        if ProjectState.focus and baseClick and not over(contX, contY, contW, contH) then
             ProjectState.focus = nil
             baseClick = false
         end
@@ -4699,6 +5062,7 @@ local function step()
         ProjectState.draggedSection = nil
         ProjectState.drag = nil
         ProjectState.draggedTab = nil
+        ProjectState.tabsDrag = nil
     end
 
     local click = Input.m1.click
@@ -4706,6 +5070,7 @@ local function step()
     local rightClick = Input.m2.click
 
     if not ProjectState.open or #ProjectState.tabs == 0 then
+        click = renderHotkeyOverlay(click, held)
         renderWatermark(click, held)
         renderNotifications()
         hideUnused()
@@ -4746,6 +5111,7 @@ local function step()
     end
 
     renderNotifications()
+    click = renderHotkeyOverlay(click, held)
     click = renderCustomBoxes(click, held)
     hideUnused()
 end
@@ -5054,6 +5420,7 @@ homesick.createWindow = function(title, width, height)
                     type = "Toggle",
                     rawItem = sSelf.rawSec:Toggle(label, default, callback)
                 }
+                widgetWrap.rawItem.item.id = id
                 
                 widgetWrap.addTooltip = function(wSelf, text)
                     wSelf.rawItem.item.tooltip = text
@@ -5079,6 +5446,7 @@ homesick.createWindow = function(title, width, height)
                     type = "Checkbox",
                     rawItem = sSelf.rawSec:Checkbox(label, default, callback)
                 }
+                widgetWrap.rawItem.item.id = id
                 
                 widgetWrap.addTooltip = function(wSelf, text)
                     wSelf.rawItem.item.tooltip = text
@@ -5104,6 +5472,7 @@ homesick.createWindow = function(title, width, height)
                     type = "Slider",
                     rawItem = sSelf.rawSec:Slider(label, default, 1, min, max, "", callback)
                 }
+                widgetWrap.rawItem.item.id = id
                 
                 widgetWrap.addTooltip = function(wSelf, text)
                     wSelf.rawItem.item.tooltip = text
@@ -5133,6 +5502,7 @@ homesick.createWindow = function(title, width, height)
                     type = "InputText",
                     rawItem = sSelf.rawSec:Textbox(label, default, callback)
                 }
+                widgetWrap.rawItem.item.id = id
                 
                 widgetWrap.addTooltip = function(wSelf, text)
                     wSelf.rawItem.item.tooltip = text
@@ -5148,6 +5518,7 @@ homesick.createWindow = function(title, width, height)
                     type = "Dropdown",
                     rawItem = sSelf.rawSec:Dropdown(label, default, choices, false, callback)
                 }
+                widgetWrap.rawItem.item.id = id
                 
                 widgetWrap.addTooltip = function(wSelf, text)
                     wSelf.rawItem.item.tooltip = text
@@ -5163,6 +5534,7 @@ homesick.createWindow = function(title, width, height)
                     type = "MultiDropdown",
                     rawItem = sSelf.rawSec:Dropdown(label, default, choices, true, callback)
                 }
+                widgetWrap.rawItem.item.id = id
                 
                 widgetWrap.addTooltip = function(wSelf, text)
                     wSelf.rawItem.item.tooltip = text
