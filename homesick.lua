@@ -1001,7 +1001,7 @@ local function renderCustomBoxes(click, held)
                             local hovered = over(bx + 10, currentY, bw - 20, 20) and not popupBlocking
                             rect(bx + 10, currentY, bw - 20, 20, hovered and Theme.surface3 or Theme.surface2, 102, 4, 0.95)
                             strokeRect(bx + 10, currentY, bw - 20, 20, hovered and Theme.accent or Theme.border, 103, 4, 0.95)
-                            txt(el.label, bx + bw / 2, currentY + 3, Theme.text, 11, FontSystem, 104, true)
+                            txt(el.label, bx + bw / 2, currentY + 10, Theme.text, 11, FontSystem, 104, true)
                             if click and hovered then
                                 safeCallback(el.callback)
                                 click = false
@@ -1051,6 +1051,54 @@ local function renderCustomBoxes(click, held)
                                 end
                             end
                             currentY = currentY + 24
+                        end
+                    elseif el.type == "separator" then
+                        if currentY + 10 <= by + bh - 6 then
+                            if el.label and el.label ~= "" then
+                                local textW = textWidth(el.label, 11, FontSystem)
+                                local lineW = max(4, (bw - 20 - textW - 16) / 2)
+                                local lineY = currentY + 5
+                                rect(bx + 10, lineY, lineW, 1, Theme.border, 102, 1, 0.95)
+                                txt(el.label, bx + 10 + lineW + 8, currentY, Theme.sub, 11, FontSystem, 103, false, false, textW + 4)
+                                rect(bx + 10 + lineW + textW + 16, lineY, lineW, 1, Theme.border, 102, 1, 0.95)
+                            else
+                                rect(bx + 10, currentY + 5, bw - 20, 1, Theme.border, 102, 1, 0.95)
+                            end
+                            currentY = currentY + 10
+                        end
+                    elseif el.type == "colorpicker" then
+                        if currentY + 20 <= by + bh - 6 then
+                            txt(el.label, bx + 10, currentY + 3, Theme.text, 11, FontSystem, 102, false)
+                            local cpX = bx + bw - 22
+                            local hovered = over(cpX - 3, currentY + 1, 18, 18)
+                            rect(cpX, currentY + 4, 12, 12, el.value, 102, 3, 0.95)
+                            strokeRect(cpX, currentY + 4, 12, 12, Theme.border, 103, 3, 0.95)
+                            if hovered then
+                                strokeRect(cpX - 2, currentY + 2, 16, 16, Theme.accent, 104, 4, 0.95)
+                            end
+                            if click and hovered and not popupBlocking then
+                                doColorPicker(ProjectState.mouseX + 14, ProjectState.mouseY - 90, el)
+                                click = false
+                            end
+                            currentY = currentY + 20
+                        end
+                    elseif el.type == "dropdown" then
+                        if currentY + 36 <= by + bh - 6 then
+                            txt(el.label, bx + 10, currentY, Theme.text, 11, FontSystem, 102, false)
+                            local dx = bx + 10
+                            local dw = bw - 20
+                            local dyBox = currentY + 14
+                            local boxH = 18
+                            local hovered = over(dx, dyBox, dw, boxH)
+                            rect(dx, dyBox, dw, boxH, hovered and Theme.surface3 or Theme.surface2, 102, 4, 0.95)
+                            strokeRect(dx, dyBox, dw, boxH, Theme.border, 103, 4, 0.95)
+                            txt(el.value[1] or "-", dx + 6, centerY(dyBox, boxH), Theme.text, 11, FontSystem, 104, false)
+                            drawChevronDown(dx + dw - 12, centerY(dyBox, boxH) - 2, Theme.sub, 105)
+                            if click and hovered and not popupBlocking then
+                                dDropdown("item", dx, dyBox + boxH, dw, el.choices, el.value, false, el.callback, el, nil)
+                                click = false
+                            end
+                            currentY = currentY + 36
                         end
                     end
                 end
@@ -5684,6 +5732,59 @@ homesick.CreateBox = function(self, config)
         local el = self.elements[id]
         if el and el.type == "slider" then
             el.value = clamp(tonumber(value) or el.value, el.min, el.max)
+        end
+        return self
+    end
+
+    function box:AddSeparator(id, label)
+        if not self.elements[id] then
+            table.insert(self.elementOrder, id)
+        end
+        self.elements[id] = {
+            type = "separator",
+            label = label or "",
+        }
+        return self
+    end
+
+    function box:AddColorpicker(id, label, defaultColor, callback)
+        if not self.elements[id] then
+            table.insert(self.elementOrder, id)
+        end
+        self.elements[id] = {
+            type = "colorpicker",
+            label = label or "color",
+            value = parseColor(defaultColor or Theme.white),
+            callback = callback,
+        }
+        return self
+    end
+    
+    function box:SetColorpicker(id, value)
+        if self.elements[id] and self.elements[id].type == "colorpicker" then
+            self.elements[id].value = parseColor(value)
+        end
+        return self
+    end
+
+    function box:AddDropdown(id, label, choices, default, callback)
+        if not self.elements[id] then
+            table.insert(self.elementOrder, id)
+        end
+        self.elements[id] = {
+            type = "dropdown",
+            label = label or "dropdown",
+            choices = choices or {},
+            value = copyArray(default),
+            callback = callback,
+            multi = false,
+        }
+        return self
+    end
+
+    function box:SetDropdown(id, value)
+        if self.elements[id] and self.elements[id].type == "dropdown" then
+            setDropdownValue(self.elements[id], value, true)
         end
         return self
     end
