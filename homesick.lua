@@ -2240,9 +2240,7 @@ local function renderHotkeyOverlay(click, held)
     for i = 1, #displayHotkeys do
         totalHeight = totalHeight + 20 * displayHotkeys[i].fade
     end
-    if #displayHotkeys == 0 then
-        totalHeight = 26 + 20
-    end
+    totalHeight = max(46, totalHeight)
     
     ProjectState.hotkeyHeight = smoothValue(ProjectState.hotkeyHeight or 46, totalHeight, 18)
     local hh = ProjectState.hotkeyHeight
@@ -4618,14 +4616,14 @@ local function renderWindow(click, held, rightClick)
     local pw, ph = w - 20, h - 20 - 24
     
     if titlePos == "left" then
-        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + 2, 36 - 2, h - 4
+        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + 2, 36 - 2, h - 28
         px = px + 36
         pw = pw - 36
     elseif titlePos == "right" then
-        titleBarX, titleBarY, titleBarW, titleBarH = x + w - 36, y + 2, 36 - 2, h - 4
+        titleBarX, titleBarY, titleBarW, titleBarH = x + w - 36, y + 2, 36 - 2, h - 28
         pw = pw - 36
     elseif titlePos == "bottom" then
-        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + h - 36, w - 4, 36 - 2
+        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + h - 36 - 24, w - 4, 36 - 2
         ph = ph - 36
     else
         titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + 2, w - 4, 36 - 2
@@ -4761,13 +4759,13 @@ local function renderWindow(click, held, rightClick)
         
         if mx < x + w * 0.25 then
             snapTarget = "left"
-            previewX, previewY, previewW, previewH = x + 2, y + 2, 36 - 2, h - 4
+            previewX, previewY, previewW, previewH = x + 2, y + 2, 36 - 2, h - 28
         elseif mx > x + w * 0.75 then
             snapTarget = "right"
-            previewX, previewY, previewW, previewH = x + w - 36, y + 2, 36 - 2, h - 4
+            previewX, previewY, previewW, previewH = x + w - 36, y + 2, 36 - 2, h - 28
         elseif my > y + h * 0.75 then
             snapTarget = "bottom"
-            previewX, previewY, previewW, previewH = x + 2, y + h - 36, w - 4, 36 - 2
+            previewX, previewY, previewW, previewH = x + 2, y + h - 36 - 24, w - 4, 36 - 2
         end
         
         rect(previewX, previewY, previewW, previewH, Theme.accent, 200, 6, 0.3)
@@ -4793,7 +4791,7 @@ local function renderWindow(click, held, rightClick)
     local searchX, searchY
     
     if isVertTitle then
-        local cogCY = y + h - 38
+        local cogCY = titleBarY + titleBarH - 18
         local searchIY = cogCY - 26
         setHovered = over(titleBarX + 8, cogCY - 10, 20, 20)
         cxSet = titleBarX + 18
