@@ -2136,6 +2136,7 @@ local function doColorPicker(x, y, picker)
         _hexInput = nil,
     }
     ProjectState.dropdown = nil
+end
 local function findItemValue(idOrLabel)
     if string.find(tostring(idOrLabel or ""), "%.") then
         local val = UI:GetValue(idOrLabel)
