@@ -1,14 +1,3 @@
-if type(identifyexecutor) ~= "function" then
-    error("homesick requires Matcha executor")
-end
-
-do
-    local executor = select(1, identifyexecutor())
-    if executor ~= "Matcha" then
-        error("homesick requires Matcha executor")
-    end
-end
-
 local v2 = Vector2.new
 local c3 = Color3.fromRGB
 local c3Hex = Color3.fromHex
@@ -22,6 +11,7 @@ local sin = math.sin
 local clock = os.clock
 local remove = table.remove
 local concat = table.concat
+
 _G.homesickFunctions = _G.homesickFunctions or {}
 _G.homesickOriginals = {
     print = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.print and not _G.homesickFunctions[_G.homesickOriginals.print]) and _G.homesickOriginals.print or print,
@@ -166,14 +156,13 @@ local contentPad = 8
 
 local shadowAlpha = {0.10, 0.07, 0.05, 0.03, 0.015}
 
-local changelogLines = {
+local changelogs = {
     "added smooth window accent glow pulse",
     "added smooth sliding indicator for tab active highlight",
     "added layout editor dragging for title bar positioning",
-    "docked top and bottom tabs inside the main gui window",
     "updated hotkey overlay to display full toggle/hold labels",
     "added smooth fade-out and slide animations for hotkeys",
-    "fixed colorpicker copying alpha to hex values",
+    "made colorpicker copy alpha to hex values",
     "added 7 drawing font choices with custom width scaling"
 }
 
@@ -3356,10 +3345,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             local item = section.items[ii]
             local itemH = getItemHeight(item, rowW)
             local disabled = isItemDisabled(item)
-            local trans = (disabled and 0.4 or 1) * cardTrans * min(clamp((rowY - cardClipTop) / 16, 0, 1), clamp((cardClipBottom - (rowY + itemH)) / 16, 0, 1))
-            if rowY + itemH > sy + secH - 4 then
-                trans = 0
-            end
+            local trans = (disabled and 0.4 or 1) * cardTrans * min(clamp((rowY - cardClipTop) / 16, 0, 1), clamp((cardClipBottom - (rowY + itemH)) / 16, 0, 1), clamp(((sy + secH - 4) - (rowY + itemH)) / 16, 0, 1))
             
             if trans > 0 then
                 if item.type == "label" then
@@ -5185,10 +5171,18 @@ local function renderWindow(click, held, rightClick)
         rect(mx, my, modalW, modalH, Theme.surface2, mz, 8, 1)
         strokeRect(mx, my, modalW, modalH, Theme.border, mz + 1, 8, 1)
         
-        txt("homesick changelog - " .. "v1.4.0", mx + 16, my + 14, Theme.accent, 13, FontBold, mz + 2)
+        txt("homesick changelog - " .. "v1.3.6", mx + 16, my + 14, Theme.accent, 13, FontBold, mz + 2)
         
-        for i = 1, #changelogLines do
-            txt("• " .. changelogLines[i], mx + 16, my + 40 + (i - 1) * 18, Theme.text, 11, FontSystem, mz + 2)
+        for i = 1, #changelogs do
+            local text = changelogs[i]
+            local isAdd = true
+            if string.find(text, "^fixed") or string.find(text, "^removed") or string.find(text, "^deleted") or string.find(text, "^cleared") then
+                isAdd = false
+            end
+            local yOffset = my + 40 + (i - 1) * 18
+            txt("[", mx + 16, yOffset, Theme.text, 11, FontSystem, mz + 2)
+            txt(isAdd and "+" or "-", mx + 22, yOffset, isAdd and c3(150, 220, 150) or c3(220, 150, 150), 11, FontSystem, mz + 2)
+            txt("] " .. text, mx + 28, yOffset, Theme.text, 11, FontSystem, mz + 2)
         end
         
         local btnHovered = over(mx + 100, my + 220, 100, 24)
