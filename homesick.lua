@@ -3078,7 +3078,9 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
 
         txt(item.keybind.listening and "..." or (item.keybind.value and string.upper(item.keybind.value) or "-"), keyX + 23, centerY(rowY + 3, 20), item.keybind.value and Theme.text or Theme.sub, 12, FontUI, 52, true, false, 42, trans)
 
-        txt(item.keybind.mode == "Toggle" and "T" or item.keybind.mode == "Always" and "A" or "H", keyX - 8, centerY(rowY, 28 - 2), item.keybind.mode == "Hold" and Theme.sub or Theme.accent, 10, FontUI, 52, true, false, nil, trans)
+        local modeLabel = item.keybind.mode == "Toggle" and "[Toggle]" or item.keybind.mode == "Always" and "[Always]" or "[Hold]"
+        local modeLabelColor = item.keybind.mode == "Hold" and Theme.sub or Theme.accent
+        txt(modeLabel, keyX + 23, rowY + 22, modeLabelColor, 9, FontUI, 52, true, false, 46, trans)
 
         if item.keybind.listening then
             for i = 1, #InputOrder do
@@ -3155,6 +3157,8 @@ local function getItemHeight(item, rowW)
         local labelLines = wrapLines(item.label, rowW or 1000, 13, FontSystem)
         item.cachedLineCount = #labelLines
         return math.max(28, #labelLines * 16 + 8)
+    elseif item.type == "checkbox" and item.keybind then
+        return 36
     end
     return 28
 end
@@ -3337,16 +3341,22 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             end
         end
         
-        local rowY = sy + 28
         local rowW = colW - 24
         local rowX = colX + 12
+        local rowY = sy + 28
+        
+        local totalItemsH = 0
+        for k = 1, #section.items do
+            totalItemsH = totalItemsH + getItemHeight(section.items[k], rowW)
+        end
+        local isClipped = section.customHeight and (secH - 34 < totalItemsH)
         
         for ii = 1, #section.items do
             local item = section.items[ii]
             local itemH = getItemHeight(item, rowW)
             local disabled = isItemDisabled(item)
             local trans = (disabled and 0.4 or 1) * cardTrans * min(clamp((rowY - cardClipTop) / 16, 0, 1), clamp((cardClipBottom - (rowY + itemH)) / 16, 0, 1))
-            if section.customHeight then
+            if isClipped then
                 trans = trans * clamp(((sy + secH - 4) - (rowY + itemH)) / 16, 0, 1)
             end
             
@@ -4783,20 +4793,22 @@ local function renderWindow(click, held, rightClick)
     local searchX, searchY
     
     if isVertTitle then
-        setHovered = over(titleBarX + 8, titleBarY + titleBarH - 28, 20, 20)
+        local cogCY = y + h - 38
+        local searchIY = cogCY - 26
+        setHovered = over(titleBarX + 8, cogCY - 10, 20, 20)
         cxSet = titleBarX + 18
-        cy = titleBarY + titleBarH - 18
+        cy = cogCY
         
-        iconHovered = over(titleBarX + 8, titleBarY + titleBarH - 52, 20, 20)
+        iconHovered = over(titleBarX + 8, searchIY - 10, 20, 20)
         circleX = titleBarX + 18
-        circleY = titleBarY + titleBarH - 42
+        circleY = searchIY
         lineX1 = titleBarX + 21
-        lineY1 = titleBarY + titleBarH - 39
+        lineY1 = searchIY + 3
         lineX2 = titleBarX + 25
-        lineY2 = titleBarY + titleBarH - 35
+        lineY2 = searchIY + 7
         
         searchX = (titlePos == "left") and (titleBarX + titleBarW + 4) or (titleBarX - ProjectState.searchBar.width - 4)
-        searchY = titleBarY + titleBarH - 52
+        searchY = searchIY - 10
     else
         setHovered = over(titleBarX + titleBarW - 30, titleBarY + 6, 20, 24)
         cxSet = titleBarX + titleBarW - 21
@@ -4926,8 +4938,6 @@ local function renderWindow(click, held, rightClick)
     circle(circleX, circleY, 4, iconHovered and Theme.accent or Theme.sub, 20, false, 1.5)
     line(lineX1, lineY1, lineX2, lineY2, iconHovered and Theme.accent or Theme.sub, 20, 1.5)
 
-    local cxSet = x + w - 21
-    local cy = y + 18
     local col = (setHovered or ProjectState.settingsActive) and Theme.accent or Theme.sub
     if ProjectState.settingsActive then
         for i = 0, 3 do
@@ -5183,9 +5193,11 @@ local function renderWindow(click, held, rightClick)
                 isAdd = false
             end
             local yOffset = my + 40 + (i - 1) * 18
-            txt("[", mx + 16, yOffset, Theme.text, 11, FontSystem, mz + 2)
-            txt(isAdd and "+" or "-", mx + 22, yOffset, isAdd and c3(150, 220, 150) or c3(220, 150, 150), 11, FontSystem, mz + 2)
-            txt("] " .. text, mx + 28, yOffset, Theme.text, 11, FontSystem, mz + 2)
+            local bulletColor = isAdd and c3(150, 220, 150) or c3(220, 150, 150)
+            local bulletChar = isAdd and "+" or "-"
+            local bx = mx + 16
+            txt("[" .. bulletChar .. "] " .. text, bx, yOffset, Theme.text, 11, FontSystem, mz + 2)
+            txt(bulletChar, bx + textWidth("[", 11, FontSystem), yOffset, bulletColor, 11, FontSystem, mz + 3)
         end
         
         local btnHovered = over(mx + 100, my + 220, 100, 24)
