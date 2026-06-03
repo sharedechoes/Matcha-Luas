@@ -9,12 +9,10 @@ do
     end
 end
 
-local DrawingNew = Drawing.new
-local V2 = Vector2.new
-local C3 = Color3.fromRGB
-local C3N = Color3.new
-local C3HEX = Color3.fromHex
-local HSV = Color3.fromHSV
+local v2 = Vector2.new
+local c3 = Color3.fromRGB
+local c3Hex = Color3.fromHex
+local hsv = Color3.fromHSV
 
 local abs = math.abs
 local floor = math.floor
@@ -50,9 +48,9 @@ end
 
 local function parseColor(c)
     if type(c) == "string" then
-        return C3HEX(string.sub(c, 1, 1) == "#" and c or "#" .. c)
+        return c3Hex(string.sub(c, 1, 1) == "#" and c or "#" .. c)
     elseif type(c) == "table" then
-        return C3(c[1] or 255, c[2] or 255, c[3] or 255)
+        return c3(c[1] or 255, c[2] or 255, c[3] or 255)
     end
     return c
 end
@@ -64,13 +62,13 @@ local Mouse = select(1, pcall(function() return LocalPlayer:GetMouse() end)) and
 local homesickInstanceId = tick()
 _G.homesickInstanceId = homesickInstanceId
 
-local _clipboardBox = nil
-local _clipboardGui = nil
-local _clipboardPending = false
-local _clipboardResult = nil
+local clipboardBox = nil
+local clipboardGui = nil
+local clipboardPending = false
+local clipboardResult = nil
 
-local function _initClipboardBox()
-    if _clipboardBox then return end
+local function initClipboardBox()
+    if clipboardBox then return end
     pcall(function()
         local sg = Instance.new("ScreenGui")
         sg.Name = "homesickClipboard"
@@ -84,25 +82,25 @@ local function _initClipboardBox()
         tb.Text = ""
         tb.ClearTextOnFocus = false
         sg.Parent = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui") or game:GetService("CoreGui")
-        _clipboardGui = sg
-        _clipboardBox = tb
+        clipboardGui = sg
+        clipboardBox = tb
         tb.FocusLost:Connect(function()
-            if _clipboardPending then
-                _clipboardResult = tb.Text
+            if clipboardPending then
+                clipboardResult = tb.Text
                 tb.Text = ""
-                _clipboardPending = false
+                clipboardPending = false
             end
         end)
     end)
 end
 
-local function _readClipboard(callback)
-    _initClipboardBox()
-    if not _clipboardBox then callback(nil) return end
-    _clipboardBox.Text = ""
-    _clipboardPending = true
-    _clipboardResult = nil
-    pcall(function() _clipboardBox:CaptureFocus() end)
+local function readClipboard(callback)
+    initClipboardBox()
+    if not clipboardBox then callback(nil) return end
+    clipboardBox.Text = ""
+    clipboardPending = true
+    clipboardResult = nil
+    pcall(function() clipboardBox:CaptureFocus() end)
     pcall(function()
         keypress(0x11)
         keypress(0x56)
@@ -110,11 +108,11 @@ local function _readClipboard(callback)
         keyrelease(0x11)
     end)
     task.delay(0.05, function()
-        pcall(function() _clipboardBox:ReleaseFocus() end)
+        pcall(function() clipboardBox:ReleaseFocus() end)
         task.delay(0.02, function()
-            local result = _clipboardResult
-            _clipboardPending = false
-            _clipboardResult = nil
+            local result = clipboardResult
+            clipboardPending = false
+            clipboardResult = nil
             callback(type(result) == "string" and result or nil)
         end)
     end)
@@ -158,40 +156,42 @@ FontWidths[Fonts.Monospace or 0] = 0.60
 FontWidths[Fonts.Pixel or 0] = 0.50
 FontWidths[Fonts.Fortnite or 0] = 0.55
 
-local DRAW_VISIBLE = 1
-local FRAME_WAIT = 1 / 240
-local MENU_KEY = "p"
+local drawVisible = 1
+local menuKey = "p"
 
-local PAD = 10
-local TITLE_H = 36
-local TAB_H = 30
-local ROW_H = 28
-local CONTROL_H = 22
-local DEFAULT_W = 430
-local DEFAULT_H = 500
-local MINIMIZED_H = 42
-local TAB_MIN_W = 80
-local CONTENT_PAD = 8
+local tabH = 30
+local minimizedH = 42
+local tabMinW = 80
+local contentPad = 8
 
-local SHADOW_ALPHA = {0.10, 0.07, 0.05, 0.03, 0.015}
-local KEYBIND_MODES = {"Hold", "Toggle", "Always"}
+local shadowAlpha = {0.10, 0.07, 0.05, 0.03, 0.015}
+
+local changelogLines = {
+    "added smooth window accent glow pulse",
+    "added smooth sliding indicator for tab active highlight",
+    "added layout editor dragging for title bar positioning",
+    "docked top and bottom tabs inside the main gui window",
+    "updated hotkey overlay to display full toggle/hold labels",
+    "added smooth fade-out and slide animations for hotkeys",
+    "fixed colorpicker copying alpha to hex values",
+    "added 7 drawing font choices with custom width scaling"
+}
 
 local Theme = {
-    bg = C3(36, 33, 31),
-    surface = C3(30, 27, 25),
-    surface2 = C3(44, 40, 37),
-    surface3 = C3(54, 50, 46),
-    text = C3(245, 242, 238),
-    sub = C3(150, 142, 135),
-    accent = C3(232, 208, 162),
-    green = C3(52, 199, 89),
-    red = C3(255, 69, 58),
-    yellow = C3(255, 204, 0),
-    unsafe = C3(255, 226, 84),
-    border = C3(60, 55, 52),
-    white = C3(255, 255, 255),
-    black = C3(0, 0, 0),
-    particle = C3(255, 255, 255),
+    bg = c3(36, 33, 31),
+    surface = c3(30, 27, 25),
+    surface2 = c3(44, 40, 37),
+    surface3 = c3(54, 50, 46),
+    text = c3(245, 242, 238),
+    sub = c3(150, 142, 135),
+    accent = c3(232, 208, 162),
+    green = c3(52, 199, 89),
+    red = c3(255, 69, 58),
+    yellow = c3(255, 204, 0),
+    unsafe = c3(255, 226, 84),
+    border = c3(60, 55, 52),
+    white = c3(255, 255, 255),
+    black = c3(0, 0, 0),
 }
 
 local ThemeAlpha = {
@@ -209,7 +209,6 @@ local ThemeAlpha = {
     border = 1.0,
     white = 1.0,
     black = 1.0,
-    particle = 0.25,
 }
 
 local function getThemeAlpha(color)
@@ -228,9 +227,9 @@ local ProjectState = {
     open = true,
     x = 100,
     y = 80,
-    w = DEFAULT_W,
-    h = DEFAULT_H,
-    defaultH = DEFAULT_H,
+    w = 430,
+    h = 500,
+    defaultH = 500,
     minimized = false,
     title = "homesick",
     tabs = {},
@@ -298,7 +297,7 @@ local ProjectState = {
     tabsPosition = "top",
     layoutEditing = false,
     hotkeyEnabled = false,
-    hotkeyPos = V2(100, 200),
+    hotkeyPos = v2(100, 200),
     hotkeyDrag = nil,
 }
 
@@ -447,7 +446,7 @@ addInput("backslash", 0xDC, "\\", "|")
 addInput("rbracket", 0xDD, "]", "}")
 addInput("quote", 0xDE, "'", "\"")
 
-local UI = {}
+local ui = {}
 
 local function viewportSize()
     local camera = Workspace.CurrentCamera
@@ -596,7 +595,7 @@ local function getDrawing(kind)
     local object = list[index]
 
     if not object then
-        local ok, created = pcall(DrawingNew, TypeMap[kind])
+        local ok, created = pcall(Drawing.new, TypeMap[kind])
         if not ok or not created then
             return nil
         end
@@ -623,7 +622,7 @@ local function getExternalDrawing(kind)
     local object = list[index]
 
     if not object then
-        local ok, created = pcall(DrawingNew, TypeMap[kind])
+        local ok, created = pcall(Drawing.new, TypeMap[kind])
         if not ok or not created then
             return nil
         end
@@ -698,13 +697,13 @@ local function rect(x, y, w, h, color, z, radius, transparency)
     if not d then
         return
     end
-    d.Position = V2(x, y)
-    d.Size = V2(w, h)
+    d.Position = v2(x, y)
+    d.Size = v2(w, h)
     d.Color = color
     d.Filled = true
     d.Corner = radius or 0
     d.ZIndex = z or 1
-    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
+    d.Transparency = (transparency or drawVisible) * getThemeAlpha(color)
 end
 
 local function strokeRect(x, y, w, h, color, z, radius, transparency)
@@ -715,13 +714,13 @@ local function strokeRect(x, y, w, h, color, z, radius, transparency)
     if not d then
         return
     end
-    d.Position = V2(x, y)
-    d.Size = V2(w, h)
+    d.Position = v2(x, y)
+    d.Size = v2(w, h)
     d.Color = color
     d.Filled = false
     d.Corner = radius or 0
     d.ZIndex = z or 1
-    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
+    d.Transparency = (transparency or drawVisible) * getThemeAlpha(color)
 end
 
 local function textWidth(value, size, font)
@@ -820,13 +819,13 @@ local function txt(value, x, y, color, size, font, z, centered, outline, maxWidt
     else
         d.Center = false
     end
-    d.Position = V2(xPos, yPos)
+    d.Position = v2(xPos, yPos)
     d.Color = color
     d.Size = size or 13
     d.Font = font or FontSystem
     d.ZIndex = (z or 1) + 10
     d.Outline = outline == true
-    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
+    d.Transparency = (transparency or drawVisible) * getThemeAlpha(color)
 end
 
 local function drawVerticalText(text, tx, ty, color, size, font, z)
@@ -848,12 +847,12 @@ local function line(x1, y1, x2, y2, color, z, thickness, transparency)
     if not d then
         return
     end
-    d.From = V2(x1, y1)
-    d.To = V2(x2, y2)
+    d.From = v2(x1, y1)
+    d.To = v2(x2, y2)
     d.Color = color
     d.Thickness = thickness or 1
     d.ZIndex = z or 1
-    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
+    d.Transparency = (transparency or drawVisible) * getThemeAlpha(color)
 end
 
 local function circle(x, y, radius, color, z, filled, thickness, sides, transparency)
@@ -861,14 +860,14 @@ local function circle(x, y, radius, color, z, filled, thickness, sides, transpar
     if not d then
         return
     end
-    d.Position = V2(x, y)
+    d.Position = v2(x, y)
     d.Radius = radius
     d.Color = color
     d.Filled = filled ~= false
     d.Thickness = thickness or 1
     d.NumSides = sides or 32
     d.ZIndex = z or 1
-    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
+    d.Transparency = (transparency or drawVisible) * getThemeAlpha(color)
 end
 
 local function triangle(a, b, c, color, z, filled, transparency)
@@ -883,15 +882,15 @@ local function triangle(a, b, c, color, z, filled, transparency)
     d.Filled = filled ~= false
     d.Thickness = 1
     d.ZIndex = z or 1
-    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
+    d.Transparency = (transparency or drawVisible) * getThemeAlpha(color)
 end
 
 local function drawImage(data, x, y, w, h, z, trans)
     local obj = getDrawing("im")
     if obj and obj == obj then
         pcall(function() obj.Data = data end)
-        pcall(function() obj.Position = V2(x, y) end)
-        pcall(function() obj.Size = V2(w, h) end)
+        pcall(function() obj.Position = v2(x, y) end)
+        pcall(function() obj.Size = v2(w, h) end)
         pcall(function() obj.ZIndex = z or 0 end)
         pcall(function() obj.Transparency = trans or 1 end)
         pcall(function() obj.Visible = true end)
@@ -1091,11 +1090,11 @@ local function renderNotifications()
 end
 
 local function drawChevronDown(x, y, color, z, transparency)
-    triangle(V2(x, y), V2(x + 8, y), V2(x + 4, y + 5), color, z, true, transparency)
+    triangle(v2(x, y), v2(x + 8, y), v2(x + 4, y + 5), color, z, true, transparency)
 end
 
 local function drawChevronUp(x, y, color, z, transparency)
-    triangle(V2(x, y + 5), V2(x + 8, y + 5), V2(x + 4, y), color, z, true, transparency)
+    triangle(v2(x, y + 5), v2(x + 8, y + 5), v2(x + 4, y), color, z, true, transparency)
 end
 
 local function snapValue(raw, item)
@@ -1195,9 +1194,9 @@ local function makeItem(section, item)
                 safeCallback(keybind.callback, keybind.value and Input[keybind.value] and Input[keybind.value].id or nil, keybind.mode)
                 return self
             end
-            function keyHandle:AddToHotkey(label, toggle_id)
+            function keyHandle:AddToHotkey(label, toggleId)
                 keybind.hotkeyLabel = label
-                keybind.hotkeyToggleId = toggle_id
+                keybind.hotkeyToggleId = toggleId
                 return self
             end
             function keyHandle:RemoveFromHotkey()
@@ -1375,9 +1374,9 @@ local function createSection(tab, name, side, allowLocking, defaultLock)
     return sectionApi
 end
 
-function UI.Notify(self, title, desc, duration, image)
+function ui.Notify(self, title, desc, duration, image)
     local t, d, dur, img
-    if type(self) == "table" and self == UI then
+    if type(self) == "table" and self == ui then
         t, d, dur, img = title, desc, duration, image
     else
         t, d, dur, img = self, title, desc, duration
@@ -1392,7 +1391,7 @@ function UI.Notify(self, title, desc, duration, image)
     })
 end
 
-function UI:SetMenuKey(key)
+function ui:SetMenuKey(key)
     if type(key) == "number" or (type(key) == "string" and tonumber(key) ~= nil) then
         local vk = tonumber(key)
         for name, input in pairs(Input) do
@@ -1402,11 +1401,11 @@ function UI:SetMenuKey(key)
             end
         end
     end
-    MENU_KEY = normalizeKey(key) or "f1"
+    menuKey = normalizeKey(key) or "f1"
     return self
 end
 
-function UI:SetTheme(overrides)
+function ui:SetTheme(overrides)
     if type(overrides) == "table" then
         for k, v in pairs(overrides) do
             if Theme[k] ~= nil then Theme[k] = v end
@@ -1415,11 +1414,11 @@ function UI:SetTheme(overrides)
     return self
 end
 
-function UI:IsOpen()
+function ui:IsOpen()
     return ProjectState.open == true
 end
 
-function UI:SetOpen(bool)
+function ui:SetOpen(bool)
     setOpen(bool == true)
     return self
 end
@@ -1432,7 +1431,7 @@ local function splitPath(str)
     return parts
 end
 
-function UI:GetValue(path)
+function ui:GetValue(path)
     local parts = splitPath(path)
     if #parts < 3 then return nil end
     local tabName, secName, itemName = parts[1], parts[2], parts[3]
@@ -1452,7 +1451,7 @@ function UI:GetValue(path)
     return nil
 end
 
-function UI:SetValue(path, value)
+function ui:SetValue(path, value)
     local parts = splitPath(path)
     if #parts < 3 then return self end
     local tabName, secName, itemName = parts[1], parts[2], parts[3]
@@ -1473,26 +1472,26 @@ function UI:SetValue(path, value)
     return self
 end
 
-function UI:GetDrawing(kind)
+function ui:GetDrawing(kind)
     return getExternalDrawing(kind)
 end
 
-function UI:SetTitle(text)
+function ui:SetTitle(text)
     ProjectState.title = tostring(text or "homesick")
     return self
 end
 
-function UI:SetPos(x, y)
+function ui:SetPos(x, y)
     ProjectState.x = tonumber(x) or ProjectState.x
     ProjectState.y = tonumber(y) or ProjectState.y
     clampWindow()
     return self
 end
 
-function UI:SetSize(w, h)
+function ui:SetSize(w, h)
     ProjectState.w = max(300, tonumber(w) or ProjectState.w)
     ProjectState.h = max(300, tonumber(h) or ProjectState.h)
-    if ProjectState.h > MINIMIZED_H then
+    if ProjectState.h > minimizedH then
         ProjectState.defaultH = ProjectState.h
         ProjectState.minimized = false
     end
@@ -1500,7 +1499,7 @@ function UI:SetSize(w, h)
     return self
 end
 
-function UI:Center()
+function ui:Center()
     local vw, vh = viewportSize()
     ProjectState.x = floor(vw / 2 - ProjectState.w / 2)
     ProjectState.y = floor(vh / 2 - ProjectState.h / 2)
@@ -1508,7 +1507,7 @@ function UI:Center()
     return self
 end
 
-function UI:Tab(name)
+function ui:Tab(name)
     local tab = {
         name = tostring(name or ("Tab " .. tostring(#ProjectState.tabs + 1))),
         sections = {},
@@ -1533,7 +1532,7 @@ function UI:Tab(name)
     return tabApi
 end
 
-function UI:RegisterActivity(callback)
+function ui:RegisterActivity(callback)
     ProjectState.activityId = ProjectState.activityId + 1
     local activity = {
         id = ProjectState.activityId,
@@ -1589,10 +1588,10 @@ local function finalDestroy()
     setrobloxinput(true)
     ProjectState.inputState = true
 
-    if _clipboardGui then
-        pcall(function() _clipboardGui:Destroy() end)
-        _clipboardGui = nil
-        _clipboardBox = nil
+    if clipboardGui then
+        pcall(function() clipboardGui:Destroy() end)
+        clipboardGui = nil
+        clipboardBox = nil
     end
 
     removeAllDrawings()
@@ -1606,7 +1605,7 @@ local function finalDestroy()
     end
 end
 
-function UI:Destroy()
+function ui:Destroy()
     ProjectState.alive = false
     ProjectState.open = false
     if not ProjectState.rendering then
@@ -1615,7 +1614,7 @@ function UI:Destroy()
     return self
 end
 
-function UI:Unload()
+function ui:Unload()
     return self:Destroy()
 end
 
@@ -1677,7 +1676,7 @@ local function updateInput()
         end
     else
         local keysToPoll = {}
-        if MENU_KEY then keysToPoll[MENU_KEY] = true end
+        if menuKey then keysToPoll[menuKey] = true end
         for _, item in ipairs(keybindItems) do
             if item.keybind and item.keybind.value then
                 keysToPoll[item.keybind.value] = true
@@ -1700,7 +1699,7 @@ local function updateInput()
 end
 
 local function lerpColor(c1, c2, t)
-    return C3N(
+    return Color3.new(
         c1.R + (c2.R - c1.R) * t,
         c1.G + (c2.G - c1.G) * t,
         c1.B + (c2.B - c1.B) * t
@@ -1752,16 +1751,16 @@ local function getFocusableItems()
 end
 
 local function pushHistory(item, prevValue)
-    if not item._history then
-        item._history = { prevValue }
-        item._historyIndex = 1
+    if not item.history then
+        item.history = { prevValue }
+        item.historyIndex = 1
     else
-        while #item._history > item._historyIndex do
-            table.remove(item._history)
+        while #item.history > item.historyIndex do
+            table.remove(item.history)
         end
-        if item._history[item._historyIndex] ~= prevValue then
-            item._historyIndex = item._historyIndex + 1
-            item._history[item._historyIndex] = prevValue
+        if item.history[item.historyIndex] ~= prevValue then
+            item.historyIndex = item.historyIndex + 1
+            item.history[item.historyIndex] = prevValue
         end
     end
 end
@@ -1805,7 +1804,7 @@ local function processTextInput()
             ProjectState.focus = nil
             return
         end
-        local value = cp._hexInput or ""
+        local value = cp.hexInput or ""
         local changed = false
         for i = 1, #InputOrder do
             local name = InputOrder[i]
@@ -1824,9 +1823,9 @@ local function processTextInput()
             end
         end
         if changed then
-            cp._hexInput = value
+            cp.hexInput = value
             if #value == 8 then
-                local ok, newColor = pcall(C3HEX, "#" .. string.sub(value, 1, 6))
+                local ok, newColor = pcall(c3Hex, "#" .. string.sub(value, 1, 6))
                 if ok and newColor and tonumber(string.sub(value, 7, 8), 16) then
                     cp.hue, cp.sat, cp.val = toHsv(newColor)
                     cp.value = newColor
@@ -1836,7 +1835,7 @@ local function processTextInput()
                     safeCallback(cp.picker.callback, newColor, cp.alpha)
                 end
             elseif #value == 6 then
-                local ok, newColor = pcall(C3HEX, "#" .. value)
+                local ok, newColor = pcall(c3Hex, "#" .. value)
                 if ok and newColor then
                     cp.hue, cp.sat, cp.val = toHsv(newColor)
                     cp.value = newColor
@@ -1865,15 +1864,15 @@ local function processTextInput()
 
     if Input.enter.click then
         if item.type == "slider" then
-            local val = tonumber(item._directValue or "") or item.value or item.min or 0
+            local val = tonumber(item.directValue or "") or item.value or item.min or 0
             setItemValue(item, val, true)
-            item._directValue = nil
+            item.directValue = nil
         end
         ProjectState.focus = nil
         return
     elseif Input.esc.click then
         if item.type == "slider" then
-            item._directValue = nil
+            item.directValue = nil
         end
         ProjectState.focus = nil
         return
@@ -1883,26 +1882,26 @@ local function processTextInput()
     if item.type == "textbox" then
         value = item.value or ""
     else
-        value = item._directValue or ""
+        value = item.directValue or ""
     end
 
     local changed = false
     local shifted = Input.shift.held or Input.lshift.held or Input.rshift.held
     local now = clock()
-    local any_held = false
+    local anyHeld = false
     
     if (Input.ctrl.held or Input.lctrl.held or Input.rctrl.held) then
         if Input.a.click then
-            item._selectedAll = true
+            item.selectedAll = true
             Input.a.click = false
         elseif Input.c.click then
             pcall(setclipboard, value)
             Input.c.click = false
         elseif Input.v.click then
             local captureItem = item
-            local captureSelectedAll = item._selectedAll
+            local captureSelectedAll = item.selectedAll
             local captureValue = value
-            _readClipboard(function(clip)
+            readClipboard(function(clip)
                 if type(clip) == "string" and clip ~= "" and ProjectState.focus == captureItem then
                     if captureItem.type == "slider" then
                         clip = clip:gsub("[^0-9%.%-]", "")
@@ -1910,7 +1909,7 @@ local function processTextInput()
                     local newVal
                     if captureSelectedAll then
                         newVal = clip
-                        captureItem._selectedAll = false
+                        captureItem.selectedAll = false
                     else
                         newVal = captureValue .. clip
                     end
@@ -1921,54 +1920,54 @@ local function processTextInput()
                             safeCallback(captureItem.callback, newVal)
                         end
                     else
-                        if newVal ~= captureItem._directValue then
-                            pushHistory(captureItem, captureItem._directValue or "")
-                            captureItem._directValue = newVal
+                        if newVal ~= captureItem.directValue then
+                            pushHistory(captureItem, captureItem.directValue or "")
+                            captureItem.directValue = newVal
                         end
                     end
                 end
             end)
             Input.v.click = false
         elseif Input.z.click then
-            if item._history and item._historyIndex > 0 then
-                local currentVal = (item.type == "textbox") and item.value or (item._directValue or "")
-                if item._historyIndex == #item._history then
-                    if item._history[item._historyIndex] ~= currentVal then
-                        item._history[#item._history + 1] = currentVal
+            if item.history and item.historyIndex > 0 then
+                local currentVal = (item.type == "textbox") and item.value or (item.directValue or "")
+                if item.historyIndex == #item.history then
+                    if item.history[item.historyIndex] ~= currentVal then
+                        item.history[#item.history + 1] = currentVal
                     end
                 end
-                if item._historyIndex > 1 then
-                    item._historyIndex = item._historyIndex - 1
-                    local targetVal = item._history[item._historyIndex]
+                if item.historyIndex > 1 then
+                    item.historyIndex = item.historyIndex - 1
+                    local targetVal = item.history[item.historyIndex]
                     if item.type == "textbox" then
                         item.value = targetVal
                         safeCallback(item.callback, targetVal)
                     else
-                        item._directValue = targetVal
+                        item.directValue = targetVal
                     end
-                    item._selectedAll = false
+                    item.selectedAll = false
                 end
             end
             Input.z.click = false
         elseif Input.y.click then
-            if item._history and item._historyIndex < #item._history then
-                item._historyIndex = item._historyIndex + 1
-                local targetVal = item._history[item._historyIndex]
+            if item.history and item.historyIndex < #item.history then
+                item.historyIndex = item.historyIndex + 1
+                local targetVal = item.history[item.historyIndex]
                 if item.type == "textbox" then
                     item.value = targetVal
                     safeCallback(item.callback, targetVal)
                 else
-                    item._directValue = targetVal
+                    item.directValue = targetVal
                 end
-                item._selectedAll = false
+                item.selectedAll = false
             end
             Input.y.click = false
         end
     else
         if Input.delete.click then
-            if item._selectedAll then
+            if item.selectedAll then
                 value = ""
-                item._selectedAll = false
+                item.selectedAll = false
             else
                 value = ""
             end
@@ -1981,9 +1980,9 @@ local function processTextInput()
             
             if input.click and input.char then
                 local char = shifted and input.shifted or input.char
-                if item._selectedAll then
+                if item.selectedAll then
                     value = ""
-                    item._selectedAll = false
+                    item.selectedAll = false
                 end
                 if item.type == "slider" then
                     if tonumber(char) or char == "." or char == "-" then
@@ -1996,15 +1995,15 @@ local function processTextInput()
                 end
                 ProjectState.repeatKey = name
                 ProjectState.repeatAt = now + 0.4
-                any_held = true
+                anyHeld = true
                 break
             elseif input.held and input.char and ProjectState.repeatKey == name then
-                any_held = true
+                anyHeld = true
                 if now >= (ProjectState.repeatAt or 0) then
                     local char = shifted and input.shifted or input.char
-                    if item._selectedAll then
+                    if item.selectedAll then
                         value = ""
-                        item._selectedAll = false
+                        item.selectedAll = false
                     end
                     if item.type == "slider" then
                         if tonumber(char) or char == "." or char == "-" then
@@ -2019,23 +2018,23 @@ local function processTextInput()
                 end
                 break
             elseif input.click and (name == "backspace" or name == "unbound") then
-                if item._selectedAll then
+                if item.selectedAll then
                     value = ""
-                    item._selectedAll = false
+                    item.selectedAll = false
                 else
                     value = string.sub(value, 1, max(0, #value - 1))
                 end
                 changed = true
                 ProjectState.repeatKey = name
                 ProjectState.repeatAt = now + 0.4
-                any_held = true
+                anyHeld = true
                 break
             elseif input.held and (name == "backspace" or name == "unbound") and ProjectState.repeatKey == name then
-                any_held = true
+                anyHeld = true
                 if now >= (ProjectState.repeatAt or 0) then
-                    if item._selectedAll then
+                    if item.selectedAll then
                         value = ""
-                        item._selectedAll = false
+                        item.selectedAll = false
                     else
                         value = string.sub(value, 1, max(0, #value - 1))
                     end
@@ -2047,7 +2046,7 @@ local function processTextInput()
         end
     end
     
-    if not any_held then
+    if not anyHeld then
         ProjectState.repeatKey = nil
     end
 
@@ -2059,9 +2058,9 @@ local function processTextInput()
                 safeCallback(item.callback, value)
             end
         else
-            if value ~= item._directValue then
-                pushHistory(item, item._directValue or "")
-                item._directValue = value
+            if value ~= item.directValue then
+                pushHistory(item, item.directValue or "")
+                item.directValue = value
             end
         end
     end
@@ -2098,7 +2097,7 @@ local function runActivities(dt, now)
     for i = 1, #ProjectState.activities do
         local activity = ProjectState.activities[i]
         if activity and activity.alive then
-            local result = safeCallback(activity.callback, UI, dt, now)
+            local result = safeCallback(activity.callback, ui, dt, now)
             if result ~= nil and result ~= "" then
                 activityParts[#activityParts + 1] = tostring(result)
             end
@@ -2177,13 +2176,13 @@ local function doColorPicker(x, y, picker)
         val = v,
         value = picker.value,
         alpha = picker.alpha or 1,
-        _hexInput = nil,
+        hexInput = nil,
     }
     ProjectState.dropdown = nil
 end
 local function findItemValue(idOrLabel)
     if string.find(tostring(idOrLabel or ""), "%.") then
-        local val = UI:GetValue(idOrLabel)
+        local val = ui:GetValue(idOrLabel)
         if val ~= nil then return val end
     end
     for _, t in ipairs(ProjectState.tabs) do
@@ -2264,7 +2263,7 @@ local function renderHotkeyOverlay(click, held)
         click = false
     end
     if held and ProjectState.hotkeyDrag then
-        ProjectState.hotkeyPos = V2(ProjectState.mouseX - ProjectState.hotkeyDrag[1], ProjectState.mouseY - ProjectState.hotkeyDrag[2])
+        ProjectState.hotkeyPos = v2(ProjectState.mouseX - ProjectState.hotkeyDrag[1], ProjectState.mouseY - ProjectState.hotkeyDrag[2])
         hx, hy = ProjectState.hotkeyPos.X, ProjectState.hotkeyPos.Y
     elseif not held then
         ProjectState.hotkeyDrag = nil
@@ -2368,10 +2367,10 @@ local function renderDropdown(click, rightClick)
     rect(dd.x, dd.y, dd.w, dd.h, Theme.surface, 111, 4)
 
     if dd.scrollOffset > 0 then
-        triangle(V2(dd.x + dd.w - 14, dd.y + headerH + 8), V2(dd.x + dd.w - 6, dd.y + headerH + 8), V2(dd.x + dd.w - 10, dd.y + headerH + 4), Theme.sub, 115, true)
+        triangle(v2(dd.x + dd.w - 14, dd.y + headerH + 8), v2(dd.x + dd.w - 6, dd.y + headerH + 8), v2(dd.x + dd.w - 10, dd.y + headerH + 4), Theme.sub, 115, true)
     end
     if dd.scrollOffset + maxRows < #dd.choices then
-        triangle(V2(dd.x + dd.w - 14, dd.y + dd.h - 8), V2(dd.x + dd.w - 6, dd.y + dd.h - 8), V2(dd.x + dd.w - 10, dd.y + dd.h - 4), Theme.sub, 115, true)
+        triangle(v2(dd.x + dd.w - 14, dd.y + dd.h - 8), v2(dd.x + dd.w - 6, dd.y + dd.h - 8), v2(dd.x + dd.w - 10, dd.y + dd.h - 4), Theme.sub, 115, true)
     end
 
     for idx = 1, min(#dd.choices, maxRows) do
@@ -2474,16 +2473,16 @@ local function renderDropdown(click, rightClick)
     end
 
     if isMulti and rightClick and isHoveredDropdown then
-        if not dd._ctxMenu then
-            dd._ctxMenu = true
-            dd._ctxY = clamp(ProjectState.mouseY, dd.y, dd.y + dd.h - 44)
+        if not dd.ctxMenu then
+            dd.ctxMenu = true
+            dd.ctxY = clamp(ProjectState.mouseY, dd.y, dd.y + dd.h - 44)
         end
         rightClick = false
     end
 
-    if dd._ctxMenu then
+    if dd.ctxMenu then
         local ctxX = dd.x
-        local ctxY = dd._ctxY or dd.y
+        local ctxY = dd.ctxY or dd.y
         local ctxW = dd.w
         rect(ctxX, ctxY, ctxW, 44, Theme.surface2, 116, 4)
         strokeRect(ctxX, ctxY, ctxW, 44, Theme.border, 117, 4)
@@ -2505,7 +2504,7 @@ local function renderDropdown(click, rightClick)
                     for ci = 1, #dd.choices do dd.value[ci] = dd.choices[ci] end
                     safeCallback(dd.callback, dd.value)
                 end
-                dd._ctxMenu = nil
+                dd.ctxMenu = nil
                 click = false
             elseif hoverClear then
                 if dd.item then
@@ -2514,10 +2513,10 @@ local function renderDropdown(click, rightClick)
                     for vi = #dd.value, 1, -1 do dd.value[vi] = nil end
                     safeCallback(dd.callback, dd.value)
                 end
-                dd._ctxMenu = nil
+                dd.ctxMenu = nil
                 click = false
             else
-                dd._ctxMenu = nil
+                dd.ctxMenu = nil
             end
         end
     end
@@ -2575,8 +2574,8 @@ local function renderColorpicker(click, held)
     if #cpSquares == 0 then
         for gx = 3, palW - 4, 4 do
             for gy = 3, palH - 4, 4 do
-                local sq = DrawingNew("Square")
-                sq.Size = V2(math.min(4, palW - 3 - gx), math.min(4, palH - 3 - gy))
+                local sq = Drawing.new("Square")
+                sq.Size = v2(math.min(4, palW - 3 - gx), math.min(4, palH - 3 - gy))
                 sq.Filled = true
                 sq.Corner = 0
                 sq.ZIndex = 113
@@ -2594,9 +2593,9 @@ local function renderColorpicker(click, held)
     end
     for i = 1, #cpSquares do
         local cell = cpSquares[i]
-        cell.obj.Position = V2(palX + cell.relX, palY + cell.relY)
+        cell.obj.Position = v2(palX + cell.relX, palY + cell.relY)
         if hueChanged or not cell.initialized then
-            cell.obj.Color = HSV(cp.hue, cell.sx, cell.sy)
+            cell.obj.Color = hsv(cp.hue, cell.sx, cell.sy)
             cell.initialized = true
         end
         cell.obj.Visible = true
@@ -2613,7 +2612,7 @@ local function renderColorpicker(click, held)
     local hueW, hueH = 12, 160
     rect(hueX, hueY, hueW, hueH, Theme.surface, 112, 6)
     for gy = hueY + 2, hueY + hueH - 3, 4 do
-        rect(hueX + 2, gy, hueW - 4, min(4, hueY + hueH - 2 - gy), HSV((gy - hueY) / hueH, 1, 1), 113, 0)
+        rect(hueX + 2, gy, hueW - 4, min(4, hueY + hueH - 2 - gy), hsv((gy - hueY) / hueH, 1, 1), 113, 0)
     end
 
     if held and over(hueX, hueY, hueW, hueH) then
@@ -2627,8 +2626,8 @@ local function renderColorpicker(click, held)
     rect(alphaX, alphaY, alphaW, alphaH, Theme.surface, 112, 6)
     for gy = alphaY + 2, alphaY + alphaH - 3, 6 do
         local blockH = min(6, alphaY + alphaH - 2 - gy)
-        rect(alphaX + 2, gy, 4, blockH, (floor((gy - alphaY) / 6) % 2 == 0) and Theme.white or C3(200, 200, 200), 113, 0)
-        rect(alphaX + 6, gy, 4, blockH, (floor((gy - alphaY) / 6) % 2 == 0) and C3(200, 200, 200) or Theme.white, 113, 0)
+        rect(alphaX + 2, gy, 4, blockH, (floor((gy - alphaY) / 6) % 2 == 0) and Theme.white or c3(200, 200, 200), 113, 0)
+        rect(alphaX + 6, gy, 4, blockH, (floor((gy - alphaY) / 6) % 2 == 0) and c3(200, 200, 200) or Theme.white, 113, 0)
     end
 
     for gy = alphaY + 2, alphaY + alphaH - 3, 4 do
@@ -2649,7 +2648,7 @@ local function renderColorpicker(click, held)
     strokeRect(x + 10, y + 196, 200, 22, (ProjectState.focus == cp) and Theme.accent or Theme.border, 115, 4)
 
     local isFocusedCP = ProjectState.focus == cp
-    local hexText = isFocusedCP and (cp._hexInput or "") or ("#" .. toHex(cp.value, cp.alpha))
+    local hexText = isFocusedCP and (cp.hexInput or "") or ("#" .. toHex(cp.value, cp.alpha))
     txt(hexText, x + 16, textTop(y + 196, 22, 12), Theme.text, 12, FontUI, 116, false, false, 188)
     if isFocusedCP then
         txt("|", x + 16 + textWidth(hexText, 12, FontUI), textTop(y + 196, 22, 12), Theme.text, 12, FontUI, 117, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
@@ -2657,26 +2656,26 @@ local function renderColorpicker(click, held)
 
     if click and over(x + 10, y + 196, 200, 22) then
         ProjectState.focus = (ProjectState.focus == cp) and nil or cp
-        cp._hexInput = toHex(cp.value, cp.alpha)
+        cp.hexInput = toHex(cp.value, cp.alpha)
         click = false
     end
 
     rect(x + 10, y + 228, 60, 22, Theme.surface, 114, 4)
     strokeRect(x + 10, y + 228, 60, 22, Theme.border, 115, 4)
-    txt("R", x + 16, textTop(y + 228, 22, 12), C3(255, 69, 58), 12, FontBold, 116)
+    txt("R", x + 16, textTop(y + 228, 22, 12), c3(255, 69, 58), 12, FontBold, 116)
     txt(tostring(floor(cp.value.R * 255 + 0.5)), x + 64 - textWidth(tostring(floor(cp.value.R * 255 + 0.5)), 12, FontUI), textTop(y + 228, 22, 12), Theme.text, 12, FontUI, 116)
 
     rect(x + 80, y + 228, 60, 22, Theme.surface, 114, 4)
     strokeRect(x + 80, y + 228, 60, 22, Theme.border, 115, 4)
-    txt("G", x + 86, textTop(y + 228, 22, 12), C3(52, 199, 89), 12, FontBold, 116)
+    txt("G", x + 86, textTop(y + 228, 22, 12), c3(52, 199, 89), 12, FontBold, 116)
     txt(tostring(floor(cp.value.G * 255 + 0.5)), x + 134 - textWidth(tostring(floor(cp.value.G * 255 + 0.5)), 12, FontUI), textTop(y + 228, 22, 12), Theme.text, 12, FontUI, 116)
 
     rect(x + 150, y + 228, 60, 22, Theme.surface, 114, 4)
     strokeRect(x + 150, y + 228, 60, 22, Theme.border, 115, 4)
-    txt("B", x + 156, textTop(y + 228, 22, 12), C3(0, 122, 255), 12, FontBold, 116)
+    txt("B", x + 156, textTop(y + 228, 22, 12), c3(0, 122, 255), 12, FontBold, 116)
     txt(tostring(floor(cp.value.B * 255 + 0.5)), x + 204 - textWidth(tostring(floor(cp.value.B * 255 + 0.5)), 12, FontUI), textTop(y + 228, 22, 12), Theme.text, 12, FontUI, 116)
 
-    local final = HSV(cp.hue, cp.sat, cp.val)
+    local final = hsv(cp.hue, cp.sat, cp.val)
     if colorChanged(final, cp.value) or (cp.alpha ~= cp.picker.alpha) then
         cp.value = final
         cp.picker.value = final
@@ -2770,7 +2769,7 @@ local function renderTabs(click, px, py, pw, ph)
             local arrowHovered = over(tabX, py, tabW, 18)
             rect(tabX, py, tabW, 18, arrowHovered and Theme.surface3 or Theme.surface, 26, 4)
             local cx = centerY(tabX, tabW)
-            triangle(V2(cx, py + 6), V2(cx - 4, py + 12), V2(cx + 4, py + 12), Theme.sub, 27, true)
+            triangle(v2(cx, py + 6), v2(cx - 4, py + 12), v2(cx + 4, py + 12), Theme.sub, 27, true)
             if click and arrowHovered then
                 ProjectState.tabTargetScrollX = max(0, target - tabH)
                 click = false
@@ -2782,7 +2781,7 @@ local function renderTabs(click, px, py, pw, ph)
             local arrowHovered = over(tabX, ay, tabW, 18)
             rect(tabX, ay, tabW, 18, arrowHovered and Theme.surface3 or Theme.surface, 26, 4)
             local cx = centerY(tabX, tabW)
-            triangle(V2(cx, ay + 12), V2(cx - 4, ay + 6), V2(cx + 4, ay + 6), Theme.sub, 27, true)
+            triangle(v2(cx, ay + 12), v2(cx - 4, ay + 6), v2(cx + 4, ay + 6), Theme.sub, 27, true)
             if click and arrowHovered then
                 ProjectState.tabTargetScrollX = min(maxScroll, target + tabH)
                 click = false
@@ -2912,9 +2911,9 @@ local function renderTabs(click, px, py, pw, ph)
 
     ProjectState.currentPillY = nil
     ProjectState.currentPillH = nil
-    local totalW = count * TAB_MIN_W
+    local totalW = count * tabMinW
     local needsScroll = totalW > pw
-    local tabW = needsScroll and TAB_MIN_W or (pw / count)
+    local tabW = needsScroll and tabMinW or (pw / count)
     local maxScroll = max(0, totalW - pw)
 
     local dtValue = ProjectState.dt or 1 / 60
@@ -2932,24 +2931,24 @@ local function renderTabs(click, px, py, pw, ph)
     local contentW = pw - (needsScroll and 36 or 0)
 
     if needsScroll and scrollX > 1 then
-        local arrowHovered = over(px, py, 18, TAB_H)
-        rect(px, py, 18, TAB_H, arrowHovered and Theme.surface3 or Theme.surface, 26, 0)
-        local cy = centerY(py, TAB_H)
-        triangle(V2(px + 6, cy), V2(px + 12, cy - 4), V2(px + 12, cy + 4), Theme.sub, 27, true)
+        local arrowHovered = over(px, py, 18, tabH)
+        rect(px, py, 18, tabH, arrowHovered and Theme.surface3 or Theme.surface, 26, 0)
+        local cy = centerY(py, tabH)
+        triangle(v2(px + 6, cy), v2(px + 12, cy - 4), v2(px + 12, cy + 4), Theme.sub, 27, true)
         if click and arrowHovered then
-            ProjectState.tabTargetScrollX = max(0, target - TAB_MIN_W)
+            ProjectState.tabTargetScrollX = max(0, target - tabMinW)
             click = false
         end
     end
 
     if needsScroll and scrollX < maxScroll - 1 then
         local ax = px + pw - 18
-        local arrowHovered = over(ax, py, 18, TAB_H)
-        rect(ax, py, 18, TAB_H, arrowHovered and Theme.surface3 or Theme.surface, 26, 0)
-        local cy = centerY(py, TAB_H)
-        triangle(V2(ax + 12, cy), V2(ax + 6, cy - 4), V2(ax + 6, cy + 4), Theme.sub, 27, true)
+        local arrowHovered = over(ax, py, 18, tabH)
+        rect(ax, py, 18, tabH, arrowHovered and Theme.surface3 or Theme.surface, 26, 0)
+        local cy = centerY(py, tabH)
+        triangle(v2(ax + 12, cy), v2(ax + 6, cy - 4), v2(ax + 6, cy + 4), Theme.sub, 27, true)
         if click and arrowHovered then
-            ProjectState.tabTargetScrollX = min(maxScroll, target + TAB_MIN_W)
+            ProjectState.tabTargetScrollX = min(maxScroll, target + tabMinW)
             click = false
         end
     end
@@ -2982,7 +2981,7 @@ local function renderTabs(click, px, py, pw, ph)
 
         local active = ProjectState.activeTab == tab
         local screenX = contentX + tab.currentX - scrollX
-        local hovered = over(screenX, py, tabW, TAB_H)
+        local hovered = over(screenX, py, tabW, tabH)
 
         if click and hovered and not ProjectState.draggedTab then
             if ProjectState.activeTab ~= tab then
@@ -3041,13 +3040,13 @@ local function renderTabs(click, px, py, pw, ph)
         local visible = tx + tabW >= contentX and tx <= contentX + contentW
         if visible then
             local active = ProjectState.activeTab == tab
-            local hovered = over(tx, py, tabW, TAB_H)
+            local hovered = over(tx, py, tabW, tabH)
             if active then
                 targetPillX = tab.currentX - scrollX + 4
                 targetPillW = tabW - 8
-                txt(tab.name, tx + tabW / 2, centerY(py, TAB_H), Theme.text, 13, FontBold, 25, true, false, tabW - 12)
+                txt(tab.name, tx + tabW / 2, centerY(py, tabH), Theme.text, 13, FontBold, 25, true, false, tabW - 12)
             else
-                txt(tab.name, tx + tabW / 2, centerY(py, TAB_H), hovered and Theme.text or Theme.sub, 13, FontSystem, 25, true, false, tabW - 12)
+                txt(tab.name, tx + tabW / 2, centerY(py, tabH), hovered and Theme.text or Theme.sub, 13, FontSystem, 25, true, false, tabW - 12)
             end
         end
     end
@@ -3066,8 +3065,8 @@ local function renderTabs(click, px, py, pw, ph)
     end
 
     if ProjectState.currentPillX and ProjectState.currentPillW then
-        rect(contentX + ProjectState.currentPillX, py + 3, ProjectState.currentPillW, TAB_H - 6, Theme.accent, 21, 10, 0.08)
-        strokeRect(contentX + ProjectState.currentPillX, py + 3, ProjectState.currentPillW, TAB_H - 6, Theme.accent, 22, 10)
+        rect(contentX + ProjectState.currentPillX, py + 3, ProjectState.currentPillW, tabH - 6, Theme.accent, 21, 10, 0.08)
+        strokeRect(contentX + ProjectState.currentPillX, py + 3, ProjectState.currentPillW, tabH - 6, Theme.accent, 22, 10)
     end
 
     return click
@@ -3090,7 +3089,7 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
 
         txt(item.keybind.listening and "..." or (item.keybind.value and string.upper(item.keybind.value) or "-"), keyX + 23, centerY(rowY + 3, 20), item.keybind.value and Theme.text or Theme.sub, 12, FontUI, 52, true, false, 42, trans)
 
-        txt(item.keybind.mode == "Toggle" and "T" or item.keybind.mode == "Always" and "A" or "H", keyX - 8, centerY(rowY, ROW_H - 2), item.keybind.mode == "Hold" and Theme.sub or Theme.accent, 10, FontUI, 52, true, false, nil, trans)
+        txt(item.keybind.mode == "Toggle" and "T" or item.keybind.mode == "Always" and "A" or "H", keyX - 8, centerY(rowY, 28 - 2), item.keybind.mode == "Hold" and Theme.sub or Theme.accent, 10, FontUI, 52, true, false, nil, trans)
 
         if item.keybind.listening then
             for i = 1, #InputOrder do
@@ -3112,7 +3111,7 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
             item.keybind.listenAt = clock()
             click = false
         elseif rightClick and hovered and item.keybind.canChange then
-            dDropdown("keymode", keyX, rowY + 24, 90, KEYBIND_MODES, nil, false, nil, nil, item.keybind)
+            dDropdown("keymode", keyX, rowY + 24, 90, {"Hold", "Toggle", "Always"}, nil, false, nil, nil, item.keybind)
             rightClick = false
         end
         currentX = currentX - 14
@@ -3165,7 +3164,7 @@ local function getItemHeight(item, rowW)
         return 44
     elseif item.type == "label" then
         local labelLines = wrapLines(item.label, rowW or 1000, 13, FontSystem)
-        item._cachedLineCount = #labelLines
+        item.cachedLineCount = #labelLines
         return math.max(28, #labelLines * 16 + 8)
     end
     return 28
@@ -3209,7 +3208,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil or isFloating
     local z = isFloating and 90 or 30
     local cardTrans = isFloating and (0.75 * (ProjectState.contentFade or 1)) or (ProjectState.contentFade or 1)
-    local cardClipTop = isFloating and (ProjectState.y + TITLE_H) or clipTop
+    local cardClipTop = isFloating and (ProjectState.y + 36) or clipTop
     local cardClipBottom = isFloating and (ProjectState.y + ProjectState.h - 24) or clipBottom
     local renderY = max(sy, cardClipTop)
     local renderH = min(sy + secH, cardClipBottom) - renderY
@@ -3239,21 +3238,21 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
         end
 
         if cy == renderY + renderH and clamp(1 - (math.sqrt((ProjectState.mouseX - cx)^2 + (ProjectState.mouseY - cy)^2) / 80), 0, 1) > 0 then
-            local d_mouse
+            local dMouse
             if cy == renderY then
-                d_mouse = cx - colX - 8
+                dMouse = cx - colX - 8
             elseif cx == colX + colW then
-                d_mouse = colW - 3.434 + (cy - renderY - 8)
+                dMouse = colW - 3.434 + (cy - renderY - 8)
             elseif cy == renderY + renderH then
-                d_mouse = colW + renderH - 6.868 + (colX + colW - 8 - cx)
+                dMouse = colW + renderH - 6.868 + (colX + colW - 8 - cx)
             elseif cx == colX then
-                d_mouse = 2 * colW + renderH - 10.302 + (renderY + renderH - 8 - cy)
+                dMouse = 2 * colW + renderH - 10.302 + (renderY + renderH - 8 - cy)
             end
             
-            if d_mouse then
+            if dMouse then
                 for i = 1, 24 do
-                    local x1, y1 = getPerimeterPoint(d_mouse - 40 + (i - 1) * 3.333, colX, renderY, colW, renderH)
-                    local x2, y2 = getPerimeterPoint(d_mouse - 40 + i * 3.333, colX, renderY, colW, renderH)
+                    local x1, y1 = getPerimeterPoint(dMouse - 40 + (i - 1) * 3.333, colX, renderY, colW, renderH)
+                    local x2, y2 = getPerimeterPoint(dMouse - 40 + i * 3.333, colX, renderY, colW, renderH)
                     line(x1, y1, x2, y2, section.locked and Theme.sub or Theme.accent, z + 2, 2, clamp(1 - (abs(-40 + (i - 0.5) * 3.333) / 40), 0, 1) * clamp(1 - (math.sqrt((ProjectState.mouseX - cx)^2 + (ProjectState.mouseY - cy)^2) / 80), 0, 1) * cardTrans)
                 end
             end
@@ -3267,7 +3266,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             local showLock = section.allowLocking ~= false
             
             local iconY = sy + 9
-            draw9Dot(colX + colW - 20, sy + 10, (showLock and section.locked) and C3(80, 75, 73) or Theme.sub, z + 2, hTrans)
+            draw9Dot(colX + colW - 20, sy + 10, (showLock and section.locked) and c3(80, 75, 73) or Theme.sub, z + 2, hTrans)
             if showLock then
                 drawLockIcon(colX + colW - 38, iconY, section.locked and Theme.accent or Theme.sub, z + 2, section.locked and hTrans or hTrans * 0.5, not section.locked)
             end
@@ -3365,7 +3364,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             if trans > 0 then
                 if item.type == "label" then
                     local labelLines = wrapLines(item.label, rowW, 13, FontSystem)
-                    item._cachedLineCount = #labelLines
+                    item.cachedLineCount = #labelLines
                     for li = 1, #labelLines do
                         txt(labelLines[li], rowX, rowY + (li - 1) * 16 + 4, item.color or Theme.text, 13, FontSystem, z + 12, false, false, rowW, trans)
                     end
@@ -3450,7 +3449,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 80, trans)
                     
                     local isFocusedSlider = ProjectState.focus == item
-                    local valStr = isFocusedSlider and (item._directValue or "") or tostring(item.value)
+                    local valStr = isFocusedSlider and (item.directValue or "") or tostring(item.value)
                     local boxW = max(36, textWidth(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), 12, FontUI) + 12)
                     local valBoxX = rowX + rowW - boxW - 4
                     local valBoxY = rowY + 1
@@ -3467,25 +3466,25 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
  
                     if click and hoveredVal and trans > 0.5 then
                         ProjectState.focus = item
-                        item._directValue = tostring(item.value)
+                        item.directValue = tostring(item.value)
                         click = false
                     end
                     
                     local sx, sw = rowX + 4, rowW - 8
-                    local sy_bar = rowY + 22
+                    local syBar = rowY + 22
                     local denom = max(0.0001, (item.max or 100) - (item.min or 0))
                     local frac = clamp(((item.value or 0) - (item.min or 0)) / denom, 0, 1)
                     
-                    rect(sx, sy_bar, sw, 4, Theme.surface3, z + 12, 2, trans)
+                    rect(sx, syBar, sw, 4, Theme.surface3, z + 12, 2, trans)
                     if frac > 0 then
-                        rect(sx, sy_bar, sw * frac, 4, Theme.accent, z + 13, 2, trans)
+                        rect(sx, syBar, sw * frac, 4, Theme.accent, z + 13, 2, trans)
                     end
                     
-                    item._animatedRadius = item._animatedRadius or 5
-                    item._animatedRadius = smoothValue(item._animatedRadius, (hoveredVal or (over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled)) and 7 or 5, 18)
-                    circle(sx + sw * frac, sy_bar + 2, item._animatedRadius, C3(190, 190, 190), z + 14, true, 0, 32, trans)
+                    item.animatedRadius = item.animatedRadius or 5
+                    item.animatedRadius = smoothValue(item.animatedRadius, (hoveredVal or (over(sx - 4, syBar - 8, sw + 8, 16) and not popupBlocking and not disabled)) and 7 or 5, 18)
+                    circle(sx + sw * frac, syBar + 2, item.animatedRadius, c3(190, 190, 190), z + 14, true, 0, 32, trans)
                     
-                    if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled and not hoveredVal and trans > 0.5 then
+                    if click and over(sx - 4, syBar - 8, sw + 8, 16) and not popupBlocking and not disabled and not hoveredVal and trans > 0.5 then
                         ProjectState.sliderDrag = item
                         click = false
                     end
@@ -3501,18 +3500,18 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 20, trans)
                     
                     local dx, dw = rowX + 4, rowW - 8
-                    local dy_box = rowY + 18
+                    local dyBox = rowY + 18
                     local boxH = 22
                     
-                    rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
-                    strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
+                    rect(dx, dyBox, dw, boxH, over(dx, dyBox, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
+                    strokeRect(dx, dyBox, dw, boxH, Theme.border, z + 13, 4, trans)
                     
-                    txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontSystem, z + 14, false, false, dw - 28, trans)
+                    txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dyBox, boxH, 13), Theme.text, 13, FontSystem, z + 14, false, false, dw - 28, trans)
                     
                     if ProjectState.dropdown and ProjectState.dropdown.item == item then
-                        drawChevronUp(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15, trans)
+                        drawChevronUp(dx + dw - 15, centerY(dyBox, boxH) - 2, Theme.sub, z + 15, trans)
                     else
-                        drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15, trans)
+                        drawChevronDown(dx + dw - 15, centerY(dyBox, boxH) - 2, Theme.sub, z + 15, trans)
                     end
                     
                     if item.tooltip and not isFloating then
@@ -3523,17 +3522,17 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         end
                     end
                     
-                    if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
-                        dDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
+                    if click and over(dx, dyBox, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
+                        dDropdown("item", dx, dyBox + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
                         click = false
                     end
                     
                 elseif item.type == "button" then
                     local controlY = rowY + 2
-                    item._hoverFactor = smoothValue(item._hoverFactor or 0, (over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled) and 1 or 0, 18)
+                    item.hoverFactor = smoothValue(item.hoverFactor or 0, (over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled) and 1 or 0, 18)
                     
-                    rect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 12, 6, trans * (0.1 + 0.15 * item._hoverFactor))
-                    strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 13, 6, trans * (0.4 + 0.6 * item._hoverFactor))
+                    rect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 12, 6, trans * (0.1 + 0.15 * item.hoverFactor))
+                    strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 13, 6, trans * (0.4 + 0.6 * item.hoverFactor))
                     
                     txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), Theme.accent, 13, FontBold, z + 14, true, false, rowW - 24, trans)
                     
@@ -3546,28 +3545,28 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 20, trans)
                     
                     local bx, bw = rowX + 4, rowW - 8
-                    local dy_box = rowY + 18
+                    local dyBox = rowY + 18
                     local boxH = 22
                     local focused = ProjectState.focus == item
                     
-                    rect(bx, dy_box, bw, boxH, focused and Theme.surface or over(bx, dy_box, bw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
-                    strokeRect(bx, dy_box, bw, boxH, focused and Theme.accent or Theme.border, z + 13, 4, trans)
+                    rect(bx, dyBox, bw, boxH, focused and Theme.surface or over(bx, dyBox, bw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
+                    strokeRect(bx, dyBox, bw, boxH, focused and Theme.accent or Theme.border, z + 13, 4, trans)
                     
-                    local is_empty = item.value == ""
-                    local textTrans = (focused and is_empty) and trans * 0.2 or trans
-                    txt(is_empty and item.label or item.value, bx + 8, textTop(dy_box, boxH, 13), is_empty and Theme.sub or Theme.text, 13, FontUI, z + 14, false, false, bw - 16, textTrans)
+                    local isEmpty = item.value == ""
+                    local textTrans = (focused and isEmpty) and trans * 0.2 or trans
+                    txt(isEmpty and item.label or item.value, bx + 8, textTop(dyBox, boxH, 13), isEmpty and Theme.sub or Theme.text, 13, FontUI, z + 14, false, false, bw - 16, textTrans)
                     if focused then
-                        if item._selectedAll and not is_empty then
-                            rect(bx + 8, dy_box + 3, math.min(bw - 16, textWidth(item.value, 13, FontUI)), boxH - 6, Theme.accent, z + 13, 2, trans * 0.4)
+                        if item.selectedAll and not isEmpty then
+                            rect(bx + 8, dyBox + 3, math.min(bw - 16, textWidth(item.value, 13, FontUI)), boxH - 6, Theme.accent, z + 13, 2, trans * 0.4)
                         end
                         local cursorX = bx + 8
-                        if not is_empty then
+                        if not isEmpty then
                             cursorX = cursorX + textWidth(item.value, 13, FontUI)
                         end
-                        txt("|", cursorX, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+                        txt("|", cursorX, textTop(dyBox, boxH, 13), Theme.text, 13, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
                     end
                     
-                    if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
+                    if click and over(bx, dyBox, bw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
                         ProjectState.focus = focused and nil or item
                         click = false
                     end
@@ -3644,7 +3643,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     end
 
     local contentH = max(leftTotal, rightTotal)
-    local viewH = max(1, contH - CONTENT_PAD * 2)
+    local viewH = max(1, contH - contentPad * 2)
     tab.maxScroll = max(0, contentH - viewH)
     tab.scrollY = tab.scrollY or 0
     tab.targetScrollY = clamp(tab.targetScrollY or tab.scrollY, 0, tab.maxScroll)
@@ -3682,7 +3681,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     tab.scrollY = tab.scrollY + (tab.targetScrollY - tab.scrollY) * factor
     tab.scrollY = clamp(tab.scrollY, 0, tab.maxScroll)
 
-    local sy = contY + CONTENT_PAD - tab.scrollY
+    local sy = contY + contentPad - tab.scrollY
     local clipTop = contY + 4
     local clipBottom = contY + contH - 4
     local colW = floor((pw - 10) / 2)
@@ -3822,13 +3821,13 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     end
 
     if tab.maxScroll > 0 then
-        local trackH = contH - CONTENT_PAD * 2 - 12
+        local trackH = contH - contentPad * 2 - 12
         local barH = max(22, (trackH / max(contentH, trackH)) * trackH)
-        local barY = contY + CONTENT_PAD + 6 + (tab.scrollY / max(1, tab.maxScroll)) * (trackH - barH)
+        local barY = contY + contentPad + 6 + (tab.scrollY / max(1, tab.maxScroll)) * (trackH - barH)
         local scrollBarX = ProjectState.x + ProjectState.w - 12
-        rect(scrollBarX, contY + CONTENT_PAD + 6, 3, trackH, Theme.surface3, 50, 2, ProjectState.contentFade)
+        rect(scrollBarX, contY + contentPad + 6, 3, trackH, Theme.surface3, 50, 2, ProjectState.contentFade)
         rect(scrollBarX, barY, 3, barH, Theme.accent, 51, 2, ProjectState.contentFade)
-        if click and over(scrollBarX - 5, contY + CONTENT_PAD + 6, 14, trackH) and not popupBlocking then
+        if click and over(scrollBarX - 5, contY + contentPad + 6, 14, trackH) and not popupBlocking then
             local grab = barH / 2
             if over(scrollBarX - 5, barY, 14, barH) then
                 grab = clamp(ProjectState.mouseY - barY, 0, barH)
@@ -3841,7 +3840,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
         end
         local drag = ProjectState.scrollDrag
         if held and type(drag) == "table" and drag.tab == tab then
-            tab.targetScrollY = clamp((ProjectState.mouseY - (contY + CONTENT_PAD + 6) - drag.grab) / max(1, trackH - barH), 0, 1) * tab.maxScroll
+            tab.targetScrollY = clamp((ProjectState.mouseY - (contY + contentPad + 6) - drag.grab) / max(1, trackH - barH), 0, 1) * tab.maxScroll
         end
     elseif type(ProjectState.scrollDrag) == "table" and ProjectState.scrollDrag.tab == tab then
         ProjectState.scrollDrag = nil
@@ -3852,11 +3851,10 @@ end
 
 local function serializeConfigData()
     local configData = {}
-    configData._system = {
+    configData.system = {
         tabsPosition = ProjectState.tabsPosition,
         titlePosition = ProjectState.titlePosition,
         hotkeyEnabled = ProjectState.hotkeyEnabled,
-        particlesEnabled = ProjectState.particlesEnabled ~= false,
     }
     for _, t in ipairs(ProjectState.tabs) do
         for _, s in ipairs(t.sections) do
@@ -3901,11 +3899,10 @@ local function loadConfig(json)
     if not json or json == "" then return end
     local decodeOk, configData = pcall(game:GetService("HttpService").JSONDecode, game:GetService("HttpService"), json)
     if decodeOk and decodeOk == true and type(configData) == "table" then
-        if configData._system then
-            ProjectState.tabsPosition = configData._system.tabsPosition or "top"
-            ProjectState.titlePosition = configData._system.titlePosition or "top"
-            ProjectState.hotkeyEnabled = configData._system.hotkeyEnabled == true
-            ProjectState.particlesEnabled = configData._system.particlesEnabled ~= false
+        if configData.system then
+            ProjectState.tabsPosition = configData.system.tabsPosition or "top"
+            ProjectState.titlePosition = configData.system.titlePosition or "top"
+            ProjectState.hotkeyEnabled = configData.system.hotkeyEnabled == true
         end
         for _, t in ipairs(ProjectState.tabs) do
             for _, s in ipairs(t.sections) do
@@ -3915,7 +3912,7 @@ local function loadConfig(json)
                     if data then
                         if item.type == "colorpicker" then
                             pcall(function()
-                                item.value = C3HEX("#" .. tostring(data.value or "FFFFFF"))
+                                item.value = c3Hex("#" .. tostring(data.value or "FFFFFF"))
                                 item.alpha = data.alpha or 1
                                 safeCallback(item.callback, item.value, item.alpha)
                             end)
@@ -3935,7 +3932,7 @@ local function loadConfig(json)
                         end
                         if data.colorpicker and item.colorpicker then
                             pcall(function()
-                                item.colorpicker.value = C3HEX("#" .. tostring(data.colorpicker.value or "FFFFFF"))
+                                item.colorpicker.value = c3Hex("#" .. tostring(data.colorpicker.value or "FFFFFF"))
                                 item.colorpicker.alpha = data.colorpicker.alpha or 1
                                 safeCallback(item.colorpicker.callback, item.colorpicker.value, item.colorpicker.alpha)
                             end)
@@ -3987,7 +3984,7 @@ local function loadTheme(json)
     if decodeOk and decodeOk == true and type(themeData) == "table" then
         for k, v in pairs(themeData) do
             if Theme[k] ~= nil then
-                Theme[k] = C3HEX("#" .. v)
+                Theme[k] = c3Hex("#" .. v)
                 if ProjectState.themeColorPickers and ProjectState.themeColorPickers[k] then
                     ProjectState.themeColorPickers[k]:Set(Theme[k])
                 end
@@ -4200,9 +4197,6 @@ local function initSettings()
     generalSec:Checkbox("Hotkey Overlay", false, function(val)
         ProjectState.hotkeyEnabled = val
     end)
-    generalSec:Checkbox("Background Particles", true, function(val)
-        ProjectState.particlesEnabled = val
-    end)
     generalSec:Button("Toggle Layout Editor", function()
         ProjectState.layoutEditing = true
         ProjectState.settingsActive = false
@@ -4210,10 +4204,10 @@ local function initSettings()
     end)
 
     local colorsSec = createSection(settingsTab, "Theming", "Full")
-    local fontNames = {"System", "UI", "SystemBold", "Minecraft", "Monospace", "Pixel", "Fortnite"}
+    local fontNames = {"System", "ui", "SystemBold", "Minecraft", "Monospace", "Pixel", "Fortnite"}
     local fontMap = {
         System = Fonts.System or 0,
-        UI = Fonts.UI or 0,
+        ui = Fonts.UI or 0,
         SystemBold = Fonts.SystemBold or 0,
         Minecraft = Fonts.Minecraft or 0,
         Monospace = Fonts.Monospace or 0,
@@ -4231,7 +4225,7 @@ local function initSettings()
         end
     end)
     ProjectState.themeColorPickers = {}
-    local pickers = {"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border", "green", "red", "yellow", "unsafe", "particle"}
+    local pickers = {"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border", "green", "red", "yellow", "unsafe"}
     for idx = 1, #pickers do
         local name = pickers[idx]
         ProjectState.themeColorPickers[name] = colorsSec:Colorpicker(
@@ -4246,7 +4240,6 @@ local function initSettings()
             name == "green" and "Success/Green Accent" or
             name == "red" and "Error/Red Accent" or
             name == "yellow" and "Warning/Yellow Accent" or
-            name == "particle" and "Background Particles" or
             "Unsafe/Caution Accent",
             Theme[name],
             true,
@@ -4338,7 +4331,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 80, trans)
         
         local isFocusedSlider = ProjectState.focus == item
-        local valStr = isFocusedSlider and (item._directValue or "") or tostring(item.value)
+        local valStr = isFocusedSlider and (item.directValue or "") or tostring(item.value)
         local boxW = max(36, textWidth(isFocusedSlider and valStr or (valStr .. tostring(item.suffix or "")), 12, FontUI) + 12)
         local valBoxX = rowX + rowW - boxW - 4
         local hoveredVal = over(valBoxX, rowY + 1, boxW, 16) and not popupBlocking and not disabled
@@ -4354,24 +4347,24 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
 
         if click and hoveredVal and trans > 0.5 then
             ProjectState.focus = item
-            item._directValue = tostring(item.value)
+            item.directValue = tostring(item.value)
             click = false
         end
         
         local sx, sw = rowX + 4, rowW - 8
-        local sy_bar = rowY + 22
+        local syBar = rowY + 22
         local frac = clamp(((item.value or 0) - (item.min or 0)) / max(0.0001, (item.max or 100) - (item.min or 0)), 0, 1)
         
-        rect(sx, sy_bar, sw, 4, Theme.surface3, z + 12, 2, trans)
+        rect(sx, syBar, sw, 4, Theme.surface3, z + 12, 2, trans)
         if frac > 0 then
-            rect(sx, sy_bar, sw * frac, 4, Theme.accent, z + 13, 2, trans)
+            rect(sx, syBar, sw * frac, 4, Theme.accent, z + 13, 2, trans)
         end
         
-        item._animatedRadius = item._animatedRadius or 5
-        item._animatedRadius = smoothValue(item._animatedRadius, (hoveredVal or (over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled)) and 7 or 5, 18)
-        circle(sx + sw * frac, sy_bar + 2, item._animatedRadius, C3(190, 190, 190), z + 14, true, 0, 32, trans)
+        item.animatedRadius = item.animatedRadius or 5
+        item.animatedRadius = smoothValue(item.animatedRadius, (hoveredVal or (over(sx - 4, syBar - 8, sw + 8, 16) and not popupBlocking and not disabled)) and 7 or 5, 18)
+        circle(sx + sw * frac, syBar + 2, item.animatedRadius, c3(190, 190, 190), z + 14, true, 0, 32, trans)
         
-        if click and over(sx - 4, sy_bar - 8, sw + 8, 16) and not popupBlocking and not disabled and not hoveredVal and trans > 0.5 then
+        if click and over(sx - 4, syBar - 8, sw + 8, 16) and not popupBlocking and not disabled and not hoveredVal and trans > 0.5 then
             ProjectState.sliderDrag = item
             click = false
         end
@@ -4387,18 +4380,18 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 20, trans)
         
         local dx, dw = rowX + 4, rowW - 8
-        local dy_box = rowY + 18
+        local dyBox = rowY + 18
         local boxH = 22
         
-        rect(dx, dy_box, dw, boxH, over(dx, dy_box, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
-        strokeRect(dx, dy_box, dw, boxH, Theme.border, z + 13, 4, trans)
+        rect(dx, dyBox, dw, boxH, over(dx, dyBox, dw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
+        strokeRect(dx, dyBox, dw, boxH, Theme.border, z + 13, 4, trans)
         
-        txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dy_box, boxH, 13), Theme.text, 13, FontSystem, z + 14, false, false, dw - 28, trans)
+        txt(item.multi and (#item.value > 0 and concat(item.value, ", ") or "-") or (item.value[1] or "-"), dx + 8, textTop(dyBox, boxH, 13), Theme.text, 13, FontSystem, z + 14, false, false, dw - 28, trans)
         
         if ProjectState.dropdown and ProjectState.dropdown.item == item then
-            drawChevronUp(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15, trans)
+            drawChevronUp(dx + dw - 15, centerY(dyBox, boxH) - 2, Theme.sub, z + 15, trans)
         else
-            drawChevronDown(dx + dw - 15, centerY(dy_box, boxH) - 2, Theme.sub, z + 15, trans)
+            drawChevronDown(dx + dw - 15, centerY(dyBox, boxH) - 2, Theme.sub, z + 15, trans)
         end
         
         if item.tooltip then
@@ -4408,17 +4401,17 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             end
         end
         
-        if click and over(dx, dy_box, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
-            dDropdown("item", dx, dy_box + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
+        if click and over(dx, dyBox, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
+            dDropdown("item", dx, dyBox + boxH, dw, item.choices, item.value, item.multi, item.callback, item, nil)
             click = false
         end
         
     elseif item.type == "button" then
         local controlY = rowY + 2
-        item._hoverFactor = smoothValue(item._hoverFactor or 0, (over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled) and 1 or 0, 18)
+        item.hoverFactor = smoothValue(item.hoverFactor or 0, (over(rowX + 4, controlY, rowW - 8, itemH - 4) and not popupBlocking and not disabled) and 1 or 0, 18)
         
-        rect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 12, 6, trans * (0.1 + 0.15 * item._hoverFactor))
-        strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 13, 6, trans * (0.4 + 0.6 * item._hoverFactor))
+        rect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 12, 6, trans * (0.1 + 0.15 * item.hoverFactor))
+        strokeRect(rowX + 4, controlY, rowW - 8, itemH - 4, Theme.accent, z + 13, 6, trans * (0.4 + 0.6 * item.hoverFactor))
         
         txt(item.label, rowX + rowW / 2, centerY(controlY, itemH - 4), Theme.accent, 13, FontBold, z + 14, true, false, rowW - 24, trans)
         
@@ -4431,26 +4424,26 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
         txt(item.label, rowX + 4, rowY + 2, Theme.text, 13, FontSystem, z + 12, false, false, rowW - 20, trans)
         
         local bx, bw = rowX + 4, rowW - 8
-        local dy_box = rowY + 18
+        local dyBox = rowY + 18
         local boxH = 22
         local focused = ProjectState.focus == item
         
-        rect(bx, dy_box, bw, boxH, focused and Theme.surface or over(bx, dy_box, bw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
-        strokeRect(bx, dy_box, bw, boxH, focused and Theme.accent or Theme.border, z + 13, 4, trans)
+        rect(bx, dyBox, bw, boxH, focused and Theme.surface or over(bx, dyBox, bw, boxH) and Theme.surface3 or Theme.surface2, z + 12, 4, trans)
+        strokeRect(bx, dyBox, bw, boxH, focused and Theme.accent or Theme.border, z + 13, 4, trans)
         
-        txt((item.value == "") and item.label or item.value, bx + 8, textTop(dy_box, boxH, 13), (item.value == "") and Theme.sub or Theme.text, 13, FontUI, z + 14, false, false, bw - 16, trans)
+        txt((item.value == "") and item.label or item.value, bx + 8, textTop(dyBox, boxH, 13), (item.value == "") and Theme.sub or Theme.text, 13, FontUI, z + 14, false, false, bw - 16, trans)
         if focused then
-            if item._selectedAll and not (item.value == "") then
-                rect(bx + 8, dy_box + 3, math.min(bw - 16, textWidth(item.value, 13, FontUI)), boxH - 6, Theme.accent, z + 13, 2, trans * 0.4)
+            if item.selectedAll and not (item.value == "") then
+                rect(bx + 8, dyBox + 3, math.min(bw - 16, textWidth(item.value, 13, FontUI)), boxH - 6, Theme.accent, z + 13, 2, trans * 0.4)
             end
             local cursorX = bx + 8
             if not (item.value == "") then
                 cursorX = cursorX + textWidth(item.value, 13, FontUI)
             end
-            txt("|", cursorX, textTop(dy_box, boxH, 13), Theme.text, 13, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+            txt("|", cursorX, textTop(dyBox, boxH, 13), Theme.text, 13, FontUI, z + 15, false, false, nil, trans * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
         end
         
-        if click and over(bx, dy_box, bw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
+        if click and over(bx, dyBox, bw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
             ProjectState.focus = focused and nil or item
             click = false
         end
@@ -4479,7 +4472,7 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
 
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
     
-    local dummyY = py + CONTENT_PAD
+    local dummyY = py + contentPad
     local lastTab = nil
     local lastSec = nil
     for i = 1, #matches do
@@ -4498,9 +4491,9 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
             dummyY = dummyY + 6
         end
     end
-    local searchContentH = dummyY - (py + CONTENT_PAD)
+    local searchContentH = dummyY - (py + contentPad)
     
-    ProjectState.searchMaxScroll = max(0, searchContentH - max(1, ph - CONTENT_PAD * 2))
+    ProjectState.searchMaxScroll = max(0, searchContentH - max(1, ph - contentPad * 2))
     ProjectState.searchScrollY = ProjectState.searchScrollY or 0
     ProjectState.searchTargetScrollY = clamp(ProjectState.searchTargetScrollY or 0, 0, ProjectState.searchMaxScroll)
     
@@ -4515,7 +4508,7 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
     ProjectState.searchScrollY = ProjectState.searchScrollY + (ProjectState.searchTargetScrollY - ProjectState.searchScrollY) * (1 - math.exp(-15 * dtValue))
     ProjectState.searchScrollY = clamp(ProjectState.searchScrollY, 0, ProjectState.searchMaxScroll)
     
-    local currentY = py + CONTENT_PAD - ProjectState.searchScrollY
+    local currentY = py + contentPad - ProjectState.searchScrollY
     local clipTop = py + 4
     local clipBottom = py + ph - 4
     
@@ -4574,13 +4567,13 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
     end
     
     if ProjectState.searchMaxScroll > 0 then
-        local trackH = ph - CONTENT_PAD * 2 - 12
+        local trackH = ph - contentPad * 2 - 12
         local barH = max(22, (trackH / max(searchContentH, trackH)) * trackH)
-        local barY = py + CONTENT_PAD + 6 + (ProjectState.searchScrollY / max(1, ProjectState.searchMaxScroll)) * (trackH - barH)
+        local barY = py + contentPad + 6 + (ProjectState.searchScrollY / max(1, ProjectState.searchMaxScroll)) * (trackH - barH)
         local scrollBarX = ProjectState.x + ProjectState.w - 12
-        rect(scrollBarX, py + CONTENT_PAD + 6, 3, trackH, Theme.surface3, 50, 2, ProjectState.contentFade)
+        rect(scrollBarX, py + contentPad + 6, 3, trackH, Theme.surface3, 50, 2, ProjectState.contentFade)
         rect(scrollBarX, barY, 3, barH, Theme.accent, 51, 2, ProjectState.contentFade)
-        if click and over(scrollBarX - 5, py + CONTENT_PAD + 6, 14, trackH) and not popupBlocking then
+        if click and over(scrollBarX - 5, py + contentPad + 6, 14, trackH) and not popupBlocking then
             ProjectState.scrollDrag = {
                 search = true,
                 grab = over(scrollBarX - 5, barY, 14, barH) and clamp(ProjectState.mouseY - barY, 0, barH) or (barH / 2),
@@ -4589,7 +4582,7 @@ local function renderSearchResults(click, held, rightClick, px, py, pw, ph)
         end
         
         if held and type(ProjectState.scrollDrag) == "table" and ProjectState.scrollDrag.search then
-            ProjectState.searchTargetScrollY = clamp((ProjectState.mouseY - (py + CONTENT_PAD + 6) - ProjectState.scrollDrag.grab) / max(1, trackH - barH), 0, 1) * ProjectState.searchMaxScroll
+            ProjectState.searchTargetScrollY = clamp((ProjectState.mouseY - (py + contentPad + 6) - ProjectState.scrollDrag.grab) / max(1, trackH - barH), 0, 1) * ProjectState.searchMaxScroll
         end
     end
     
@@ -4613,7 +4606,7 @@ end)
 
 local function renderWindow(click, held, rightClick)
     local x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
-    local popupOpen = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil or ProjectState.importModal ~= nil
+    local popupOpen = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil or ProjectState.importModal ~= nil or ProjectState.changelogOpen
     local baseClick = popupOpen and false or click
     local baseHeld = popupOpen and false or held
     local baseRightClick = popupOpen and false or rightClick
@@ -4626,59 +4619,34 @@ local function renderWindow(click, held, rightClick)
     local pw, ph = w - 20, h - 20 - 24
     
     if titlePos == "left" then
-        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + 2, TITLE_H - 2, h - 4
-        px = px + TITLE_H
-        pw = pw - TITLE_H
+        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + 2, 36 - 2, h - 4
+        px = px + 36
+        pw = pw - 36
     elseif titlePos == "right" then
-        titleBarX, titleBarY, titleBarW, titleBarH = x + w - TITLE_H, y + 2, TITLE_H - 2, h - 4
-        pw = pw - TITLE_H
+        titleBarX, titleBarY, titleBarW, titleBarH = x + w - 36, y + 2, 36 - 2, h - 4
+        pw = pw - 36
     elseif titlePos == "bottom" then
-        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + h - TITLE_H, w - 4, TITLE_H - 2
-        ph = ph - TITLE_H
+        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + h - 36, w - 4, 36 - 2
+        ph = ph - 36
     else
-        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + 2, w - 4, TITLE_H - 2
-        py = py + TITLE_H
-        ph = ph - TITLE_H
+        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + 2, w - 4, 36 - 2
+        py = py + 36
+        ph = ph - 36
     end
 
-    for i = 1, #SHADOW_ALPHA do
+    for i = 1, #shadowAlpha do
         local offset = i * 2
-        rect(x - offset, y - offset + 6, w + offset * 2, h + offset * 2, Theme.black, 0, 12, SHADOW_ALPHA[i])
+        rect(x - offset, y - offset + 6, w + offset * 2, h + offset * 2, Theme.black, 0, 12, shadowAlpha[i])
+    end
+
+    local glowIntensity = 0.35 + 0.2 * math.cos(clock() * 2.5)
+    for i = 1, 3 do
+        local offset = i * 3
+        rect(x - offset, y - offset, w + offset * 2, h + offset * 2, Theme.accent, 0, 12, glowIntensity * (0.12 / i))
     end
 
     rect(x, y, w, h, Theme.surface, 5, 12)
     strokeRect(x, y, w, h, Theme.border, 6, 12)
-
-    if ProjectState.particlesEnabled ~= false then
-        if not ProjectState.particles then
-            ProjectState.particles = {}
-            for i = 1, 30 do
-                ProjectState.particles[i] = {
-                    x = math.random() * w,
-                    y = math.random() * h,
-                    vx = (math.random() - 0.5) * 30,
-                    vy = (math.random() - 0.5) * 30,
-                    size = 1.5 + math.random() * 2
-                }
-            end
-        end
-        
-        local dtValue = ProjectState.dt or 1/60
-        if dtValue <= 0 then dtValue = 1/60 end
-        
-        for i = 1, #ProjectState.particles do
-            local p = ProjectState.particles[i]
-            p.x = p.x + p.vx * dtValue
-            p.y = p.y + p.vy * dtValue
-            
-            if p.x < 0 then p.x = w end
-            if p.x > w then p.x = 0 end
-            if p.y < 0 then p.y = h end
-            if p.y > h then p.y = 0 end
-            
-            circle(x + p.x, y + p.y, p.size, Theme.particle, 7, true)
-        end
-    end
 
     local dragEdge = ProjectState.resizeEdge
     if held and dragEdge then
@@ -4790,17 +4758,17 @@ local function renderWindow(click, held, rightClick)
         x, y = ProjectState.x, ProjectState.y
     elseif held and ProjectState.titleDrag then
         local snapTarget = "top"
-        local previewX, previewY, previewW, previewH = x + 2, y + 2, w - 4, TITLE_H - 2
+        local previewX, previewY, previewW, previewH = x + 2, y + 2, w - 4, 36 - 2
         
         if mx < x + w * 0.25 then
             snapTarget = "left"
-            previewX, previewY, previewW, previewH = x + 2, y + 2, TITLE_H - 2, h - 4
+            previewX, previewY, previewW, previewH = x + 2, y + 2, 36 - 2, h - 4
         elseif mx > x + w * 0.75 then
             snapTarget = "right"
-            previewX, previewY, previewW, previewH = x + w - TITLE_H, y + 2, TITLE_H - 2, h - 4
+            previewX, previewY, previewW, previewH = x + w - 36, y + 2, 36 - 2, h - 4
         elseif my > y + h * 0.75 then
             snapTarget = "bottom"
-            previewX, previewY, previewW, previewH = x + 2, y + h - TITLE_H, w - 4, TITLE_H - 2
+            previewX, previewY, previewW, previewH = x + 2, y + h - 36, w - 4, 36 - 2
         end
         
         rect(previewX, previewY, previewW, previewH, Theme.accent, 200, 6, 0.3)
@@ -4821,13 +4789,13 @@ local function renderWindow(click, held, rightClick)
         end
     end
 
-    local setHovered, cx_set, cy
+    local setHovered, cxSet, cy
     local iconHovered, circleX, circleY, lineX1, lineY1, lineX2, lineY2
     local searchX, searchY
     
     if isVertTitle then
         setHovered = over(titleBarX + 8, titleBarY + titleBarH - 28, 20, 20)
-        cx_set = titleBarX + 18
+        cxSet = titleBarX + 18
         cy = titleBarY + titleBarH - 18
         
         iconHovered = over(titleBarX + 8, titleBarY + titleBarH - 52, 20, 20)
@@ -4842,7 +4810,7 @@ local function renderWindow(click, held, rightClick)
         searchY = titleBarY + titleBarH - 52
     else
         setHovered = over(titleBarX + titleBarW - 30, titleBarY + 6, 20, 24)
-        cx_set = titleBarX + titleBarW - 21
+        cxSet = titleBarX + titleBarW - 21
         cy = titleBarY + 18
         
         iconHovered = over(titleBarX + titleBarW - 52, titleBarY + 6, 20, 24)
@@ -4860,7 +4828,7 @@ local function renderWindow(click, held, rightClick)
     if isVertTitle then
         drawVerticalText(ProjectState.title or "homesick", titleBarX + titleBarW / 2, titleBarY + 14, Theme.accent, 14, FontBold, 16)
     else
-        txt(ProjectState.title or "homesick", titleBarX + 14, textTop(titleBarY, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
+        txt(ProjectState.title or "homesick", titleBarX + 14, textTop(titleBarY, 36, 14), Theme.accent, 14, FontBold, 16)
     end
 
     if click and setHovered then
@@ -4969,7 +4937,7 @@ local function renderWindow(click, held, rightClick)
     circle(circleX, circleY, 4, iconHovered and Theme.accent or Theme.sub, 20, false, 1.5)
     line(lineX1, lineY1, lineX2, lineY2, iconHovered and Theme.accent or Theme.sub, 20, 1.5)
 
-    local cx_set = x + w - 21
+    local cxSet = x + w - 21
     local cy = y + 18
     local col = (setHovered or ProjectState.settingsActive) and Theme.accent or Theme.sub
     if ProjectState.settingsActive then
@@ -4977,22 +4945,22 @@ local function renderWindow(click, held, rightClick)
             local a = clock() * 2 + i * math.pi / 4
             local c = math.cos(a)
             local s = math.sin(a)
-            line(cx_set - 6 * c, cy - 6 * s, cx_set + 6 * c, cy + 6 * s, Theme.accent, 19, 4, 0.25)
+            line(cxSet - 6 * c, cy - 6 * s, cxSet + 6 * c, cy + 6 * s, Theme.accent, 19, 4, 0.25)
         end
-        circle(cx_set, cy, 4, Theme.accent, 19, false, 4, 32, 0.25)
-        circle(cx_set, cy, 1.5, Theme.accent, 19, true, 0, 32, 0.25)
+        circle(cxSet, cy, 4, Theme.accent, 19, false, 4, 32, 0.25)
+        circle(cxSet, cy, 1.5, Theme.accent, 19, true, 0, 32, 0.25)
     end
     for i = 0, 3 do
         local a = (ProjectState.settingsActive and clock() * 2 or 0) + i * math.pi / 4
         local c = math.cos(a)
         local s = math.sin(a)
-        line(cx_set - 6 * c, cy - 6 * s, cx_set + 6 * c, cy + 6 * s, col, 20, 1.5)
+        line(cxSet - 6 * c, cy - 6 * s, cxSet + 6 * c, cy + 6 * s, col, 20, 1.5)
     end
-    circle(cx_set, cy, 4, Theme.surface2, 21, true)
-    circle(cx_set, cy, 4, col, 22, false, 1.5)
-    circle(cx_set, cy, 1.5, col, 23, true)
+    circle(cxSet, cy, 4, Theme.surface2, 21, true)
+    circle(cxSet, cy, 4, col, 22, false, 1.5)
+    circle(cxSet, cy, 1.5, col, 23, true)
 
-    if ProjectState.minimized or h <= MINIMIZED_H then
+    if ProjectState.minimized or h <= minimizedH then
         return click, held, rightClick
     end
 
@@ -5037,7 +5005,7 @@ local function renderWindow(click, held, rightClick)
     else
         local pos = ProjectState.tabsPosition or "top"
         local tabW = 85
-        local tabH = TAB_H
+        local tabH = tabH
         
         local tabsX, tabsY, tabsWidth, tabsHeight
         local contX, contY, contW, contH = px, py, pw, ph
@@ -5124,7 +5092,7 @@ local function renderWindow(click, held, rightClick)
         local my = y + (h - modalH) / 2
         local mz = 85
         
-        rect(x, y, w, h, C3(0, 0, 0), mz - 2, 8, 0.6)
+        rect(x, y, w, h, c3(0, 0, 0), mz - 2, 8, 0.6)
         rect(mx, my, modalW, modalH, Theme.surface2, mz, 8, 1)
         strokeRect(mx, my, modalW, modalH, Theme.border, mz + 1, 8, 1)
         
@@ -5134,27 +5102,27 @@ local function renderWindow(click, held, rightClick)
         
         local modalTextbox = modal.textbox
         local bx, bw = mx + 20, modalW - 40
-        local dy_box = my + 42
+        local dyBox = my + 42
         local boxH = 22
         local focused = ProjectState.focus == modalTextbox
         
-        rect(bx, dy_box, bw, boxH, focused and Theme.surface or over(bx, dy_box, bw, boxH) and Theme.surface3 or Theme.surface, mz + 2, 4, 1)
-        strokeRect(bx, dy_box, bw, boxH, focused and Theme.accent or Theme.border, mz + 3, 4, 1)
+        rect(bx, dyBox, bw, boxH, focused and Theme.surface or over(bx, dyBox, bw, boxH) and Theme.surface3 or Theme.surface, mz + 2, 4, 1)
+        strokeRect(bx, dyBox, bw, boxH, focused and Theme.accent or Theme.border, mz + 3, 4, 1)
         
-        txt((modalTextbox.value == "" and not focused) and "enter code..." or modalTextbox.value, bx + 8, textTop(dy_box, boxH, 12), (modalTextbox.value == "") and Theme.sub or Theme.text, 12, FontUI, mz + 4, false, false, bw - 16)
+        txt((modalTextbox.value == "" and not focused) and "enter code..." or modalTextbox.value, bx + 8, textTop(dyBox, boxH, 12), (modalTextbox.value == "") and Theme.sub or Theme.text, 12, FontUI, mz + 4, false, false, bw - 16)
         
         if focused then
-            if modalTextbox._selectedAll and not (modalTextbox.value == "") then
-                rect(bx + 8, dy_box + 3, math.min(bw - 16, textWidth(modalTextbox.value, 12, FontUI)), boxH - 6, Theme.accent, mz + 3, 2, 0.4)
+            if modalTextbox.selectedAll and not (modalTextbox.value == "") then
+                rect(bx + 8, dyBox + 3, math.min(bw - 16, textWidth(modalTextbox.value, 12, FontUI)), boxH - 6, Theme.accent, mz + 3, 2, 0.4)
             end
             local cursorX = bx + 8
             if not (modalTextbox.value == "") then
                 cursorX = cursorX + textWidth(modalTextbox.value, 12, FontUI)
             end
-            txt("|", cursorX, textTop(dy_box, boxH, 12), Theme.text, 12, FontUI, mz + 5, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+            txt("|", cursorX, textTop(dyBox, boxH, 12), Theme.text, 12, FontUI, mz + 5, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
         end
         
-        if click and over(bx, dy_box, bw, boxH) then
+        if click and over(bx, dyBox, bw, boxH) then
             ProjectState.focus = modalTextbox
             click = false
         end
@@ -5186,7 +5154,7 @@ local function renderWindow(click, held, rightClick)
         local confirmX = mx + modalW - 20 - btnW
         local confirmHovered = recognized and over(confirmX, btnY, btnW, btnH)
         
-        local confirmBgColor = not recognized and C3(45, 42, 40) or (confirmHovered and Theme.accent or Theme.surface)
+        local confirmBgColor = not recognized and c3(45, 42, 40) or (confirmHovered and Theme.accent or Theme.surface)
         local confirmTextColor = not recognized and Theme.sub or (confirmHovered and Theme.bg or Theme.accent)
         
         rect(confirmX, btnY, btnW, btnH, confirmBgColor, mz + 2, 4, 1)
@@ -5202,6 +5170,34 @@ local function renderWindow(click, held, rightClick)
             if ProjectState.focus == modalTextbox then
                 ProjectState.focus = nil
             end
+            click = false
+        end
+    end
+
+    if ProjectState.changelogOpen then
+        local modalW = 300
+        local modalH = 260
+        local mx = x + (w - modalW) / 2
+        local my = y + (h - modalH) / 2
+        local mz = 85
+        
+        rect(x, y, w, h, c3(0, 0, 0), mz - 2, 8, 0.6)
+        rect(mx, my, modalW, modalH, Theme.surface2, mz, 8, 1)
+        strokeRect(mx, my, modalW, modalH, Theme.border, mz + 1, 8, 1)
+        
+        txt("homesick changelog - " .. "v1.4.0", mx + 16, my + 14, Theme.accent, 13, FontBold, mz + 2)
+        
+        for i = 1, #changelogLines do
+            txt("• " .. changelogLines[i], mx + 16, my + 40 + (i - 1) * 18, Theme.text, 11, FontSystem, mz + 2)
+        end
+        
+        local btnHovered = over(mx + 100, my + 220, 100, 24)
+        rect(mx + 100, my + 220, 100, 24, btnHovered and Theme.surface3 or Theme.surface, mz + 2, 4, 1)
+        strokeRect(mx + 100, my + 220, 100, 24, btnHovered and Theme.accent or Theme.border, mz + 3, 4, 1)
+        txt("awesome!", mx + 150, centerY(my + 220, 24), Theme.accent, 12, FontBold, mz + 4, true)
+        
+        if click and btnHovered then
+            ProjectState.changelogOpen = false
             click = false
         end
     end
@@ -5283,7 +5279,7 @@ local function step()
     getMouse()
     updateInput()
 
-    if Input[MENU_KEY] and Input[MENU_KEY].click and not ProjectState.focus then
+    if Input[menuKey] and Input[menuKey].click and not ProjectState.focus then
         setOpen(not ProjectState.open)
     end
 
@@ -5350,10 +5346,10 @@ local function step()
     renderWatermark(click, held)
 
     if prevFocus and ProjectState.focus ~= prevFocus then
-        prevFocus._selectedAll = false
-        if prevFocus.type == "slider" and prevFocus._directValue then
-            setItemValue(prevFocus, tonumber(prevFocus._directValue) or prevFocus.value or prevFocus.min or 0, true)
-            prevFocus._directValue = nil
+        prevFocus.selectedAll = false
+        if prevFocus.type == "slider" and prevFocus.directValue then
+            setItemValue(prevFocus, tonumber(prevFocus.directValue) or prevFocus.value or prevFocus.min or 0, true)
+            prevFocus.directValue = nil
         end
     end
 
@@ -5367,7 +5363,7 @@ local function step()
     hideUnused()
 end
 
-function UI:Demo()
+function ui:Demo()
     if ProjectState.demoLoaded then
         return self
     end
@@ -5472,19 +5468,19 @@ else
         while ProjectState.alive do
             runStepSafe()
             if ProjectState.alive then
-                task.wait(FRAME_WAIT)
+                task.wait((1 / 240))
             end
         end
     end)
 end
 
-_G.homesick = UI
-_G.homesickUI = UI
+_G.homesick = ui
+_G.homesickUI = ui
 
-local homesick = {}
+local homesick = { changelogEnabled = true }
 
 homesick.GetDrawing = function(self, kind)
-    return UI:GetDrawing(kind)
+    return ui:GetDrawing(kind)
 end
 
 homesick.CreateBox = function(self, config)
@@ -5492,8 +5488,8 @@ homesick.CreateBox = function(self, config)
     local box = {
         title = config.title,
         showTopbar = config.showTopbar ~= false,
-        position = config.position or V2(100, 100),
-        size = config.size or V2(220, 75),
+        position = config.position or v2(100, 100),
+        size = config.size or v2(220, 75),
         bgColor = parseColor(config.bgColor or Theme.surface),
         borderColor = parseColor(config.borderColor or Theme.accent),
         titleColor = parseColor(config.titleColor or Theme.text),
@@ -5640,9 +5636,13 @@ end
 homesick.CreateElement = homesick.CreateBox
 
 homesick.createWindow = function(title, width, height)
-    UI:SetTitle(title)
-    UI:SetSize(width, height)
-    UI:Center()
+    ui:SetTitle(title)
+    ui:SetSize(width, height)
+    ui:Center()
+    
+    if homesick.changelogEnabled then
+        ProjectState.changelogOpen = true
+    end
     
     local windowWrap = {}
     
@@ -5653,7 +5653,7 @@ homesick.createWindow = function(title, width, height)
     
     windowWrap.addTab = function(wSelf, tabName)
         local tabWrap = {
-            rawTab = UI:Tab(tabName),
+            rawTab = ui:Tab(tabName),
             name = tabName
         }
         
@@ -5833,23 +5833,23 @@ homesick.createWindow = function(title, width, height)
     end
     
     windowWrap.render = function(wSelf)
-        UI:SetOpen(wSelf.visible == true)
+        ui:SetOpen(wSelf.visible == true)
     end
     
     windowWrap.remove = function(wSelf)
-        UI:Destroy()
+        ui:Destroy()
     end
     
     setmetatable(windowWrap, {
         __index = function(t, k)
             if k == "visible" then
-                return UI:IsOpen()
+                return ui:IsOpen()
             end
             return rawget(t, k)
         end,
         __newindex = function(t, k, v)
             if k == "visible" then
-                UI:SetOpen(v == true)
+                ui:SetOpen(v == true)
             else
                 rawset(t, k, v)
             end
@@ -5868,7 +5868,7 @@ newPrint = function(...)
     for i = 1, select("#", ...) do
         strArgs[i] = string.lower(tostring(select(i, ...)))
     end
-    UI:Notify("print", table.concat(strArgs, " "), 5)
+    ui:Notify("print", table.concat(strArgs, " "), 5)
     local orig = _G.homesickOriginals.print
     if orig and orig ~= newPrint and not _G.homesickFunctions[orig] then
         return orig(unpack(strArgs))
@@ -5883,7 +5883,7 @@ newWarn = function(...)
     for i = 1, select("#", ...) do
         strArgs[i] = string.lower(tostring(select(i, ...)))
     end
-    UI:Notify("warning", table.concat(strArgs, " "), 5)
+    ui:Notify("warning", table.concat(strArgs, " "), 5)
     local orig = _G.homesickOriginals.warn
     if orig and orig ~= newWarn and not _G.homesickFunctions[orig] then
         return orig(unpack(strArgs))
@@ -5899,7 +5899,7 @@ if type(printl) == "function" then
         for i = 1, select("#", ...) do
             strArgs[i] = string.lower(tostring(select(i, ...)))
         end
-        UI:Notify("print", table.concat(strArgs, " "), 5)
+        ui:Notify("print", table.concat(strArgs, " "), 5)
         local orig = _G.homesickOriginals.printl
         if orig and orig ~= newPrintl and not _G.homesickFunctions[orig] then
             return orig(unpack(strArgs))
@@ -5914,7 +5914,7 @@ if type(notify) == "function" then
     newNotify = function(message, title, duration)
         local lowerMsg = string.lower(tostring(message or ""))
         local lowerTitle = string.lower(tostring(title or "notification"))
-        UI:Notify(lowerTitle, lowerMsg, duration or 5)
+        ui:Notify(lowerTitle, lowerMsg, duration or 5)
         local orig = _G.homesickOriginals.notify
         if orig and orig ~= newNotify and not _G.homesickFunctions[orig] then
             return orig(message, title, duration)
