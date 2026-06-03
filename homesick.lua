@@ -20,7 +20,7 @@ _G.homesickOriginals = {
     notify = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.notify and not _G.homesickFunctions[_G.homesickOriginals.notify]) and _G.homesickOriginals.notify or notify,
     isrbxactive = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.isrbxactive and not _G.homesickFunctions[_G.homesickOriginals.isrbxactive]) and _G.homesickOriginals.isrbxactive or isrbxactive
 }
-local exportConfig, importConfig, exportTheme, importTheme, smoothValue, toHex
+local exportConfig, importConfig, exportTheme, importTheme, smoothValue, toHex, doColorPicker, dDropdown, drawChevronDown, drawChevronUp
 
 local function clamp(value, low, high)
     if value < low then
@@ -1163,11 +1163,11 @@ local function renderNotifications()
     end
 end
 
-local function drawChevronDown(x, y, color, z, transparency)
+drawChevronDown = function(x, y, color, z, transparency)
     triangle(v2(x, y), v2(x + 8, y), v2(x + 4, y + 5), color, z, true, transparency)
 end
 
-local function drawChevronUp(x, y, color, z, transparency)
+drawChevronUp = function(x, y, color, z, transparency)
     triangle(v2(x, y + 5), v2(x + 8, y + 5), v2(x + 4, y), color, z, true, transparency)
 end
 
@@ -2209,7 +2209,7 @@ toHsv = function(color)
     return hue, saturation, high
 end
 
-local function dDropdown(kind, x, y, w, choices, value, multi, callback, item, keybind)
+dDropdown = function(kind, x, y, w, choices, value, multi, callback, item, keybind)
     local vw, vh = viewportSize()
     local height
     if multi then
@@ -2234,7 +2234,7 @@ local function dDropdown(kind, x, y, w, choices, value, multi, callback, item, k
     ProjectState.colorpicker = nil
 end
 
-local function doColorPicker(x, y, picker)
+doColorPicker = function(x, y, picker)
     local h, s, v = toHsv(picker.value)
     local vw, vh = viewportSize()
     local w, height = 220, 260
@@ -4724,12 +4724,12 @@ local function renderWindow(click, held, rightClick)
         rect(x - offset, y - offset, w + offset * 2, h + offset * 2, Theme.accent, 0, 12, glowIntensity * (0.12 / i))
     end
 
-    rect(x, y, w, h, Theme.surface, 5, 12)
-    if titlePos ~= "top" then
+    rect(x, y, w, h, Theme.surface, 5, (titlePos == "bottom") and 0 or 12)
+    if titlePos == "left" or titlePos == "right" then
         rect(x, y + h - 12, w, 12, Theme.surface, 5, 0)
     end
-    strokeRect(x, y, w, h, Theme.border, 6, 12)
-    if titlePos ~= "top" then
+    strokeRect(x, y, w, h, Theme.border, 6, (titlePos == "bottom") and 0 or 12)
+    if titlePos == "left" or titlePos == "right" then
         rect(x + 1, y + h - 12, w - 2, 13, Theme.surface, 6, 0)
         line(x, y + h - 12, x, y + h, Theme.border, 6)
         line(x, y + h, x + w, y + h, Theme.border, 6)
@@ -5426,6 +5426,7 @@ local function step()
     if not ProjectState.open or #ProjectState.tabs == 0 then
         click = renderHotkeyOverlay(click, held)
         renderWatermark(click, held)
+        click = renderCustomBoxes(click, held)
         renderNotifications()
         hideUnused()
         return
@@ -5433,6 +5434,7 @@ local function step()
 
     if not ProjectState.hasMouse then
         renderWatermark(click, held)
+        click = renderCustomBoxes(click, held)
         renderNotifications()
         hideUnused()
         return
@@ -5551,6 +5553,7 @@ local function runStepSafe()
     ProjectState.rendering = false
 
     if not ok then
+        warn("step failed " .. tostring(err) .. " rip")
         local now = clock()
         ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
         if now - ProjectState.lastErrorAt > 1 then
