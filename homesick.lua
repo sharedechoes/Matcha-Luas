@@ -537,8 +537,8 @@ local function clampWindow()
     )
     ProjectState.y = clamp(
         ProjectState.y,
-        pos == "top" and (TAB_H + 8) or 0,
-        pos == "bottom" and max(0, select(2, viewportSize()) - ProjectState.h - TAB_H - 8) or max(0, select(2, viewportSize()) - min(40, ProjectState.h))
+        0,
+        max(0, select(2, viewportSize()) - min(40, ProjectState.h))
     )
 end
 
@@ -825,6 +825,12 @@ local function txt(value, x, y, color, size, font, z, centered, outline, maxWidt
     d.ZIndex = (z or 1) + 10
     d.Outline = outline == true
     d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
+end
+
+local function drawVerticalText(text, tx, ty, color, size, font, z)
+    for i = 1, #text do
+        txt(string.sub(text, i, i), tx, ty + (i - 1) * (size + 2), color, size, font, z, true)
+    end
 end
 
 local function centerY(y, h)
@@ -2197,28 +2203,59 @@ local function renderHotkeyOverlay(click, held)
         return click
     end
     
-    local activeHotkeys = {}
+    local dtValue = ProjectState.dt or 1/60
+    if dtValue <= 0 then dtValue = 1/60 end
+    
+    ProjectState.hotkeyFades = ProjectState.hotkeyFades or {}
+    local displayHotkeys = {}
+    
     for _, item in ipairs(keybindItems) do
         if item.keybind and item.keybind.value then
+            local active = false
             if (item.keybind.hotkeyToggleId and findItemValue(item.keybind.hotkeyToggleId) == true) or
                (not item.keybind.hotkeyToggleId and (
                    item.keybind.mode == "Always" or
                    (item.keybind.mode == "Toggle" and item.value == true) or
                    (item.keybind.mode == "Hold" and Input[item.keybind.value] and Input[item.keybind.value].held == true)
                )) then
-                activeHotkeys[#activeHotkeys + 1] = {
+                active = true
+            end
+            
+            local currentFade = ProjectState.hotkeyFades[item] or 0
+            if active then
+                currentFade = currentFade + (1 - currentFade) * (1 - math.exp(-15 * dtValue))
+                if currentFade > 0.99 then currentFade = 1 end
+            else
+                currentFade = currentFade - currentFade * (1 - math.exp(-15 * dtValue))
+                if currentFade < 0.01 then currentFade = 0 end
+            end
+            ProjectState.hotkeyFades[item] = currentFade
+            
+            if currentFade > 0 then
+                displayHotkeys[#displayHotkeys + 1] = {
                     label = item.keybind.hotkeyLabel or item.label,
                     value = item.keybind.value,
                     mode = item.keybind.mode,
-                    listening = item.keybind.listening
+                    listening = item.keybind.listening,
+                    fade = currentFade
                 }
             end
         end
     end
     
     local hx, hy = ProjectState.hotkeyPos.X, ProjectState.hotkeyPos.Y
-    local hw = 180
-    local hh = 26 + math.max(1, #activeHotkeys) * 20
+    local hw = 220
+    
+    local totalHeight = 26
+    for i = 1, #displayHotkeys do
+        totalHeight = totalHeight + 20 * displayHotkeys[i].fade
+    end
+    if #displayHotkeys == 0 then
+        totalHeight = 26 + 20
+    end
+    
+    ProjectState.hotkeyHeight = smoothValue(ProjectState.hotkeyHeight or 46, totalHeight, 18)
+    local hh = ProjectState.hotkeyHeight
     
     if click and over(hx, hy, hw, 22) and not (ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil) then
         ProjectState.hotkeyDrag = { ProjectState.mouseX - hx, ProjectState.mouseY - hy }
@@ -2237,13 +2274,30 @@ local function renderHotkeyOverlay(click, held)
     rect(hx + 2, hy + 2, hw - 4, 18, Theme.surface2, 152, 4)
     txt("keybinds", hx + 10, textTop(hy + 2, 18, 11), Theme.accent, 11, FontBold, 153)
     
-    if #activeHotkeys == 0 then
+    if #displayHotkeys == 0 then
         txt("-", hx + hw / 2, centerY(hy + 22, 20), Theme.sub, 11, FontSystem, 153, true)
     else
-        for i = 1, #activeHotkeys do
-            local kb = activeHotkeys[i]
-            txt(kb.label, hx + 10, textTop(hy + 22 + (i - 1) * 20, 20, 11), Theme.text, 11, FontSystem, 153)
-            txt(string.format("[%s] (%s)", kb.listening and "..." or string.upper(kb.value or "-"), kb.mode == "Toggle" and "T" or kb.mode == "Always" and "A" or "H"), hx + hw - 10 - textWidth(string.format("[%s] (%s)", kb.listening and "..." or string.upper(kb.value or "-"), kb.mode == "Toggle" and "T" or kb.mode == "Always" and "A" or "H"), 10, FontUI), textTop(hy + 22 + (i - 1) * 20, 20, 10), Theme.sub, 10, FontUI, 153)
+        local currentY = hy + 22
+        for i = 1, #displayHotkeys do
+            local kb = displayHotkeys[i]
+            local itemHeight = 20 * kb.fade
+            if itemHeight > 2 then
+                txt(kb.label, hx + 10, textTop(currentY, itemHeight, 11), Theme.text, 11, FontSystem, 153, false, false, nil, kb.fade)
+                txt(
+                    string.format("[%s] [%s]", kb.listening and "..." or string.upper(kb.value or "-"), kb.mode == "Toggle" and "Toggle" or kb.mode == "Always" and "Always" or "Hold"),
+                    hx + hw - 10 - textWidth(string.format("[%s] [%s]", kb.listening and "..." or string.upper(kb.value or "-"), kb.mode == "Toggle" and "Toggle" or kb.mode == "Always" and "Always" or "Hold"), 10, FontUI),
+                    textTop(currentY, itemHeight, 10),
+                    Theme.sub,
+                    10,
+                    FontUI,
+                    153,
+                    false,
+                    false,
+                    nil,
+                    kb.fade
+                )
+            end
+            currentY = currentY + itemHeight
         end
     end
     
@@ -3798,6 +3852,7 @@ local function serializeConfigData()
     local configData = {}
     configData._system = {
         tabsPosition = ProjectState.tabsPosition,
+        titlePosition = ProjectState.titlePosition,
         hotkeyEnabled = ProjectState.hotkeyEnabled,
     }
     for _, t in ipairs(ProjectState.tabs) do
@@ -3845,6 +3900,7 @@ local function loadConfig(json)
     if decodeOk and decodeOk == true and type(configData) == "table" then
         if configData._system then
             ProjectState.tabsPosition = configData._system.tabsPosition or "top"
+            ProjectState.titlePosition = configData._system.titlePosition or "top"
             ProjectState.hotkeyEnabled = configData._system.hotkeyEnabled == true
         end
         for _, t in ipairs(ProjectState.tabs) do
@@ -4554,6 +4610,29 @@ local function renderWindow(click, held, rightClick)
     local baseHeld = popupOpen and false or held
     local baseRightClick = popupOpen and false or rightClick
 
+    local titlePos = ProjectState.titlePosition or "top"
+    local isVertTitle = titlePos == "left" or titlePos == "right"
+    
+    local titleBarX, titleBarY, titleBarW, titleBarH
+    local px, py = x + 10, y + 10
+    local pw, ph = w - 20, h - 20 - 24
+    
+    if titlePos == "left" then
+        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + 2, TITLE_H - 2, h - 4
+        px = px + TITLE_H
+        pw = pw - TITLE_H
+    elseif titlePos == "right" then
+        titleBarX, titleBarY, titleBarW, titleBarH = x + w - TITLE_H, y + 2, TITLE_H - 2, h - 4
+        pw = pw - TITLE_H
+    elseif titlePos == "bottom" then
+        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + h - TITLE_H, w - 4, TITLE_H - 2
+        ph = ph - TITLE_H
+    else
+        titleBarX, titleBarY, titleBarW, titleBarH = x + 2, y + 2, w - 4, TITLE_H - 2
+        py = py + TITLE_H
+        ph = ph - TITLE_H
+    end
+
     for i = 1, #SHADOW_ALPHA do
         local offset = i * 2
         rect(x - offset, y - offset + 6, w + offset * 2, h + offset * 2, Theme.black, 0, 12, SHADOW_ALPHA[i])
@@ -4578,11 +4657,23 @@ local function renderWindow(click, held, rightClick)
         end
     end
 
-    rect(x + 2, y + 2, w - 4, TITLE_H - 2, Theme.surface2, 7, 10)
-    rect(x + 2, y + 2 + (TITLE_H - 2) / 2, w - 4, (TITLE_H - 2) / 2, Theme.surface2, 7, 0)
-    line(x + 2, y + TITLE_H, x + w - 2, y + TITLE_H, Theme.border, 8)
-
-    local titleMidY = centerY(y, TITLE_H)
+    if titlePos == "top" then
+        rect(titleBarX, titleBarY, titleBarW, titleBarH, Theme.surface2, 7, 10)
+        rect(titleBarX, titleBarY + titleBarH / 2, titleBarW, titleBarH / 2, Theme.surface2, 7, 0)
+        line(titleBarX, titleBarY + titleBarH, titleBarX + titleBarW, titleBarY + titleBarH, Theme.border, 8)
+    elseif titlePos == "bottom" then
+        rect(titleBarX, titleBarY, titleBarW, titleBarH, Theme.surface2, 7, 10)
+        rect(titleBarX, titleBarY, titleBarW, titleBarH / 2, Theme.surface2, 7, 0)
+        line(titleBarX, titleBarY, titleBarX + titleBarW, titleBarY, Theme.border, 8)
+    elseif titlePos == "left" then
+        rect(titleBarX, titleBarY, titleBarW, titleBarH, Theme.surface2, 7, 10)
+        rect(titleBarX + titleBarW / 2, titleBarY, titleBarW / 2, titleBarH, Theme.surface2, 7, 0)
+        line(titleBarX + titleBarW, titleBarY, titleBarX + titleBarW, titleBarY + titleBarH, Theme.border, 8)
+    else
+        rect(titleBarX, titleBarY, titleBarW, titleBarH, Theme.surface2, 7, 10)
+        rect(titleBarX, titleBarY, titleBarW / 2, titleBarH, Theme.surface2, 7, 0)
+        line(titleBarX, titleBarY, titleBarX, titleBarY + titleBarH, Theme.border, 8)
+    end
 
     local edgeSize = 6
     local mx, my = ProjectState.mouseX, ProjectState.mouseY
@@ -4609,8 +4700,12 @@ local function renderWindow(click, held, rightClick)
             ProjectState.resizeEdge = edge
             ProjectState.resizeStart = {x = x, y = y, w = w, h = h, mouseX = mx, mouseY = my}
             baseClick = false
-        elseif over(x, y, w, TITLE_H) then
-            ProjectState.drag = {ProjectState.mouseX - x, ProjectState.mouseY - y}
+        elseif over(titleBarX, titleBarY, titleBarW, titleBarH) then
+            if ProjectState.layoutEditing then
+                ProjectState.titleDrag = {ProjectState.mouseX - titleBarX, ProjectState.mouseY - titleBarY}
+            else
+                ProjectState.drag = {ProjectState.mouseX - x, ProjectState.mouseY - y}
+            end
             baseClick = false
         end
     end
@@ -4654,15 +4749,81 @@ local function renderWindow(click, held, rightClick)
         ProjectState.y = ProjectState.mouseY - ProjectState.drag[2]
         clampWindow()
         x, y = ProjectState.x, ProjectState.y
+    elseif held and ProjectState.titleDrag then
+        local snapTarget = "top"
+        local previewX, previewY, previewW, previewH = x + 2, y + 2, w - 4, TITLE_H - 2
+        
+        if mx < x + w * 0.25 then
+            snapTarget = "left"
+            previewX, previewY, previewW, previewH = x + 2, y + 2, TITLE_H - 2, h - 4
+        elseif mx > x + w * 0.75 then
+            snapTarget = "right"
+            previewX, previewY, previewW, previewH = x + w - TITLE_H, y + 2, TITLE_H - 2, h - 4
+        elseif my > y + h * 0.75 then
+            snapTarget = "bottom"
+            previewX, previewY, previewW, previewH = x + 2, y + h - TITLE_H, w - 4, TITLE_H - 2
+        end
+        
+        rect(previewX, previewY, previewW, previewH, Theme.accent, 200, 6, 0.3)
+        strokeRect(previewX, previewY, previewW, previewH, Theme.accent, 201, 6)
+        
+        ProjectState.lastTitleSnapTarget = snapTarget
     elseif not held then
         ProjectState.resizeEdge = nil
         ProjectState.resizeStart = nil
         ProjectState.drag = nil
+        if ProjectState.titleDrag then
+            if ProjectState.lastTitleSnapTarget then
+                ProjectState.titlePosition = ProjectState.lastTitleSnapTarget
+                pcall(saveConfig)
+                ProjectState.lastTitleSnapTarget = nil
+            end
+            ProjectState.titleDrag = nil
+        end
     end
 
-    txt(ProjectState.title or "homesick", x + 14, textTop(y, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
+    local setHovered, cx_set, cy
+    local iconHovered, circleX, circleY, lineX1, lineY1, lineX2, lineY2
+    local searchX, searchY
+    
+    if isVertTitle then
+        setHovered = over(titleBarX + 8, titleBarY + titleBarH - 28, 20, 20)
+        cx_set = titleBarX + 18
+        cy = titleBarY + titleBarH - 18
+        
+        iconHovered = over(titleBarX + 8, titleBarY + titleBarH - 52, 20, 20)
+        circleX = titleBarX + 18
+        circleY = titleBarY + titleBarH - 42
+        lineX1 = titleBarX + 21
+        lineY1 = titleBarY + titleBarH - 39
+        lineX2 = titleBarX + 25
+        lineY2 = titleBarY + titleBarH - 35
+        
+        searchX = (titlePos == "left") and (titleBarX + titleBarW + 4) or (titleBarX - ProjectState.searchBar.width - 4)
+        searchY = titleBarY + titleBarH - 52
+    else
+        setHovered = over(titleBarX + titleBarW - 30, titleBarY + 6, 20, 24)
+        cx_set = titleBarX + titleBarW - 21
+        cy = titleBarY + 18
+        
+        iconHovered = over(titleBarX + titleBarW - 52, titleBarY + 6, 20, 24)
+        circleX = titleBarX + titleBarW - 45
+        circleY = titleBarY + 16
+        lineX1 = titleBarX + titleBarW - 42
+        lineY1 = titleBarY + 19
+        lineX2 = titleBarX + titleBarW - 38
+        lineY2 = titleBarY + 23
+        
+        searchX = titleBarX + titleBarW - 56 - ProjectState.searchBar.width
+        searchY = titleBarY + 8
+    end
 
-    local setHovered = over(x + w - 30, y + 6, 20, 24)
+    if isVertTitle then
+        drawVerticalText(ProjectState.title or "homesick", titleBarX + titleBarW / 2, titleBarY + 14, Theme.accent, 14, FontBold, 16)
+    else
+        txt(ProjectState.title or "homesick", titleBarX + 14, textTop(titleBarY, TITLE_H, 14), Theme.accent, 14, FontBold, 16)
+    end
+
     if click and setHovered then
         ProjectState.settingsActive = not ProjectState.settingsActive
         ProjectState.contentFade = 0
@@ -4708,7 +4869,6 @@ local function renderWindow(click, held, rightClick)
         baseClick = false
     end
 
-    local iconHovered = over(x + w - 52, y + 6, 20, 24)
     if click and iconHovered then
         ProjectState.searchBar.active = not ProjectState.searchBar.active
         ProjectState.contentFade = 0
@@ -4750,27 +4910,25 @@ local function renderWindow(click, held, rightClick)
     end
     ProjectState.searchBar.width = smoothValue(ProjectState.searchBar.width or 0, ProjectState.searchBar.active and 140 or 0, 18)
     if ProjectState.searchBar.width > 2 then
-        local searchW = ProjectState.searchBar.width
-        local searchX = x + w - 56 - searchW
-        rect(searchX, y + 8, searchW, 20, Theme.surface, 15, 6)
-        strokeRect(searchX, y + 8, searchW, 20, (ProjectState.focus == ProjectState.searchBar) and Theme.accent or Theme.border, 16, 6)
-        txt((ProjectState.searchBar.value == "") and "Search..." or ProjectState.searchBar.value, searchX + 8, textTop(y + 8, 20, 12), (ProjectState.searchBar.value == "") and Theme.sub or Theme.text, 12, FontUI, 17, false, false, searchW - 16)
+        rect(searchX, searchY, ProjectState.searchBar.width, 20, Theme.surface, 15, 6)
+        strokeRect(searchX, searchY, ProjectState.searchBar.width, 20, (ProjectState.focus == ProjectState.searchBar) and Theme.accent or Theme.border, 16, 6)
+        txt((ProjectState.searchBar.value == "") and "Search..." or ProjectState.searchBar.value, searchX + 8, textTop(searchY, 20, 12), (ProjectState.searchBar.value == "") and Theme.sub or Theme.text, 12, FontUI, 17, false, false, ProjectState.searchBar.width - 16)
         if ProjectState.focus == ProjectState.searchBar then
             local cursorX = searchX + 8
             if not (ProjectState.searchBar.value == "") then
                 cursorX = cursorX + textWidth(ProjectState.searchBar.value, 12, FontUI)
             end
-            txt("|", cursorX, textTop(y + 8, 20, 12), Theme.text, 12, FontUI, 18, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+            txt("|", cursorX, textTop(searchY, 20, 12), Theme.text, 12, FontUI, 18, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
         end
-        if click and over(searchX, y + 8, searchW, 20) then
+        if click and over(searchX, searchY, ProjectState.searchBar.width, 20) then
             ProjectState.focus = ProjectState.searchBar
             click = false
             baseClick = false
         end
     end
 
-    circle(x + w - 45, y + 16, 4, iconHovered and Theme.accent or Theme.sub, 20, false, 1.5)
-    line(x + w - 42, y + 19, x + w - 38, y + 23, iconHovered and Theme.accent or Theme.sub, 20, 1.5)
+    circle(circleX, circleY, 4, iconHovered and Theme.accent or Theme.sub, 20, false, 1.5)
+    line(lineX1, lineY1, lineX2, lineY2, iconHovered and Theme.accent or Theme.sub, 20, 1.5)
 
     local cx_set = x + w - 21
     local cy = y + 18
@@ -4799,8 +4957,6 @@ local function renderWindow(click, held, rightClick)
         return click, held, rightClick
     end
 
-    local px, py = x + PAD, y + TITLE_H + PAD
-    local pw, ph = w - PAD * 2, h - TITLE_H - PAD * 2 - 24
     if pw <= 40 or ph <= 40 then
         return click, held, rightClick
     end
@@ -4852,9 +5008,12 @@ local function renderWindow(click, held, rightClick)
         elseif pos == "right" then
             tabsX, tabsY, tabsWidth, tabsHeight = x + w + 8, y, tabW, h
         elseif pos == "bottom" then
-            tabsX, tabsY, tabsWidth, tabsHeight = x, y + h + 8, w, tabH
+            tabsX, tabsY, tabsWidth, tabsHeight = px, py + ph - tabH, pw, tabH
+            contH = ph - tabH - 6
         else
-            tabsX, tabsY, tabsWidth, tabsHeight = x, y - tabH - 8, w, tabH
+            tabsX, tabsY, tabsWidth, tabsHeight = px, py, pw, tabH
+            contY = py + tabH + 6
+            contH = ph - tabH - 6
         end
         
         rect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.surface, 5, 8)
@@ -4871,7 +5030,7 @@ local function renderWindow(click, held, rightClick)
                 if held then
                     local mx, my = ProjectState.mouseX, ProjectState.mouseY
                     local snapTarget = "top"
-                    local previewX, previewY, previewW, previewH = x, y - tabH - 8, w, tabH
+                    local previewX, previewY, previewW, previewH = px, py, pw, tabH
                     
                     if mx < x + w * 0.25 then
                         snapTarget = "left"
@@ -4881,7 +5040,7 @@ local function renderWindow(click, held, rightClick)
                         previewX, previewY, previewW, previewH = x + w + 8, y, tabW, h
                     elseif my > y + h * 0.75 then
                         snapTarget = "bottom"
-                        previewX, previewY, previewW, previewH = x, y + h + 8, w, tabH
+                        previewX, previewY, previewW, previewH = px, py + ph - tabH, pw, tabH
                     end
                     
                     rect(previewX, previewY, previewW, previewH, Theme.accent, 200, 6, 0.3)
@@ -4913,7 +5072,7 @@ local function renderWindow(click, held, rightClick)
     local botY = y + h - 24
     local botH = 24
     line(x + 2, botY, x + w - 2, botY, Theme.border, 8)
-    txt((ProjectState.badgeText and ProjectState.badgeText ~= "") and (ProjectState.badgeText .. " | v1.0.0") or "v1.0.0", x + 14, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
+    txt((ProjectState.badgeText and ProjectState.badgeText ~= "") and (ProjectState.badgeText .. " | v1.3.6") or "v1.0.0", x + 14, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
     line(x + w - 13, y + h - 5, x + w - 5, y + h - 13, Theme.sub, 10, 1)
     line(x + w - 10, y + h - 5, x + w - 5, y + h - 10, Theme.sub, 10, 1)
     line(x + w - 7, y + h - 5, x + w - 5, y + h - 7, Theme.sub, 10, 1)
