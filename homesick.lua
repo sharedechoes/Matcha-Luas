@@ -150,9 +150,13 @@ local FontBold = Fonts.SystemBold or FontSystem
 local FontUI = Fonts.UI or FontSystem
 
 local FontWidths = {}
-FontWidths[FontSystem] = 0.48
-FontWidths[FontBold] = 0.52
-FontWidths[FontUI] = 0.50
+FontWidths[Fonts.System or 0] = 0.48
+FontWidths[Fonts.SystemBold or 0] = 0.52
+FontWidths[Fonts.UI or 0] = 0.50
+FontWidths[Fonts.Minecraft or 0] = 0.55
+FontWidths[Fonts.Monospace or 0] = 0.60
+FontWidths[Fonts.Pixel or 0] = 0.50
+FontWidths[Fonts.Fortnite or 0] = 0.55
 
 local DRAW_VISIBLE = 1
 local FRAME_WAIT = 1 / 240
@@ -188,6 +192,32 @@ local Theme = {
     white = C3(255, 255, 255),
     black = C3(0, 0, 0),
 }
+
+local ThemeAlpha = {
+    bg = 1.0,
+    surface = 1.0,
+    surface2 = 1.0,
+    surface3 = 1.0,
+    text = 1.0,
+    sub = 1.0,
+    accent = 1.0,
+    green = 1.0,
+    red = 1.0,
+    yellow = 1.0,
+    unsafe = 1.0,
+    border = 1.0,
+    white = 1.0,
+    black = 1.0,
+}
+
+local function getThemeAlpha(color)
+    for name, val in pairs(Theme) do
+        if val == color then
+            return ThemeAlpha[name] or 1.0
+        end
+    end
+    return 1.0
+end
 
 local ProjectState = {
     alive = true,
@@ -499,11 +529,17 @@ local function setOpen(open)
 end
 
 local function clampWindow()
-    local vw, vh = viewportSize()
-    local w = ProjectState.w
-    local h = ProjectState.h
-    ProjectState.x = clamp(ProjectState.x, 0, max(0, vw - min(80, w)))
-    ProjectState.y = clamp(ProjectState.y, 0, max(0, vh - min(40, h)))
+    local pos = ProjectState.tabsPosition or "top"
+    ProjectState.x = clamp(
+        ProjectState.x,
+        pos == "left" and (85 + 8) or 0,
+        pos == "right" and max(0, select(1, viewportSize()) - ProjectState.w - 85 - 8) or max(0, select(1, viewportSize()) - min(80, ProjectState.w))
+    )
+    ProjectState.y = clamp(
+        ProjectState.y,
+        pos == "top" and (TAB_H + 8) or 0,
+        pos == "bottom" and max(0, select(2, viewportSize()) - ProjectState.h - TAB_H - 8) or max(0, select(2, viewportSize()) - min(40, ProjectState.h))
+    )
 end
 
 local function getMouse()
@@ -666,7 +702,7 @@ local function rect(x, y, w, h, color, z, radius, transparency)
     d.Filled = true
     d.Corner = radius or 0
     d.ZIndex = z or 1
-    d.Transparency = transparency or DRAW_VISIBLE
+    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
 end
 
 local function strokeRect(x, y, w, h, color, z, radius, transparency)
@@ -683,7 +719,7 @@ local function strokeRect(x, y, w, h, color, z, radius, transparency)
     d.Filled = false
     d.Corner = radius or 0
     d.ZIndex = z or 1
-    d.Transparency = transparency or DRAW_VISIBLE
+    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
 end
 
 local function textWidth(value, size, font)
@@ -788,7 +824,7 @@ local function txt(value, x, y, color, size, font, z, centered, outline, maxWidt
     d.Font = font or FontSystem
     d.ZIndex = (z or 1) + 10
     d.Outline = outline == true
-    d.Transparency = transparency or DRAW_VISIBLE
+    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
 end
 
 local function centerY(y, h)
@@ -809,7 +845,7 @@ local function line(x1, y1, x2, y2, color, z, thickness, transparency)
     d.Color = color
     d.Thickness = thickness or 1
     d.ZIndex = z or 1
-    d.Transparency = transparency or DRAW_VISIBLE
+    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
 end
 
 local function circle(x, y, radius, color, z, filled, thickness, sides, transparency)
@@ -824,7 +860,7 @@ local function circle(x, y, radius, color, z, filled, thickness, sides, transpar
     d.Thickness = thickness or 1
     d.NumSides = sides or 32
     d.ZIndex = z or 1
-    d.Transparency = transparency or DRAW_VISIBLE
+    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
 end
 
 local function triangle(a, b, c, color, z, filled, transparency)
@@ -839,7 +875,7 @@ local function triangle(a, b, c, color, z, filled, transparency)
     d.Filled = filled ~= false
     d.Thickness = 1
     d.ZIndex = z or 1
-    d.Transparency = transparency or DRAW_VISIBLE
+    d.Transparency = (transparency or DRAW_VISIBLE) * getThemeAlpha(color)
 end
 
 local function drawImage(data, x, y, w, h, z, trans)
@@ -2163,10 +2199,19 @@ local function renderHotkeyOverlay(click, held)
     
     local activeHotkeys = {}
     for _, item in ipairs(keybindItems) do
-        if item.keybind and item.keybind.hotkeyLabel and item.keybind.value then
-            local toggleActive = findItemValue(item.keybind.hotkeyToggleId)
-            if toggleActive == true then
-                activeHotkeys[#activeHotkeys + 1] = item.keybind
+        if item.keybind and item.keybind.value then
+            if (item.keybind.hotkeyToggleId and findItemValue(item.keybind.hotkeyToggleId) == true) or
+               (not item.keybind.hotkeyToggleId and (
+                   item.keybind.mode == "Always" or
+                   (item.keybind.mode == "Toggle" and item.value == true) or
+                   (item.keybind.mode == "Hold" and Input[item.keybind.value] and Input[item.keybind.value].held == true)
+               )) then
+                activeHotkeys[#activeHotkeys + 1] = {
+                    label = item.keybind.hotkeyLabel or item.label,
+                    value = item.keybind.value,
+                    mode = item.keybind.mode,
+                    listening = item.keybind.listening
+                }
             end
         end
     end
@@ -2175,8 +2220,7 @@ local function renderHotkeyOverlay(click, held)
     local hw = 180
     local hh = 26 + math.max(1, #activeHotkeys) * 20
     
-    local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
-    if click and over(hx, hy, hw, 22) and not popupBlocking then
+    if click and over(hx, hy, hw, 22) and not (ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil) then
         ProjectState.hotkeyDrag = { ProjectState.mouseX - hx, ProjectState.mouseY - hy }
         click = false
     end
@@ -2198,12 +2242,8 @@ local function renderHotkeyOverlay(click, held)
     else
         for i = 1, #activeHotkeys do
             local kb = activeHotkeys[i]
-            local rowY = hy + 22 + (i - 1) * 20
-            txt(kb.hotkeyLabel, hx + 10, textTop(rowY, 20, 11), Theme.text, 11, FontSystem, 153)
-            
-            local rightText = string.format("[%s] (%s)", kb.listening and "..." or string.upper(kb.value or "-"), kb.mode == "Toggle" and "T" or kb.mode == "Always" and "A" or "H")
-            local rightTextW = textWidth(rightText, 10, FontUI)
-            txt(rightText, hx + hw - 10 - rightTextW, textTop(rowY, 20, 10), Theme.sub, 10, FontUI, 153)
+            txt(kb.label, hx + 10, textTop(hy + 22 + (i - 1) * 20, 20, 11), Theme.text, 11, FontSystem, 153)
+            txt(string.format("[%s] (%s)", kb.listening and "..." or string.upper(kb.value or "-"), kb.mode == "Toggle" and "T" or kb.mode == "Always" and "A" or "H"), hx + hw - 10 - textWidth(string.format("[%s] (%s)", kb.listening and "..." or string.upper(kb.value or "-"), kb.mode == "Toggle" and "T" or kb.mode == "Always" and "A" or "H"), 10, FontUI), textTop(hy + 22 + (i - 1) * 20, 20, 10), Theme.sub, 10, FontUI, 153)
         end
     end
     
@@ -4107,36 +4147,50 @@ local function initSettings()
     end)
 
     local colorsSec = createSection(settingsTab, "Theming", "Full")
-    local fontNames = {"System", "UI", "SystemBold"}
-    local fontMap = {System = FontSystem, UI = FontUI, SystemBold = FontBold}
+    local fontNames = {"System", "UI", "SystemBold", "Minecraft", "Monospace", "Pixel", "Fortnite"}
+    local fontMap = {
+        System = Fonts.System or 0,
+        UI = Fonts.UI or 0,
+        SystemBold = Fonts.SystemBold or 0,
+        Minecraft = Fonts.Minecraft or 0,
+        Monospace = Fonts.Monospace or 0,
+        Pixel = Fonts.Pixel or 0,
+        Fortnite = Fonts.Fortnite or 0,
+    }
     colorsSec:Dropdown("Font", {"System"}, fontNames, false, function(picked)
         if picked and #picked > 0 then
             local f = fontMap[picked[1]]
             if f then
                 FontSystem = f
+                FontUI = f
+                FontBold = fontMap.SystemBold or f
             end
         end
     end)
     ProjectState.themeColorPickers = {}
-    local pickers = {"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border"}
+    local pickers = {"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border", "green", "red", "yellow", "unsafe"}
     for idx = 1, #pickers do
         local name = pickers[idx]
         ProjectState.themeColorPickers[name] = colorsSec:Colorpicker(
-            name == "accent" and "Accent" or
-            name == "bg" and "Background" or
-            name == "surface" and "Surface 1" or
-            name == "surface2" and "Surface 2" or
-            name == "surface3" and "Surface 3" or
-            name == "text" and "Text" or
-            name == "sub" and "Sub Text" or
-            "Border",
+            name == "accent" and "Accent Color" or
+            name == "bg" and "Window Background" or
+            name == "surface" and "Section Background" or
+            name == "surface2" and "Widget Background (Inactive)" or
+            name == "surface3" and "Widget Background (Hovered/Active)" or
+            name == "text" and "Primary Text" or
+            name == "sub" and "Subtext" or
+            name == "border" and "Border Color" or
+            name == "green" and "Success/Green Accent" or
+            name == "red" and "Error/Red Accent" or
+            name == "yellow" and "Warning/Yellow Accent" or
+            "Unsafe/Caution Accent",
             Theme[name],
             true,
-            function(color)
+            function(color, alpha)
                 Theme[name] = color
+                ThemeAlpha[name] = alpha or 1.0
             end
         )
-        local dummy = idx or idx
     end
 end
 
@@ -4791,21 +4845,20 @@ local function renderWindow(click, held, rightClick)
         local tabH = TAB_H
         
         local tabsX, tabsY, tabsWidth, tabsHeight
-        local contX, contY, contW, contH
+        local contX, contY, contW, contH = px, py, pw, ph
         
         if pos == "left" then
-            tabsX, tabsY, tabsWidth, tabsHeight = px, py, tabW, ph
-            contX, contY, contW, contH = px + tabW + 8, py, pw - tabW - 8, ph
+            tabsX, tabsY, tabsWidth, tabsHeight = x - tabW - 8, y, tabW, h
         elseif pos == "right" then
-            tabsX, tabsY, tabsWidth, tabsHeight = px + pw - tabW, py, tabW, ph
-            contX, contY, contW, contH = px, py, pw - tabW - 8, ph
+            tabsX, tabsY, tabsWidth, tabsHeight = x + w + 8, y, tabW, h
         elseif pos == "bottom" then
-            tabsX, tabsY, tabsWidth, tabsHeight = px, py + ph - tabH, pw, tabH
-            contX, contY, contW, contH = px, py, pw, ph - tabH - 8
+            tabsX, tabsY, tabsWidth, tabsHeight = x, y + h + 8, w, tabH
         else
-            tabsX, tabsY, tabsWidth, tabsHeight = px, py, pw, tabH
-            contX, contY, contW, contH = px, py + tabH + 8, pw, ph - tabH - 8
+            tabsX, tabsY, tabsWidth, tabsHeight = x, y - tabH - 8, w, tabH
         end
+        
+        rect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.surface, 5, 8)
+        strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.border, 6, 8)
         
         if ProjectState.layoutEditing then
             local isHoveredTabs = over(tabsX, tabsY, tabsWidth, tabsHeight)
@@ -4818,17 +4871,17 @@ local function renderWindow(click, held, rightClick)
                 if held then
                     local mx, my = ProjectState.mouseX, ProjectState.mouseY
                     local snapTarget = "top"
-                    local previewX, previewY, previewW, previewH = px, py, pw, tabH
+                    local previewX, previewY, previewW, previewH = x, y - tabH - 8, w, tabH
                     
-                    if mx < px + pw * 0.25 then
+                    if mx < x + w * 0.25 then
                         snapTarget = "left"
-                        previewX, previewY, previewW, previewH = px, py, tabW, ph
-                    elseif mx > px + pw * 0.75 then
+                        previewX, previewY, previewW, previewH = x - tabW - 8, y, tabW, h
+                    elseif mx > x + w * 0.75 then
                         snapTarget = "right"
-                        previewX, previewY, previewW, previewH = px + pw - tabW, py, tabW, ph
-                    elseif my > py + ph * 0.75 then
+                        previewX, previewY, previewW, previewH = x + w + 8, y, tabW, h
+                    elseif my > y + h * 0.75 then
                         snapTarget = "bottom"
-                        previewX, previewY, previewW, previewH = px, py + ph - tabH, pw, tabH
+                        previewX, previewY, previewW, previewH = x, y + h + 8, w, tabH
                     end
                     
                     rect(previewX, previewY, previewW, previewH, Theme.accent, 200, 6, 0.3)
@@ -4845,7 +4898,7 @@ local function renderWindow(click, held, rightClick)
                 end
             end
             
-            strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.accent, 199, 6)
+            strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.accent, 199, 8)
         end
         
         baseClick = renderTabs(baseClick, tabsX, tabsY, tabsWidth, tabsHeight)
@@ -5063,7 +5116,6 @@ local function step()
         ProjectState.draggedSection = nil
         ProjectState.drag = nil
         ProjectState.draggedTab = nil
-        ProjectState.tabsDrag = nil
     end
 
     local click = Input.m1.click
