@@ -940,6 +940,14 @@ end
 local function renderCustomBoxes(click, held)
     local popupBlocking = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil
     local boxes = ProjectState.customBoxes or {}
+    
+    if held and ProjectState.boxDrag then
+        ProjectState.boxDrag.box.position = v2(ProjectState.mouseX - ProjectState.boxDrag.offset.X, ProjectState.mouseY - ProjectState.boxDrag.offset.Y)
+    end
+    if held and ProjectState.boxResize then
+        ProjectState.boxResize.box.size = v2(max(100, ProjectState.boxResize.startSize.X + (ProjectState.mouseX - ProjectState.boxResize.startMouse.X)), max(40, ProjectState.boxResize.startSize.Y + (ProjectState.mouseY - ProjectState.boxResize.startMouse.Y)))
+    end
+
     for i = 1, #boxes do
         local box = boxes[i]
         if box.visible then
@@ -947,8 +955,27 @@ local function renderCustomBoxes(click, held)
             local by = box.position.Y
             local bw = box.size.X
             local bh = box.size.Y
+            
+            if click and not popupBlocking then
+                if over(bx + bw - 15, by + bh - 15, 15, 15) then
+                    ProjectState.boxResize = { box = box, startSize = box.size, startMouse = v2(ProjectState.mouseX, ProjectState.mouseY) }
+                    click = false
+                elseif box.showTopbar and box.title and over(bx, by, bw, 22) then
+                    ProjectState.boxDrag = { box = box, offset = v2(ProjectState.mouseX - bx, ProjectState.mouseY - by) }
+                    click = false
+                elseif not box.showTopbar and over(bx, by, bw, 15) then
+                    ProjectState.boxDrag = { box = box, offset = v2(ProjectState.mouseX - bx, ProjectState.mouseY - by) }
+                    click = false
+                end
+            end
+
             rect(bx, by, bw, bh, box.bgColor, 100, 6, 0.95)
             strokeRect(bx, by, bw, bh, box.borderColor, 101, 6, 0.95)
+            
+            line(bx + bw - 13, by + bh - 5, bx + bw - 5, by + bh - 13, Theme.sub, 102, 1)
+            line(bx + bw - 10, by + bh - 5, bx + bw - 5, by + bh - 10, Theme.sub, 102, 1)
+            line(bx + bw - 7, by + bh - 5, bx + bw - 5, by + bh - 7, Theme.sub, 102, 1)
+
             local currentY = by + 8
             if box.showTopbar and box.title then
                 txt(box.title, bx + bw / 2, currentY, box.titleColor, 12, FontUI, 102, true)
@@ -959,62 +986,72 @@ local function renderCustomBoxes(click, held)
                 local el = box.elements[box.elementOrder[j]]
                 if el then
                     if el.type == "text" then
-                        txt(el.text, bx + bw / 2, currentY, el.color, el.size, el.font, 102, el.alignment == "center")
-                        currentY = currentY + el.size + 4
+                        if currentY + el.size + 4 <= by + bh - 6 then
+                            txt(el.text, bx + bw / 2, currentY, el.color, el.size, el.font, 102, el.alignment == "center")
+                            currentY = currentY + el.size + 4
+                        end
                     elseif el.type == "timer" then
-                        rect(bx + 10, currentY + 4, bw - 20, 2, Theme.surface3, 102, 1, 0.95)
-                        rect(bx + 10, currentY + 4, (bw - 20) * clamp(el.value / max(0.0001, el.maxValue), 0, 1), 2, el.color, 103, 1, 0.95)
-                        currentY = currentY + 8
+                        if currentY + 8 <= by + bh - 6 then
+                            rect(bx + 10, currentY + 4, bw - 20, 2, Theme.surface3, 102, 1, 0.95)
+                            rect(bx + 10, currentY + 4, (bw - 20) * clamp(el.value / max(0.0001, el.maxValue), 0, 1), 2, el.color, 103, 1, 0.95)
+                            currentY = currentY + 8
+                        end
                     elseif el.type == "button" then
-                        local hovered = over(bx + 10, currentY, bw - 20, 20) and not popupBlocking
-                        rect(bx + 10, currentY, bw - 20, 20, hovered and Theme.surface3 or Theme.surface2, 102, 4, 0.95)
-                        strokeRect(bx + 10, currentY, bw - 20, 20, hovered and Theme.accent or Theme.border, 103, 4, 0.95)
-                        txt(el.label, bx + bw / 2, currentY + 3, Theme.text, 11, FontSystem, 104, true)
-                        if click and hovered then
-                            safeCallback(el.callback)
-                            click = false
+                        if currentY + 24 <= by + bh - 6 then
+                            local hovered = over(bx + 10, currentY, bw - 20, 20) and not popupBlocking
+                            rect(bx + 10, currentY, bw - 20, 20, hovered and Theme.surface3 or Theme.surface2, 102, 4, 0.95)
+                            strokeRect(bx + 10, currentY, bw - 20, 20, hovered and Theme.accent or Theme.border, 103, 4, 0.95)
+                            txt(el.label, bx + bw / 2, currentY + 3, Theme.text, 11, FontSystem, 104, true)
+                            if click and hovered then
+                                safeCallback(el.callback)
+                                click = false
+                            end
+                            currentY = currentY + 24
                         end
-                        currentY = currentY + 24
                     elseif el.type == "checkbox" then
-                        local cbX, cbY = bx + 10, currentY + 3
-                        rect(cbX, cbY, 14, 14, Theme.surface3, 102, 4, 0.95)
-                        strokeRect(cbX, cbY, 14, 14, Theme.border, 103, 4, 0.95)
-                        local targetAnim = el.value and 1 or 0
-                        el.animState = smoothValue(el.animState or targetAnim, targetAnim, 18)
-                        if el.animState > 0.05 then
-                            local offset = 7 * (1 - el.animState)
-                            rect(cbX + offset, cbY + offset, 14 * el.animState, 14 * el.animState, Theme.accent, 104, 4 * el.animState, 0.95)
+                        if currentY + 20 <= by + bh - 6 then
+                            local cbX, cbY = bx + 10, currentY + 3
+                            rect(cbX, cbY, 14, 14, Theme.surface3, 102, 4, 0.95)
+                            strokeRect(cbX, cbY, 14, 14, Theme.border, 103, 4, 0.95)
+                            local targetAnim = el.value and 1 or 0
+                            el.animState = smoothValue(el.animState or targetAnim, targetAnim, 18)
+                            if el.animState > 0.05 then
+                                local offset = 7 * (1 - el.animState)
+                                rect(cbX + offset, cbY + offset, 14 * el.animState, 14 * el.animState, Theme.accent, 104, 4 * el.animState, 0.95)
+                            end
+                            txt(el.label, bx + 30, currentY, el.value and Theme.text or Theme.sub, 11, FontSystem, 102, false)
+                            local hovered = over(bx + 10, currentY, bw - 20, 20) and not popupBlocking
+                            if click and hovered then
+                                el.value = not el.value
+                                safeCallback(el.callback, el.value)
+                                click = false
+                            end
+                            currentY = currentY + 20
                         end
-                        txt(el.label, bx + 30, currentY, el.value and Theme.text or Theme.sub, 11, FontSystem, 102, false)
-                        local hovered = over(bx + 10, currentY, bw - 20, 20) and not popupBlocking
-                        if click and hovered then
-                            el.value = not el.value
-                            safeCallback(el.callback, el.value)
-                            click = false
-                        end
-                        currentY = currentY + 20
                     elseif el.type == "slider" then
-                        txt(el.label, bx + 10, currentY, Theme.text, 11, FontSystem, 102, false)
-                        local valStr = tostring(el.value)
-                        txt(valStr, bx + bw - 10 - textWidth(valStr, 11, FontUI), currentY, Theme.text, 11, FontUI, 102, false)
-                        local barY = currentY + 14
-                        local barW = bw - 20
-                        rect(bx + 10, barY, barW, 4, Theme.surface3, 102, 2, 0.95)
-                        rect(bx + 10, barY, barW * clamp((el.value - el.min) / max(0.0001, el.max - el.min), 0, 1), 4, Theme.accent, 103, 2, 0.95)
-                        circle(bx + 10 + barW * clamp((el.value - el.min) / max(0.0001, el.max - el.min), 0, 1), barY + 2, 4, Theme.text, 104, true, 0, 16, 0.95)
-                        local hovered = over(bx + 10, barY - 4, barW, 12) and not popupBlocking
-                        if held and (hovered or ProjectState.sliderDrag == el) then
-                            ProjectState.sliderDrag = el
-                            local newVal = el.min + clamp((ProjectState.mouseX - (bx + 10)) / barW, 0, 1) * (el.max - el.min)
-                            if el.step then
-                                newVal = math.floor(newVal / el.step + 0.5) * el.step
+                        if currentY + 24 <= by + bh - 6 then
+                            txt(el.label, bx + 10, currentY, Theme.text, 11, FontSystem, 102, false)
+                            local valStr = tostring(el.value)
+                            txt(valStr, bx + bw - 10 - textWidth(valStr, 11, FontUI), currentY, Theme.text, 11, FontUI, 102, false)
+                            local barY = currentY + 14
+                            local barW = bw - 20
+                            rect(bx + 10, barY, barW, 4, Theme.surface3, 102, 2, 0.95)
+                            rect(bx + 10, barY, barW * clamp((el.value - el.min) / max(0.0001, el.max - el.min), 0, 1), 4, Theme.accent, 103, 2, 0.95)
+                            circle(bx + 10 + barW * clamp((el.value - el.min) / max(0.0001, el.max - el.min), 0, 1), barY + 2, 4, Theme.text, 104, true, 0, 16, 0.95)
+                            local hovered = over(bx + 10, barY - 4, barW, 12) and not popupBlocking
+                            if held and (hovered or ProjectState.sliderDrag == el) then
+                                ProjectState.sliderDrag = el
+                                local newVal = el.min + clamp((ProjectState.mouseX - (bx + 10)) / barW, 0, 1) * (el.max - el.min)
+                                if el.step then
+                                    newVal = math.floor(newVal / el.step + 0.5) * el.step
+                                end
+                                if el.value ~= newVal then
+                                    el.value = newVal
+                                    safeCallback(el.callback, newVal)
+                                end
                             end
-                            if el.value ~= newVal then
-                                el.value = newVal
-                                safeCallback(el.callback, newVal)
-                            end
+                            currentY = currentY + 24
                         end
-                        currentY = currentY + 24
                     end
                 end
             end
@@ -3263,12 +3300,12 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                 local expX = colX + colW - 54
                 local expHovered = not popupBlocking and over(expX - 2, sy + 4, 14, 20) and headerTrans > 0.5
                 local expColor = expHovered and Theme.accent or Theme.sub
-                drawExportIcon(expX - 2, iconY, expColor, z + 2, hTrans * (expHovered and 1 or 0.6))
+                drawExportIcon(expX - 2, iconY - 2, expColor, z + 2, hTrans * (expHovered and 1 or 0.6))
 
                 local impX = colX + colW - 70
                 local impHovered = not popupBlocking and over(impX - 2, sy + 4, 14, 20) and headerTrans > 0.5
                 local impColor = impHovered and Theme.accent or Theme.sub
-                drawImportIcon(impX - 2, iconY, impColor, z + 2, hTrans * (impHovered and 1 or 0.6))
+                drawImportIcon(impX - 2, iconY - 2, impColor, z + 2, hTrans * (impHovered and 1 or 0.6))
 
                 if not isFloating and click and headerTrans > 0.5 then
                     if expHovered then
@@ -3383,7 +3420,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     if item.colorpicker then cbExtra = cbExtra + 20 end
                     if item.keybind then cbExtra = cbExtra + 64 end
                     if item.tooltip then cbExtra = cbExtra + 18 end
-                    txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - cbExtra, trans)
+                    txt(item.label, rowX + 26, textTop(rowY, (item.keybind and 28 or itemH) - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - cbExtra, trans)
                     
                     if not isFloating then
                         click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
@@ -3391,7 +3428,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     
                     if item.tooltip and not isFloating then
                         local qHovered = over(rowX + rowW - 16, rowY + 6, 12, 12)
-                        txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
+                        txt("?", rowX + rowW - 10, textTop(rowY, (item.keybind and 28 or itemH) - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
                         if qHovered and not disabled then
                             tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
                         end
@@ -4271,12 +4308,12 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             rect(rowX + 4 + offset, rowY + 6 + offset, 14 * item.animState, 14 * item.animState, Theme.accent, z + 14, 4 * item.animState, trans)
         end
         
-        txt(item.label, rowX + 26, textTop(rowY, itemH - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - (6 + (item.colorpicker and 20 or 0) + (item.keybind and 64 or 0) + (item.tooltip and 18 or 0)), trans)
+        txt(item.label, rowX + 26, textTop(rowY, (item.keybind and 28 or itemH) - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - (6 + (item.colorpicker and 20 or 0) + (item.keybind and 64 or 0) + (item.tooltip and 18 or 0)), trans)
         
         click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
         
         if item.tooltip then
-            txt("?", rowX + rowW - 10, textTop(rowY, itemH - 2, 13), over(rowX + rowW - 16, rowY + 6, 12, 12) and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
+            txt("?", rowX + rowW - 10, textTop(rowY, (item.keybind and 28 or itemH) - 2, 13), over(rowX + rowW - 16, rowY + 6, 12, 12) and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
             if over(rowX + rowW - 16, rowY + 6, 12, 12) and not disabled then
                 tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
             end
@@ -4640,12 +4677,16 @@ local function renderWindow(click, held, rightClick)
     end
 
     rect(x, y, w, h, Theme.surface, 5, 12)
-    rect(x, y + h - 12, w, 12, Theme.surface, 5, 0)
+    if titlePos ~= "top" then
+        rect(x, y + h - 12, w, 12, Theme.surface, 5, 0)
+    end
     strokeRect(x, y, w, h, Theme.border, 6, 12)
-    rect(x + 1, y + h - 12, w - 2, 13, Theme.surface, 6, 0)
-    line(x, y + h - 12, x, y + h, Theme.border, 6)
-    line(x, y + h, x + w, y + h, Theme.border, 6)
-    line(x + w, y + h - 12, x + w, y + h, Theme.border, 6)
+    if titlePos ~= "top" then
+        rect(x + 1, y + h - 12, w - 2, 13, Theme.surface, 6, 0)
+        line(x, y + h - 12, x, y + h, Theme.border, 6)
+        line(x, y + h, x + w, y + h, Theme.border, 6)
+        line(x + w, y + h - 12, x + w, y + h, Theme.border, 6)
+    end
 
     local dragEdge = ProjectState.resizeEdge
     if held and dragEdge then
@@ -5210,7 +5251,7 @@ local function renderWindow(click, held, rightClick)
         local btnHovered = over(mx + 100, my + 220, 100, 24)
         rect(mx + 100, my + 220, 100, 24, btnHovered and Theme.surface3 or Theme.surface, mz + 2, 4, 1)
         strokeRect(mx + 100, my + 220, 100, 24, btnHovered and Theme.accent or Theme.border, mz + 3, 4, 1)
-        txt("awesome!", mx + 150, centerY(my + 220, 24), Theme.accent, 12, FontBold, mz + 4, true)
+        txt("continue", mx + 150, centerY(my + 220, 24), Theme.accent, 12, FontBold, mz + 4, true)
         
         if click and btnHovered then
             ProjectState.changelogOpen = false
@@ -5326,6 +5367,8 @@ local function step()
         ProjectState.draggedSection = nil
         ProjectState.drag = nil
         ProjectState.draggedTab = nil
+        ProjectState.boxDrag = nil
+        ProjectState.boxResize = nil
     end
 
     local click = Input.m1.click
