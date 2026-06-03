@@ -2890,9 +2890,6 @@ local function renderTabs(click, px, py, pw, ph)
             strokeRect(tabX + 4, contentY + ProjectState.currentPillY, tabW - 8, ProjectState.currentPillH, Theme.accent, 22, 6)
         end
         
-        local lineX = pos == "left" and (tabX + tabW + 4) or (tabX - 4)
-        line(lineX, py, lineX, py + ph, Theme.border, 24)
-        
         return click
     end
 
@@ -4643,7 +4640,12 @@ local function renderWindow(click, held, rightClick)
     end
 
     rect(x, y, w, h, Theme.surface, 5, 12)
+    rect(x, y + h - 12, w, 12, Theme.surface, 5, 0)
     strokeRect(x, y, w, h, Theme.border, 6, 12)
+    rect(x + 1, y + h - 12, w - 2, 13, Theme.surface, 6, 0)
+    line(x, y + h - 12, x, y + h, Theme.border, 6)
+    line(x, y + h, x + w, y + h, Theme.border, 6)
+    line(x + w, y + h - 12, x + w, y + h, Theme.border, 6)
 
     local dragEdge = ProjectState.resizeEdge
     if held and dragEdge then
@@ -5018,6 +5020,13 @@ local function renderWindow(click, held, rightClick)
             tabsX, tabsY, tabsWidth, tabsHeight = px, py, pw, tabH
             contY = py + tabH + 6
             contH = ph - tabH - 6
+        end
+        
+        if pos == "left" or pos == "right" then
+            for i = 1, #shadowAlpha do
+                local offset = i * 2
+                rect(tabsX - offset, tabsY - offset + 6, tabsWidth + offset * 2, tabsHeight + offset * 2, Theme.black, 0, 12, shadowAlpha[i])
+            end
         end
         
         rect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.surface, 5, 8)
