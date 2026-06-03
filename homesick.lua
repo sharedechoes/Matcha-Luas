@@ -3345,7 +3345,10 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
             local item = section.items[ii]
             local itemH = getItemHeight(item, rowW)
             local disabled = isItemDisabled(item)
-            local trans = (disabled and 0.4 or 1) * cardTrans * min(clamp((rowY - cardClipTop) / 16, 0, 1), clamp((cardClipBottom - (rowY + itemH)) / 16, 0, 1), clamp(((sy + secH - 4) - (rowY + itemH)) / 16, 0, 1))
+            local trans = (disabled and 0.4 or 1) * cardTrans * min(clamp((rowY - cardClipTop) / 16, 0, 1), clamp((cardClipBottom - (rowY + itemH)) / 16, 0, 1))
+            if section.customHeight then
+                trans = trans * clamp(((sy + secH - 4) - (rowY + itemH)) / 16, 0, 1)
+            end
             
             if trans > 0 then
                 if item.type == "label" then
