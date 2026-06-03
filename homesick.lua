@@ -191,6 +191,7 @@ local Theme = {
     border = C3(60, 55, 52),
     white = C3(255, 255, 255),
     black = C3(0, 0, 0),
+    particle = C3(255, 255, 255),
 }
 
 local ThemeAlpha = {
@@ -208,6 +209,7 @@ local ThemeAlpha = {
     border = 1.0,
     white = 1.0,
     black = 1.0,
+    particle = 0.25,
 }
 
 local function getThemeAlpha(color)
@@ -3854,6 +3856,7 @@ local function serializeConfigData()
         tabsPosition = ProjectState.tabsPosition,
         titlePosition = ProjectState.titlePosition,
         hotkeyEnabled = ProjectState.hotkeyEnabled,
+        particlesEnabled = ProjectState.particlesEnabled ~= false,
     }
     for _, t in ipairs(ProjectState.tabs) do
         for _, s in ipairs(t.sections) do
@@ -3902,6 +3905,7 @@ local function loadConfig(json)
             ProjectState.tabsPosition = configData._system.tabsPosition or "top"
             ProjectState.titlePosition = configData._system.titlePosition or "top"
             ProjectState.hotkeyEnabled = configData._system.hotkeyEnabled == true
+            ProjectState.particlesEnabled = configData._system.particlesEnabled ~= false
         end
         for _, t in ipairs(ProjectState.tabs) do
             for _, s in ipairs(t.sections) do
@@ -4196,6 +4200,9 @@ local function initSettings()
     generalSec:Checkbox("Hotkey Overlay", false, function(val)
         ProjectState.hotkeyEnabled = val
     end)
+    generalSec:Checkbox("Background Particles", true, function(val)
+        ProjectState.particlesEnabled = val
+    end)
     generalSec:Button("Toggle Layout Editor", function()
         ProjectState.layoutEditing = true
         ProjectState.settingsActive = false
@@ -4224,7 +4231,7 @@ local function initSettings()
         end
     end)
     ProjectState.themeColorPickers = {}
-    local pickers = {"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border", "green", "red", "yellow", "unsafe"}
+    local pickers = {"accent", "bg", "surface", "surface2", "surface3", "text", "sub", "border", "green", "red", "yellow", "unsafe", "particle"}
     for idx = 1, #pickers do
         local name = pickers[idx]
         ProjectState.themeColorPickers[name] = colorsSec:Colorpicker(
@@ -4239,6 +4246,7 @@ local function initSettings()
             name == "green" and "Success/Green Accent" or
             name == "red" and "Error/Red Accent" or
             name == "yellow" and "Warning/Yellow Accent" or
+            name == "particle" and "Background Particles" or
             "Unsafe/Caution Accent",
             Theme[name],
             true,
@@ -4640,6 +4648,37 @@ local function renderWindow(click, held, rightClick)
 
     rect(x, y, w, h, Theme.surface, 5, 12)
     strokeRect(x, y, w, h, Theme.border, 6, 12)
+
+    if ProjectState.particlesEnabled ~= false then
+        if not ProjectState.particles then
+            ProjectState.particles = {}
+            for i = 1, 30 do
+                ProjectState.particles[i] = {
+                    x = math.random() * w,
+                    y = math.random() * h,
+                    vx = (math.random() - 0.5) * 30,
+                    vy = (math.random() - 0.5) * 30,
+                    size = 1.5 + math.random() * 2
+                }
+            end
+        end
+        
+        local dtValue = ProjectState.dt or 1/60
+        if dtValue <= 0 then dtValue = 1/60 end
+        
+        for i = 1, #ProjectState.particles do
+            local p = ProjectState.particles[i]
+            p.x = p.x + p.vx * dtValue
+            p.y = p.y + p.vy * dtValue
+            
+            if p.x < 0 then p.x = w end
+            if p.x > w then p.x = 0 end
+            if p.y < 0 then p.y = h end
+            if p.y > h then p.y = 0 end
+            
+            circle(x + p.x, y + p.y, p.size, Theme.particle, 7, true)
+        end
+    end
 
     local dragEdge = ProjectState.resizeEdge
     if held and dragEdge then
