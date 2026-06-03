@@ -157,13 +157,7 @@ local contentPad = 8
 local shadowAlpha = {0.10, 0.07, 0.05, 0.03, 0.015}
 
 local changelogs = {
-    "added smooth window accent glow pulse",
-    "added smooth sliding indicator for tab active highlight",
-    "added layout editor dragging for title bar positioning",
-    "updated hotkey overlay to display full toggle/hold labels",
-    "added smooth fade-out and slide animations for hotkeys",
-    "made colorpicker copy alpha to hex values",
-    "added 7 drawing font choices with custom width scaling"
+    "RELEASE!!!"
 }
 
 local Theme = {
@@ -238,7 +232,6 @@ local ProjectState = {
     hasMouse = false,
     focusedWindow = true,
     inputState = nil,
-    demoLoaded = false,
     tooltipText = nil,
     tooltipAt = 0,
     tooltipX = 0,
@@ -488,7 +481,7 @@ local function safeCallback(callback, ...)
     end
     local ok, result = pcall(callback, ...)
     if not ok then
-        warn("homesick callback error " .. tostring(result) .. " rip")
+        warn("homesick callback error " .. tostring(result))
         return
     end
     return result
@@ -3215,7 +3208,7 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
                         item.colorpicker.alpha = ProjectState.copiedAlpha or 1
                         safeCallback(item.colorpicker.callback, item.colorpicker.value, item.colorpicker.alpha)
                     else
-                        warn("color clipboard empty lol")
+                        warn("color clipboard empty")
                     end
                 end
             end, nil, nil)
@@ -3360,15 +3353,15 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         click = false
                         if section.name == "Configs" then
                             if pcall(setclipboard, exportConfig()) then
-                                warn("config code copied to clipboard lol")
+                                warn("config code copied to clipboard")
                             else
-                                warn("failed to copy config to clipboard sadge")
+                                warn("failed to copy config to clipboard")
                             end
                         else
                             if pcall(setclipboard, exportTheme()) then
-                                warn("theme code copied to clipboard lol")
+                                warn("theme code copied to clipboard")
                             else
-                                warn("failed to copy theme to clipboard sadge")
+                                warn("failed to copy theme to clipboard")
                             end
                         end
                     elseif impHovered then
@@ -3384,10 +3377,10 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                             onConfirm = function(code)
                                 if section.name == "Configs" then
                                     importConfig(code)
-                                    warn("config imported successfully lol")
+                                    warn("config imported successfully")
                                 else
                                     importTheme(code)
-                                    warn("theme imported successfully lol")
+                                    warn("theme imported successfully")
                                 end
                             end
                         }
@@ -3517,7 +3510,7 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                                     item.alpha = ProjectState.copiedAlpha or 1
                                     safeCallback(item.callback, item.value, item.alpha)
                                 else
-                                    warn("color clipboard empty lol")
+                                    warn("color clipboard empty")
                                 end
                             end
                         end, nil, nil)
@@ -4399,7 +4392,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
                         item.alpha = ProjectState.copiedAlpha or 1
                         safeCallback(item.callback, item.value, item.alpha)
                     else
-                        warn("color clipboard empty lol")
+                        warn("color clipboard empty")
                     end
                 end
             end, nil, nil)
@@ -5472,67 +5465,6 @@ local function step()
     hideUnused()
 end
 
-function ui:Demo()
-    if ProjectState.demoLoaded then
-        return self
-    end
-
-    ProjectState.demoLoaded = true
-    self:SetTitle("homesick")
-    self:SetSize(400, 500)
-    self:Center()
-
-    local playground = self:Tab("Playground")
-    local controls = playground:Section("Section 1")
-
-    controls:Label("homesick Test", Theme.accent)
-    local toggleOne = controls:Toggle("Toggle #1", false, nil, true, "This feature has a tooltip")
-    local key = toggleOne:AddKeybind(nil, "Hold", true)
-    local toggleTwo = controls:Toggle("Toggle #2", false)
-    local color = toggleTwo:AddColorpicker("ESP Color", Theme.white, true)
-    local textBox = controls:Textbox("Hint", "")
-    local slider = controls:Slider("Drag me", 10, 1, 1, 360, "deg")
-    local dropdown = controls:Dropdown("Pick me", {"1"}, {"1", "2", "3", "4", "5", "verybigitem"}, false)
-    local multi = controls:Dropdown("Multi pick", {"A"}, {"A", "B", "C"}, true)
-
-    controls:Divider("Actions")
-    controls:Button("Rollback", function()
-        toggleOne:Set(false)
-        key:Set(nil, "Hold")
-        toggleTwo:Set(false)
-        color:Set(Theme.white)
-        textBox:Set("")
-        slider:Set(100)
-        dropdown:Set({"1"})
-        multi:Set({"A"})
-    end)
-
-    local anims = playground:Section("Section 2")
-    local shouldAnimate = false
-    local animToggle = anims:Toggle("Playing", shouldAnimate, function(value)
-        shouldAnimate = value
-    end)
-    local animSlider = anims:Slider("Meter", 0, 1, -100, 100, "%")
-    anims:Button("Stop", function()
-        animToggle:Set(false)
-    end)
-
-    self:RegisterActivity(function()
-        if shouldAnimate then
-            animSlider:Set(floor(sin(clock() * 8) * 100 + 0.0001))
-        end
-    end)
-
-    playground:Section("Section 3")
-    playground:Section("Section 4")
-    self:Tab("Another tab")
-    self:Tab("Tabs")
-
-    applyInputState(true)
-
-    return self
-end
-
 local RunService = game:GetService("RunService")
 
 local function runStepSafe()
@@ -5553,7 +5485,7 @@ local function runStepSafe()
     ProjectState.rendering = false
 
     if not ok then
-        warn("step failed " .. tostring(err) .. " rip")
+        warn("step failed " .. tostring(err))
         local now = clock()
         ProjectState.errorCount = (ProjectState.errorCount or 0) + 1
         if now - ProjectState.lastErrorAt > 1 then
