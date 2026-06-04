@@ -6,7 +6,7 @@ Requests can be sent to me on Discord, my tag is **sharedechoes** & my ID is **1
 # ~~Supported Games~~
 
 # Utility
-[Homesick UI Library](https://github.com/sharedechoes/Matcha-Luas/blob/main/homesick.lua)
+[Homesick UI Library](https://github.com/sharedechoes/Matcha-Luas/blob/main/homesick.lua) | [Homesick Example Script](https://github.com/sharedechoes/Matcha-Luas/blob/main/homesick_example.lua)
 
 # QoL
 [Visual Breadcrumbs](https://github.com/sharedechoes/Matcha-Luas/blob/main/breadcrumbs.lua)
