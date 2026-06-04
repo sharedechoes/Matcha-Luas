@@ -3,7 +3,10 @@ Luas made specifically for the Roblox External "Matcha"
 
 Requests can be sent to me on Discord, my tag is **sharedechoes** & my ID is **1360649834322727084** - make sure it's me before you run something lol
 
-# Supported Games
+# ~~Supported Games~~
 
+# Utility
+[Homesick UI Library](https://github.com/sharedechoes/Matcha-Luas/blob/main/homesick.lua)
 
 # QoL
+[Visual Breadcrumbs](https://github.com/sharedechoes/Matcha-Luas/blob/main/breadcrumbs.lua)
