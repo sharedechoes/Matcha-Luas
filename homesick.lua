@@ -40,7 +40,10 @@ local sin = math.sin
 local clock = nil
 pcall(function() clock = os.clock end)
 if type(clock) ~= "function" then
-    local rawTick = env.tick or (type(tick) == "function" and tick) or nil
+    local rawTick = env.tick
+    if type(rawTick) ~= "function" then
+        pcall(function() rawTick = tick end)
+    end
     if type(rawTick) == "function" then
         clock = rawTick
     else
@@ -104,7 +107,11 @@ local Mouse = nil
 if type(LocalPlayer) == "userdata" or type(LocalPlayer) == "table" then
     pcall(function() Mouse = LocalPlayer:GetMouse() end)
 end
-local homesickInstanceId = (type(env.tick) == "function" and env.tick()) or (type(tick) == "function" and tick()) or clock()
+local rawTick = env.tick
+if type(rawTick) ~= "function" then
+    pcall(function() rawTick = tick end)
+end
+local homesickInstanceId = (type(rawTick) == "function" and rawTick() or clock())
 safeWriteGlobal("homesickInstanceId", homesickInstanceId)
 
 local clipboardBox = nil
