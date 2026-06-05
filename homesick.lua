@@ -1,79 +1,25 @@
-local env = nil
-pcall(function() env = getfenv and getfenv() or _G end)
-if type(env) ~= "table" then env = {} end
-
-local shared = type(shared) == "table" and shared or {}
-local function safeWriteGlobal(key, value)
-    pcall(function()
-        _G[key] = value
-    end)
-    pcall(function()
-        shared[key] = value
-    end)
-end
-
-local function safeReadGlobal(key)
-    local val = nil
-    pcall(function() val = _G[key] end)
-    if val ~= nil then return val end
-    pcall(function() val = shared[key] end)
-    return val
-end
-
 local v2 = Vector2.new
 local c3 = Color3.fromRGB
-
-local c3Hex = nil
-pcall(function() c3Hex = Color3.fromHex end)
-if type(c3Hex) ~= "function" then c3Hex = function(...) return nil end end
-
-local hsv = nil
-pcall(function() hsv = Color3.fromHSV end)
-if type(hsv) ~= "function" then hsv = function(...) return nil end end
+local c3Hex = Color3.fromHex
+local hsv = Color3.fromHSV
 
 local abs = math.abs
 local floor = math.floor
 local max = math.max
 local min = math.min
 local sin = math.sin
-
-local clock = nil
-pcall(function() clock = os.clock end)
-if type(clock) ~= "function" then
-    local rawTick = env.tick
-    if type(rawTick) ~= "function" then
-        pcall(function() rawTick = tick end)
-    end
-    if type(rawTick) == "function" then
-        clock = rawTick
-    else
-        clock = function() return 0 end
-    end
-end
-
+local clock = os.clock
 local remove = table.remove
 local concat = table.concat
 
-local setrobloxinput = (type(env.setrobloxinput) == "function" and env.setrobloxinput) or function(...) end
-local isrbxactive = (type(env.isrbxactive) == "function" and env.isrbxactive) or function() return true end
-
-local homesickFunctions = safeReadGlobal("homesickFunctions")
-if type(homesickFunctions) ~= "table" then
-    homesickFunctions = {}
-    safeWriteGlobal("homesickFunctions", homesickFunctions)
-end
-
-local homesickOriginals = safeReadGlobal("homesickOriginals")
-if type(homesickOriginals) ~= "table" then
-    homesickOriginals = {
-        print = env.print or print,
-        warn = env.warn or warn,
-        printl = env.printl,
-        notify = env.notify,
-        isrbxactive = (type(env.isrbxactive) == "function" and env.isrbxactive) or isrbxactive
-    }
-    safeWriteGlobal("homesickOriginals", homesickOriginals)
-end
+_G.homesickFunctions = _G.homesickFunctions or {}
+_G.homesickOriginals = {
+    print = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.print and not _G.homesickFunctions[_G.homesickOriginals.print]) and _G.homesickOriginals.print or print,
+    warn = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.warn and not _G.homesickFunctions[_G.homesickOriginals.warn]) and _G.homesickOriginals.warn or warn,
+    printl = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.printl and not _G.homesickFunctions[_G.homesickOriginals.printl]) and _G.homesickOriginals.printl or printl,
+    notify = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.notify and not _G.homesickFunctions[_G.homesickOriginals.notify]) and _G.homesickOriginals.notify or notify,
+    isrbxactive = (type(_G.homesickOriginals) == "table" and _G.homesickOriginals.isrbxactive and not _G.homesickFunctions[_G.homesickOriginals.isrbxactive]) and _G.homesickOriginals.isrbxactive or isrbxactive
+}
 local exportConfig, importConfig, exportTheme, importTheme, smoothValue, toHex, doColorPicker, dDropdown, drawChevronDown, drawChevronUp
 
 local function clamp(value, low, high)
@@ -99,20 +45,12 @@ local function parseColor(c)
     return c
 end
 
-local Players = nil
-pcall(function() Players = game:GetService("Players") end)
+local Players = game:GetService("Players")
 local Workspace = workspace
-local LocalPlayer = (type(Players) == "userdata" or type(Players) == "table") and Players.LocalPlayer or nil
-local Mouse = nil
-if type(LocalPlayer) == "userdata" or type(LocalPlayer) == "table" then
-    pcall(function() Mouse = LocalPlayer:GetMouse() end)
-end
-local rawTick = env.tick
-if type(rawTick) ~= "function" then
-    pcall(function() rawTick = tick end)
-end
-local homesickInstanceId = (type(rawTick) == "function" and rawTick() or clock())
-safeWriteGlobal("homesickInstanceId", homesickInstanceId)
+local LocalPlayer = Players.LocalPlayer
+local Mouse = select(1, pcall(function() return LocalPlayer:GetMouse() end)) and LocalPlayer:GetMouse() or nil
+local homesickInstanceId = tick()
+_G.homesickInstanceId = homesickInstanceId
 
 local clipboardBox = nil
 local clipboardGui = nil
@@ -171,9 +109,8 @@ local function readClipboard(callback)
 end
 
 local mouseScroll = 0
-local uis = nil
-pcall(function() uis = game:GetService("UserInputService") end)
-if (type(uis) == "userdata" or type(uis) == "table") then
+local uis = game:GetService("UserInputService")
+if uis then
     pcall(function()
         uis.PointerAction:Connect(function(wheel)
             mouseScroll = mouseScroll + wheel
@@ -195,12 +132,7 @@ if (type(uis) == "userdata" or type(uis) == "table") then
     end)
 end
 
-local Fonts = {}
-pcall(function()
-    if type(Drawing) == "table" or type(Drawing) == "userdata" then
-        Fonts = Drawing.Fonts or {}
-    end
-end)
+local Fonts = (type(Drawing) == "table" and Drawing.Fonts) or {}
 local FontSystem = Fonts.System or Fonts.UI or 0
 local FontBold = Fonts.SystemBold or FontSystem
 local FontUI = Fonts.UI or FontSystem
@@ -359,8 +291,8 @@ local function warn(msg)
         duration = 5,
         elapsed = 0,
     })
-    if homesickOriginals and homesickOriginals.warn then
-        homesickOriginals.warn(msg)
+    if _G.homesickOriginals and _G.homesickOriginals.warn then
+        _G.homesickOriginals.warn(msg)
     end
 end
 
@@ -499,8 +431,7 @@ addInput("quote", 0xDE, "'", "\"")
 local ui = {}
 
 local function viewportSize()
-    local camera = nil
-    pcall(function() camera = Workspace and Workspace.CurrentCamera end)
+    local camera = Workspace.CurrentCamera
     if camera and camera.ViewportSize then
         return camera.ViewportSize.X, camera.ViewportSize.Y
     end
@@ -646,7 +577,7 @@ local function getDrawing(kind)
     local object = list[index]
 
     if not object then
-        local ok, created = pcall(function() return Drawing.new(TypeMap[kind]) end)
+        local ok, created = pcall(Drawing.new, TypeMap[kind])
         if not ok or not created then
             return nil
         end
@@ -673,7 +604,7 @@ local function getExternalDrawing(kind)
     local object = list[index]
 
     if not object then
-        local ok, created = pcall(function() return Drawing.new(TypeMap[kind]) end)
+        local ok, created = pcall(Drawing.new, TypeMap[kind])
         if not ok or not created then
             return nil
         end
@@ -5379,23 +5310,19 @@ local function step()
         if isTyping then
             setrobloxinput(false)
             pcall(function()
-                if game then
-                    game:GetService("ContextActionService"):BindActionAtPriority(
-                        "homesickFreezeMovement",
-                        function() return Enum.ContextActionResult.Sink end,
-                        false,
-                        3000,
-                        Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D, Enum.KeyCode.Space,
-                        Enum.KeyCode.Up, Enum.KeyCode.Down, Enum.KeyCode.Left, Enum.KeyCode.Right
-                    )
-                end
+                game:GetService("ContextActionService"):BindActionAtPriority(
+                    "homesickFreezeMovement",
+                    function() return Enum.ContextActionResult.Sink end,
+                    false,
+                    3000,
+                    Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D, Enum.KeyCode.Space,
+                    Enum.KeyCode.Up, Enum.KeyCode.Down, Enum.KeyCode.Left, Enum.KeyCode.Right
+                )
             end)
         else
             setrobloxinput(true)
             pcall(function()
-                if game then
-                    game:GetService("ContextActionService"):UnbindAction("homesickFreezeMovement")
-                end
+                game:GetService("ContextActionService"):UnbindAction("homesickFreezeMovement")
             end)
         end
     end
@@ -5538,8 +5465,7 @@ local function step()
     hideUnused()
 end
 
-local RunService = nil
-pcall(function() RunService = game:GetService("RunService") end)
+local RunService = game:GetService("RunService")
 
 local function runStepSafe()
     if _G.homesickInstanceId ~= homesickInstanceId then
@@ -5547,7 +5473,7 @@ local function runStepSafe()
     end
     if not ProjectState.alive then
         if stepConnection then
-            pcall(function() stepConnection:Disconnect() end)
+            stepConnection:Disconnect()
             stepConnection = nil
         end
         finalDestroy()
@@ -5565,7 +5491,7 @@ local function runStepSafe()
         if now - ProjectState.lastErrorAt > 1 then
             ProjectState.lastErrorAt = now
         end
-        pcall(setrobloxinput, true)
+        setrobloxinput(true)
         ProjectState.inputState = true
         hideAll()
         if ProjectState.errorCount >= 3 then
@@ -5577,17 +5503,8 @@ local function runStepSafe()
     end
 end
 
-local hasRenderStepped = false
-pcall(function()
-    if (type(RunService) == "userdata" or type(RunService) == "table") and RunService.RenderStepped then
-        hasRenderStepped = true
-    end
-end)
-
-if hasRenderStepped then
-    pcall(function()
-        stepConnection = RunService.RenderStepped:Connect(runStepSafe)
-    end)
+if RunService and RunService.RenderStepped then
+    stepConnection = RunService.RenderStepped:Connect(runStepSafe)
 else
     task.spawn(function()
         while ProjectState.alive do
@@ -5599,8 +5516,8 @@ else
     end)
 end
 
-safeWriteGlobal("homesick", ui)
-safeWriteGlobal("homesickUI", ui)
+_G.homesick = ui
+_G.homesickUI = ui
 
 local homesick = { changelogEnabled = true }
 
@@ -6047,16 +5964,13 @@ newPrint = function(...)
         strArgs[i] = string.lower(tostring(select(i, ...)))
     end
     ui:Notify("print", table.concat(strArgs, " "), 5)
-    local orig = homesickOriginals.print
-    if orig and orig ~= newPrint and not homesickFunctions[orig] then
+    local orig = _G.homesickOriginals.print
+    if orig and orig ~= newPrint and not _G.homesickFunctions[orig] then
         return orig(unpack(strArgs))
     end
 end
-homesickFunctions[newPrint] = true
-pcall(function()
-    env.print = newPrint
-end)
-safeWriteGlobal("print", newPrint)
+_G.homesickFunctions[newPrint] = true
+_G.print = newPrint
 
 local newWarn
 newWarn = function(...)
@@ -6065,18 +5979,15 @@ newWarn = function(...)
         strArgs[i] = string.lower(tostring(select(i, ...)))
     end
     ui:Notify("warning", table.concat(strArgs, " "), 5)
-    local orig = homesickOriginals.warn
-    if orig and orig ~= newWarn and not homesickFunctions[orig] then
+    local orig = _G.homesickOriginals.warn
+    if orig and orig ~= newWarn and not _G.homesickFunctions[orig] then
         return orig(unpack(strArgs))
     end
 end
-homesickFunctions[newWarn] = true
-pcall(function()
-    env.warn = newWarn
-end)
-safeWriteGlobal("warn", newWarn)
+_G.homesickFunctions[newWarn] = true
+_G.warn = newWarn
 
-if type(env.printl) == "function" then
+if type(printl) == "function" then
     local newPrintl
     newPrintl = function(...)
         local strArgs = {}
@@ -6084,54 +5995,45 @@ if type(env.printl) == "function" then
             strArgs[i] = string.lower(tostring(select(i, ...)))
         end
         ui:Notify("print", table.concat(strArgs, " "), 5)
-        local orig = homesickOriginals.printl
-        if orig and orig ~= newPrintl and not homesickFunctions[orig] then
+        local orig = _G.homesickOriginals.printl
+        if orig and orig ~= newPrintl and not _G.homesickFunctions[orig] then
             return orig(unpack(strArgs))
         end
     end
-    homesickFunctions[newPrintl] = true
-    pcall(function()
-        env.printl = newPrintl
-    end)
-    safeWriteGlobal("printl", newPrintl)
+    _G.homesickFunctions[newPrintl] = true
+    _G.printl = newPrintl
 end
 
-if type(env.notify) == "function" then
+if type(notify) == "function" then
     local newNotify
     newNotify = function(message, title, duration)
         local lowerMsg = string.lower(tostring(message or ""))
         local lowerTitle = string.lower(tostring(title or "notification"))
         ui:Notify(lowerTitle, lowerMsg, duration or 5)
-        local orig = homesickOriginals.notify
-        if orig and orig ~= newNotify and not homesickFunctions[orig] then
+        local orig = _G.homesickOriginals.notify
+        if orig and orig ~= newNotify and not _G.homesickFunctions[orig] then
             return orig(message, title, duration)
         end
     end
-    homesickFunctions[newNotify] = true
-    pcall(function()
-        env.notify = newNotify
-    end)
-    safeWriteGlobal("notify", newNotify)
+    _G.homesickFunctions[newNotify] = true
+    _G.notify = newNotify
 end
 
-if type(homesickOriginals.isrbxactive) == "function" then
+if _G.homesickOriginals and type(_G.homesickOriginals.isrbxactive) == "function" then
     local newIsRbxActive
     newIsRbxActive = function()
         if ProjectState.isrbxactiveOverride then
             return true
         end
-        local orig = homesickOriginals.isrbxactive
-        if orig and orig ~= newIsRbxActive and not homesickFunctions[orig] then
+        local orig = _G.homesickOriginals.isrbxactive
+        if orig and orig ~= newIsRbxActive and not _G.homesickFunctions[orig] then
             return orig()
         end
         return true
     end
-    homesickFunctions[newIsRbxActive] = true
-    pcall(function()
-        env.isrbxactive = newIsRbxActive
-    end)
-    safeWriteGlobal("isrbxactive", newIsRbxActive)
+    _G.homesickFunctions[newIsRbxActive] = true
+    _G.isrbxactive = newIsRbxActive
 end
 
-safeWriteGlobal("homesick", homesick)
+_G.homesick = homesick
 return homesick
