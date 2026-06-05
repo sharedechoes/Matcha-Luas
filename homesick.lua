@@ -20,50 +20,27 @@ local function safeReadGlobal(key)
     return val
 end
 
-local rawVector2 = env.Vector2
-local v2 = nil
-pcall(function() v2 = rawVector2 and rawVector2.new end)
-if type(v2) ~= "function" then v2 = function(...) return nil end end
-
-local rawColor3 = env.Color3
-local c3 = nil
-pcall(function() c3 = rawColor3 and rawColor3.fromRGB end)
-if type(c3) ~= "function" then c3 = function(...) return nil end end
+local v2 = Vector2.new
+local c3 = Color3.fromRGB
 
 local c3Hex = nil
-pcall(function() c3Hex = rawColor3 and rawColor3.fromHex end)
+pcall(function() c3Hex = Color3.fromHex end)
 if type(c3Hex) ~= "function" then c3Hex = function(...) return nil end end
 
 local hsv = nil
-pcall(function() hsv = rawColor3 and rawColor3.fromHSV end)
+pcall(function() hsv = Color3.fromHSV end)
 if type(hsv) ~= "function" then hsv = function(...) return nil end end
 
-local rawMath = env.math
-local abs = nil
-pcall(function() abs = rawMath and rawMath.abs end)
-if type(abs) ~= "function" then abs = function(x) return x < 0 and -x or x end end
+local abs = math.abs
+local floor = math.floor
+local max = math.max
+local min = math.min
+local sin = math.sin
 
-local floor = nil
-pcall(function() floor = rawMath and rawMath.floor end)
-if type(floor) ~= "function" then floor = function(x) return x - x % 1 end end
-
-local max = nil
-pcall(function() max = rawMath and rawMath.max end)
-if type(max) ~= "function" then max = function(a, b) return a > b and a or b end end
-
-local min = nil
-pcall(function() min = rawMath and rawMath.min end)
-if type(min) ~= "function" then min = function(a, b) return a < b and a or b end end
-
-local sin = nil
-pcall(function() sin = rawMath and rawMath.sin end)
-if type(sin) ~= "function" then sin = function(x) return 0 end end
-
-local rawOs = env.os
 local clock = nil
-pcall(function() clock = rawOs and rawOs.clock end)
+pcall(function() clock = os.clock end)
 if type(clock) ~= "function" then
-    local rawTick = env.tick
+    local rawTick = env.tick or (type(tick) == "function" and tick) or nil
     if type(rawTick) == "function" then
         clock = rawTick
     else
@@ -71,20 +48,11 @@ if type(clock) ~= "function" then
     end
 end
 
-local rawTable = env.table
-local remove = nil
-pcall(function() remove = rawTable and rawTable.remove end)
-if type(remove) ~= "function" then remove = function(t, i) return nil end end
+local remove = table.remove
+local concat = table.concat
 
-local concat = nil
-pcall(function() concat = rawTable and rawTable.concat end)
-if type(concat) ~= "function" then concat = function(t, sep) return "" end end
-
-local rawSetRobloxInput = env.setrobloxinput
-local setrobloxinput = (type(rawSetRobloxInput) == "function" and rawSetRobloxInput) or function(...) end
-
-local rawIsRbxActive = env.isrbxactive
-local isrbxactive = (type(rawIsRbxActive) == "function" and rawIsRbxActive) or function() return true end
+local setrobloxinput = (type(env.setrobloxinput) == "function" and env.setrobloxinput) or function(...) end
+local isrbxactive = (type(env.isrbxactive) == "function" and env.isrbxactive) or function() return true end
 
 local homesickFunctions = safeReadGlobal("homesickFunctions")
 if type(homesickFunctions) ~= "table" then
@@ -99,7 +67,7 @@ if type(homesickOriginals) ~= "table" then
         warn = env.warn or warn,
         printl = env.printl,
         notify = env.notify,
-        isrbxactive = rawIsRbxActive
+        isrbxactive = (type(env.isrbxactive) == "function" and env.isrbxactive) or isrbxactive
     }
     safeWriteGlobal("homesickOriginals", homesickOriginals)
 end
@@ -128,18 +96,15 @@ local function parseColor(c)
     return c
 end
 
-local rawGame = env.game
 local Players = nil
-pcall(function() Players = rawGame and rawGame:GetService("Players") end)
-local Workspace = nil
-pcall(function() Workspace = rawGame and (rawGame:GetService("Workspace") or rawGame.Workspace) or env.workspace end)
+pcall(function() Players = game:GetService("Players") end)
+local Workspace = workspace
 local LocalPlayer = (type(Players) == "userdata" or type(Players) == "table") and Players.LocalPlayer or nil
 local Mouse = nil
 if type(LocalPlayer) == "userdata" or type(LocalPlayer) == "table" then
     pcall(function() Mouse = LocalPlayer:GetMouse() end)
 end
-local rawTick = env.tick
-local homesickInstanceId = (type(rawTick) == "function" and rawTick() or clock())
+local homesickInstanceId = (type(env.tick) == "function" and env.tick()) or (type(tick) == "function" and tick()) or clock()
 safeWriteGlobal("homesickInstanceId", homesickInstanceId)
 
 local clipboardBox = nil
@@ -161,7 +126,7 @@ local function initClipboardBox()
         tb.TextTransparency = 1
         tb.Text = ""
         tb.ClearTextOnFocus = false
-        sg.Parent = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui") or rawGame and rawGame:GetService("CoreGui")
+        sg.Parent = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui") or game:GetService("CoreGui")
         clipboardGui = sg
         clipboardBox = tb
         tb.FocusLost:Connect(function()
@@ -200,7 +165,7 @@ end
 
 local mouseScroll = 0
 local uis = nil
-pcall(function() uis = rawGame and rawGame:GetService("UserInputService") end)
+pcall(function() uis = game:GetService("UserInputService") end)
 if (type(uis) == "userdata" or type(uis) == "table") then
     pcall(function()
         uis.PointerAction:Connect(function(wheel)
@@ -224,10 +189,9 @@ if (type(uis) == "userdata" or type(uis) == "table") then
 end
 
 local Fonts = {}
-local rawDrawing = env.Drawing
 pcall(function()
-    if type(rawDrawing) == "table" or type(rawDrawing) == "userdata" then
-        Fonts = rawDrawing.Fonts or {}
+    if type(Drawing) == "table" or type(Drawing) == "userdata" then
+        Fonts = Drawing.Fonts or {}
     end
 end)
 local FontSystem = Fonts.System or Fonts.UI or 0
@@ -675,7 +639,7 @@ local function getDrawing(kind)
     local object = list[index]
 
     if not object then
-        local ok, created = pcall(function() return rawDrawing and rawDrawing.new(TypeMap[kind]) end)
+        local ok, created = pcall(function() return Drawing.new(TypeMap[kind]) end)
         if not ok or not created then
             return nil
         end
@@ -702,7 +666,7 @@ local function getExternalDrawing(kind)
     local object = list[index]
 
     if not object then
-        local ok, created = pcall(function() return rawDrawing and rawDrawing.new(TypeMap[kind]) end)
+        local ok, created = pcall(function() return Drawing.new(TypeMap[kind]) end)
         if not ok or not created then
             return nil
         end
@@ -5408,8 +5372,8 @@ local function step()
         if isTyping then
             setrobloxinput(false)
             pcall(function()
-                if rawGame then
-                    rawGame:GetService("ContextActionService"):BindActionAtPriority(
+                if game then
+                    game:GetService("ContextActionService"):BindActionAtPriority(
                         "homesickFreezeMovement",
                         function() return Enum.ContextActionResult.Sink end,
                         false,
@@ -5422,8 +5386,8 @@ local function step()
         else
             setrobloxinput(true)
             pcall(function()
-                if rawGame then
-                    rawGame:GetService("ContextActionService"):UnbindAction("homesickFreezeMovement")
+                if game then
+                    game:GetService("ContextActionService"):UnbindAction("homesickFreezeMovement")
                 end
             end)
         end
@@ -5568,7 +5532,7 @@ local function step()
 end
 
 local RunService = nil
-pcall(function() RunService = rawGame and rawGame:GetService("RunService") end)
+pcall(function() RunService = game:GetService("RunService") end)
 
 local function runStepSafe()
     if _G.homesickInstanceId ~= homesickInstanceId then
