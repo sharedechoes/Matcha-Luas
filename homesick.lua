@@ -45,10 +45,10 @@ local function parseColor(c)
     return c
 end
 
-local Players = game:GetService("Players")
+local Players = select(2, pcall(function() return game:GetService("Players") end))
 local Workspace = workspace
-local LocalPlayer = Players.LocalPlayer
-local Mouse = select(1, pcall(function() return LocalPlayer:GetMouse() end)) and LocalPlayer:GetMouse() or nil
+local LocalPlayer = (type(Players) == "userdata" or type(Players) == "table") and Players.LocalPlayer or nil
+local Mouse = (type(LocalPlayer) == "userdata" or type(LocalPlayer) == "table") and select(1, pcall(function() return LocalPlayer:GetMouse() end)) and LocalPlayer:GetMouse() or nil
 local homesickInstanceId = tick()
 _G.homesickInstanceId = homesickInstanceId
 
@@ -109,8 +109,8 @@ local function readClipboard(callback)
 end
 
 local mouseScroll = 0
-local uis = game:GetService("UserInputService")
-if uis then
+local uis = select(2, pcall(function() return game:GetService("UserInputService") end))
+if (type(uis) == "userdata" or type(uis) == "table") then
     pcall(function()
         uis.PointerAction:Connect(function(wheel)
             mouseScroll = mouseScroll + wheel
@@ -132,7 +132,12 @@ if uis then
     end)
 end
 
-local Fonts = (type(Drawing) == "table" and Drawing.Fonts) or {}
+local Fonts = {}
+pcall(function()
+    if type(Drawing) == "table" or type(Drawing) == "userdata" then
+        Fonts = Drawing.Fonts or {}
+    end
+end)
 local FontSystem = Fonts.System or Fonts.UI or 0
 local FontBold = Fonts.SystemBold or FontSystem
 local FontUI = Fonts.UI or FontSystem
@@ -5465,7 +5470,7 @@ local function step()
     hideUnused()
 end
 
-local RunService = game:GetService("RunService")
+local RunService = select(2, pcall(function() return game:GetService("RunService") end))
 
 local function runStepSafe()
     if _G.homesickInstanceId ~= homesickInstanceId then
@@ -5473,7 +5478,7 @@ local function runStepSafe()
     end
     if not ProjectState.alive then
         if stepConnection then
-            stepConnection:Disconnect()
+            pcall(function() stepConnection:Disconnect() end)
             stepConnection = nil
         end
         finalDestroy()
@@ -5491,7 +5496,7 @@ local function runStepSafe()
         if now - ProjectState.lastErrorAt > 1 then
             ProjectState.lastErrorAt = now
         end
-        setrobloxinput(true)
+        pcall(setrobloxinput, true)
         ProjectState.inputState = true
         hideAll()
         if ProjectState.errorCount >= 3 then
@@ -5503,8 +5508,10 @@ local function runStepSafe()
     end
 end
 
-if RunService and RunService.RenderStepped then
-    stepConnection = RunService.RenderStepped:Connect(runStepSafe)
+if select(2, pcall(function() return (type(RunService) == "userdata" or type(RunService) == "table") and RunService.RenderStepped ~= nil end)) then
+    pcall(function()
+        stepConnection = RunService.RenderStepped:Connect(runStepSafe)
+    end)
 else
     task.spawn(function()
         while ProjectState.alive do
