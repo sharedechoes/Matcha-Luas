@@ -219,7 +219,18 @@ local changelogs = {
     "added pinning with grid overlay snapping and transparent closed state",
     "added autoload themes and configs separate option",
     "added hover tooltips and global settings toggle",
-    "added limit max selections for multi dropdowns"
+    "added limit max selections for multi dropdowns",
+    "fixed pin button click closing instantly",
+    "fixed snapping drag preview to draw actual window background",
+    "redesigned pin icon to a circle needle tack",
+    "hidden tab navigation bar when closed and pinned",
+    "saved theme color and alpha transparency levels together",
+    "added user settings checkboxes for autoload config and theme",
+    "added global spotlight search palette via ctrl + space",
+    "added loading spinner and mod combos for keybinds",
+    "fixed tooltips cutting off with auto-wrapping and dynamic box sizing",
+    "added auto-adapting keybind button sizes",
+    "redesigned waiting for keybind loader to a YouTube-style dotted spinner"
 }
 
 local Theme = {
@@ -2673,21 +2684,27 @@ local function renderTooltip()
     if ProjectState.tooltipsEnabled == false then
         return
     end
-    local textValue = ProjectState.tooltipText
-    if not textValue or clock() - ProjectState.tooltipAt < 0.35 then
+    if not ProjectState.tooltipText or clock() - ProjectState.tooltipAt < 0.35 then
         return
     end
 
-    local width = min(260, textWidth(textValue, 12) + 16)
-    local x = ProjectState.tooltipX + 12
-    local y = ProjectState.tooltipY + 18
-    local vw, vh = viewportSize()
-    x = clamp(x, 8, max(8, vw - width - 8))
-    y = clamp(y, 8, max(8, vh - 32))
+    local lines = wrapLines(ProjectState.tooltipText, 260, 12, FontUI)
+    local maxW = 0
+    for i = 1, #lines do
+        if textWidth(lines[i], 12, FontUI) > maxW then
+            maxW = textWidth(lines[i], 12, FontUI)
+        end
+    end
+    local width = maxW + 16
+    local h = 12 + 16 * #lines
+    local x = clamp(ProjectState.tooltipX + 12, 8, max(8, select(1, viewportSize()) - width - 8))
+    local y = clamp(ProjectState.tooltipY + 18, 8, max(8, select(2, viewportSize()) - h - 4))
 
-    rect(x, y, width, 28, Theme.black, 140, 6, 0.92)
-    strokeRect(x, y, width, 28, Theme.border, 141, 6)
-    txt(textValue, x + 8, textTop(y, 28, 12), Theme.text, 12, FontUI, 142, false, false, width - 16)
+    rect(x, y, width, h, Theme.black, 140, 6, 0.92)
+    strokeRect(x, y, width, h, Theme.border, 141, 6)
+    for i = 1, #lines do
+        txt(lines[i], x + 8, y + 8 + (i - 1) * 16, Theme.text, 12, FontUI, 142)
+    end
 end
 
 local function renderDropdown(click, rightClick)
@@ -3469,10 +3486,6 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
     local currentX = rowX + rowW - 4
 
     if item.keybind then
-        currentX = currentX - 48
-        local keyX = currentX
-        local hovered = over(keyX, rowY + 3, 46, 20)
-
         local keyText = "-"
         if item.keybind.listening then
             if item.keybind.modifierPressed then
@@ -3484,22 +3497,34 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
             keyText = item.keybind.value
         end
         local textToDraw = string.upper(keyText):gsub("%+", " + ")
+        local neededW = math.max(46, textWidth(textToDraw, 12, FontUI) + 12)
+        currentX = currentX - neededW - 2
+        local keyX = currentX
+        local hovered = over(keyX, rowY + 3, neededW, 20)
 
-        rect(keyX, rowY + 3, 46, 20, Theme.surface3, 45, 4, trans)
-        strokeRect(keyX, rowY + 3, 46, 20, hovered and Theme.accent or Theme.border, 46, 4, trans)
+        rect(keyX, rowY + 3, neededW, 20, Theme.surface3, 45, 4, trans)
+        strokeRect(keyX, rowY + 3, neededW, 20, hovered and Theme.accent or Theme.border, 46, 4, trans)
 
-        txt(textToDraw, keyX + 23, centerY(rowY + 3, 20), (item.keybind.listening or item.keybind.value) and Theme.text or Theme.sub, 12, FontUI, 52, true, false, 42, trans)
+        txt(textToDraw, keyX + neededW / 2, centerY(rowY + 3, 20), (item.keybind.listening or item.keybind.value) and Theme.text or Theme.sub, 12, FontUI, 52, true, false, neededW - 4, trans)
 
         local modeLabel = item.keybind.mode == "Toggle" and "[Toggle]" or item.keybind.mode == "Always" and "[Always]" or "[Hold]"
         local modeLabelColor = item.keybind.mode == "Hold" and Theme.sub or Theme.accent
-        txt(modeLabel, keyX + 23, rowY + 22, modeLabelColor, 9, FontUI, 52, true, false, 46, trans)
+        txt(modeLabel, keyX + neededW / 2, rowY + 22, modeLabelColor, 9, FontUI, 52, true, false, neededW, trans)
 
         if item.keybind.listening then
-            local cx = keyX - 10
-            local cy = centerY(rowY + 3, 20)
-            circle(cx, cy, 5, Theme.border, 50, false, 1, 16, trans)
-            local angle = clock() * 8
-            line(cx, cy, cx + 5 * math.cos(angle), cy + 5 * math.sin(angle), Theme.accent, 51, 1, trans)
+            for j = 1, 8 do
+                circle(
+                    (keyX - 10) + 5 * math.cos((j - 1) * 0.785398 + clock() * 8),
+                    (centerY(rowY + 3, 20)) + 5 * math.sin((j - 1) * 0.785398 + clock() * 8),
+                    1.2,
+                    Theme.accent,
+                    50,
+                    true,
+                    nil,
+                    8,
+                    trans * (j / 8)
+                )
+            end
 
             for i = 1, #InputOrder do
                 local name = InputOrder[i]
@@ -5681,7 +5706,7 @@ local function renderWindow(click, held, rightClick)
     local botY = y + h - 24
     local botH = 24
     line(x + 2, botY, x + w - 2, botY, Theme.border, 8)
-    txt((ProjectState.badgeText and ProjectState.badgeText ~= "") and (ProjectState.badgeText .. " | v1.3.8") or "v1.3.8", x + 14, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
+    txt((ProjectState.badgeText and ProjectState.badgeText ~= "") and (ProjectState.badgeText .. " | v1.4.0") or "v1.4.0", x + 14, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
     line(x + w - 13, y + h - 5, x + w - 5, y + h - 13, Theme.sub, 10, 1)
     line(x + w - 10, y + h - 5, x + w - 5, y + h - 10, Theme.sub, 10, 1)
     line(x + w - 7, y + h - 5, x + w - 5, y + h - 7, Theme.sub, 10, 1)
