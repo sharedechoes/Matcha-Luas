@@ -347,6 +347,15 @@ local ProjectState = {
     hotkeyEnabled = false,
     hotkeyPos = v2(100, 200),
     hotkeyDrag = nil,
+    spotlightEnabled = true,
+    spotlightKeybind = "ctrl+space",
+    spotlightActive = false,
+    spotlightSearch = {
+        type = "textbox",
+        value = "",
+        active = false,
+        selected = 1,
+    },
 }
 
 local function warn(msg)
@@ -1980,6 +1989,78 @@ local function processTextInput()
         return
     end
 
+    if item == ProjectState.spotlightSearch then
+        local ss = item
+        if Input.esc.click then
+            ProjectState.spotlightActive = false
+            ProjectState.focus = nil
+            Input.esc.click = false
+            return
+        end
+        
+        local matches = {}
+        local query = string.lower(ss.value or "")
+        for _, t in ipairs(ProjectState.tabs) do
+            for _, s in ipairs(t.sections) do
+                for _, mi in ipairs(s.items) do
+                    if mi.type ~= "divider" and mi.type ~= "label" then
+                        if query == "" or string.find(string.lower(mi.label), query, 1, true) then
+                            matches[#matches + 1] = mi
+                        end
+                    end
+                end
+            end
+        end
+        
+        local matchCount = math.min(#matches, 5)
+        
+        if Input.down.click then
+            ss.selected = (ss.selected or 1) + 1
+            if ss.selected > matchCount then ss.selected = 1 end
+            Input.down.click = false
+        elseif Input.up.click then
+            ss.selected = (ss.selected or 1) - 1
+            if ss.selected < 1 then ss.selected = matchCount end
+            Input.up.click = false
+        end
+        
+        if Input.enter.click then
+            local mi = matches[ss.selected or 1]
+            if mi then
+                if mi.type == "checkbox" or mi.type == "toggle" then
+                    setItemValue(mi, not mi.value, true)
+                elseif mi.type == "button" then
+                    safeCallback(mi.callback)
+                end
+            end
+            ProjectState.spotlightActive = false
+            ProjectState.focus = nil
+            Input.enter.click = false
+            return
+        end
+
+        local value = ss.value or ""
+        local changed = false
+        for i = 1, #InputOrder do
+            local name = InputOrder[i]
+            local input = Input[name]
+            if input.click and input.char then
+                value = value .. input.char
+                changed = true
+                break
+            elseif input.click and (name == "backspace" or name == "unbound") then
+                value = string.sub(value, 1, max(0, #value - 1))
+                changed = true
+                break
+            end
+        end
+        if changed then
+            ss.value = value
+            ss.selected = 1
+        end
+        return
+    end
+
     if item == ProjectState.dropdown then
         local dd = item
         if Input.enter.click or Input.esc.click then
@@ -2286,6 +2367,40 @@ local function processTextInput()
 end
 
 local function processKeybinds()
+    if ProjectState.focus and ProjectState.focus ~= ProjectState.spotlightSearch then
+        return
+    end
+
+    if ProjectState.spotlightEnabled ~= false and not ProjectState.open then
+        local key = ProjectState.spotlightKeybind or "ctrl+space"
+        local isCombo = string.find(key, "+", 1, true)
+        local pressed = false
+        if isCombo then
+            local mod = string.sub(key, 1, isCombo - 1)
+            local k = string.sub(key, isCombo + 1)
+            if Input[mod] and Input[mod].held and Input[k] and Input[k].click then
+                pressed = true
+            end
+        else
+            if Input[key] and Input[key].click then
+                pressed = true
+            end
+        end
+        if pressed then
+            ProjectState.spotlightActive = not ProjectState.spotlightActive
+            if ProjectState.spotlightActive then
+                ProjectState.focus = ProjectState.spotlightSearch
+                ProjectState.spotlightSearch.value = ""
+                ProjectState.spotlightSearch.selected = 1
+            else
+                if ProjectState.focus == ProjectState.spotlightSearch then
+                    ProjectState.focus = nil
+                end
+            end
+            return
+        end
+    end
+
     if ProjectState.focus then
         return
     end
@@ -2293,17 +2408,37 @@ local function processKeybinds()
     for i = 1, #keybindItems do
         local item = keybindItems[i]
         local keybind = item.keybind
-        if item.type == "checkbox" and keybind and keybind.value and not keybind.listening and not isItemDisabled(item) then
-            local input = Input[keybind.value]
-            if input then
-                if keybind.mode == "Always" then
-                    setItemValue(item, true, true)
-                elseif keybind.mode == "Toggle" then
-                    if input.click then
-                        setItemValue(item, not item.value, true)
+        if item.label ~= "Spotlight Search" and item.type == "checkbox" and keybind and keybind.value and not keybind.listening and not isItemDisabled(item) then
+            local val = keybind.value
+            local isCombo = string.find(val, "+", 1, true)
+            if isCombo then
+                local mod = string.sub(val, 1, isCombo - 1)
+                local k = string.sub(val, isCombo + 1)
+                local modInput = Input[mod]
+                local keyInput = Input[k]
+                if modInput and keyInput then
+                    if keybind.mode == "Always" then
+                        setItemValue(item, modInput.held and keyInput.held, true)
+                    elseif keybind.mode == "Toggle" then
+                        if modInput.held and keyInput.click then
+                            setItemValue(item, not item.value, true)
+                        end
+                    else
+                        setItemValue(item, modInput.held and keyInput.held, true)
                     end
-                else
-                    setItemValue(item, input.held, true)
+                end
+            else
+                local input = Input[val]
+                if input then
+                    if keybind.mode == "Always" then
+                        setItemValue(item, true, true)
+                    elseif keybind.mode == "Toggle" then
+                        if input.click then
+                            setItemValue(item, not item.value, true)
+                        end
+                    else
+                        setItemValue(item, input.held, true)
+                    end
                 end
             end
         end
@@ -3337,32 +3472,72 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
         local keyX = currentX
         local hovered = over(keyX, rowY + 3, 46, 20)
 
+        local keyText = "-"
+        if item.keybind.listening then
+            if item.keybind.modifierPressed then
+                keyText = item.keybind.modifierPressed .. " + ?"
+            else
+                keyText = "?"
+            end
+        elseif item.keybind.value then
+            keyText = item.keybind.value
+        end
+        local textToDraw = string.upper(keyText):gsub("%+", " + ")
+
         rect(keyX, rowY + 3, 46, 20, Theme.surface3, 45, 4, trans)
         strokeRect(keyX, rowY + 3, 46, 20, hovered and Theme.accent or Theme.border, 46, 4, trans)
 
-        txt(item.keybind.listening and "..." or (item.keybind.value and string.upper(item.keybind.value) or "-"), keyX + 23, centerY(rowY + 3, 20), item.keybind.value and Theme.text or Theme.sub, 12, FontUI, 52, true, false, 42, trans)
+        txt(textToDraw, keyX + 23, centerY(rowY + 3, 20), (item.keybind.listening or item.keybind.value) and Theme.text or Theme.sub, 12, FontUI, 52, true, false, 42, trans)
 
         local modeLabel = item.keybind.mode == "Toggle" and "[Toggle]" or item.keybind.mode == "Always" and "[Always]" or "[Hold]"
         local modeLabelColor = item.keybind.mode == "Hold" and Theme.sub or Theme.accent
         txt(modeLabel, keyX + 23, rowY + 22, modeLabelColor, 9, FontUI, 52, true, false, 46, trans)
 
         if item.keybind.listening then
+            local cx = keyX - 10
+            local cy = centerY(rowY + 3, 20)
+            circle(cx, cy, 5, Theme.border, 50, false, 1, 16, trans)
+            local angle = clock() * 8
+            line(cx, cy, cx + 5 * math.cos(angle), cy + 5 * math.sin(angle), Theme.accent, 51, 1, trans)
+
             for i = 1, #InputOrder do
                 local name = InputOrder[i]
                 local input = Input[name]
                 if input.click and (name ~= "m1" or clock() - item.keybind.listenAt > 0.25) then
                     local newKey = normalizeKey(name)
                     if name == "backspace" or name == "delete" or name == "unbound" or name == "esc" then
-                        newKey = nil
+                        item.keybind.value = nil
+                        item.keybind.modifierPressed = nil
+                        item.keybind.listening = false
+                        safeCallback(item.keybind.callback, nil, item.keybind.mode)
+                        break
                     end
-                    item.keybind.value = newKey
-                    item.keybind.listening = false
-                    safeCallback(item.keybind.callback, newKey and Input[newKey] and Input[newKey].id or nil, item.keybind.mode)
-                    break
+                    
+                    local isMod = (name == "ctrl" or name == "alt" or name == "shift" or name == "lctrl" or name == "rctrl" or name == "lalt" or name == "ralt" or name == "lshift" or name == "rshift")
+                    if isMod then
+                        if item.keybind.modifierPressed then
+                            if item.keybind.modifierPressed ~= name then
+                                item.keybind.modifierPressed = name
+                            end
+                        else
+                            item.keybind.modifierPressed = name
+                        end
+                    else
+                        local keyVal = newKey
+                        if item.keybind.modifierPressed then
+                            keyVal = item.keybind.modifierPressed .. "+" .. newKey
+                        end
+                        item.keybind.value = keyVal
+                        item.keybind.modifierPressed = nil
+                        item.keybind.listening = false
+                        safeCallback(item.keybind.callback, keyVal, item.keybind.mode)
+                        break
+                    end
                 end
             end
         elseif click and hovered then
             item.keybind.listening = true
+            item.keybind.modifierPressed = nil
             item.keybind.listenAt = clock()
             click = false
         elseif rightClick and hovered and item.keybind.canChange then
@@ -4108,6 +4283,15 @@ local function serializeConfigData()
         tabsPosition = ProjectState.tabsPosition,
         titlePosition = ProjectState.titlePosition,
         hotkeyEnabled = ProjectState.hotkeyEnabled,
+        autoloadConfig = ProjectState.autoloadConfig,
+        autoloadTheme = ProjectState.autoloadTheme,
+        tabAnimations = ProjectState.tabAnimations,
+        gridLocking = ProjectState.gridLocking,
+        tooltipsEnabled = ProjectState.tooltipsEnabled,
+        hoverEffects = ProjectState.hoverEffects,
+        isrbxactiveOverride = ProjectState.isrbxactiveOverride,
+        spotlightEnabled = ProjectState.spotlightEnabled,
+        spotlightKeybind = ProjectState.spotlightKeybind,
     }
     for _, t in ipairs(ProjectState.tabs) do
         for _, s in ipairs(t.sections) do
@@ -4142,7 +4326,7 @@ local function saveConfig()
     end
 end
 
-local function loadConfig(json)
+local function loadConfig(json, force)
     if not json then
         local ok, raw = pcall(readfile, "homesick/config.json")
         if ok and raw then
@@ -4156,39 +4340,58 @@ local function loadConfig(json)
             ProjectState.tabsPosition = configData.system.tabsPosition or "top"
             ProjectState.titlePosition = configData.system.titlePosition or "top"
             ProjectState.hotkeyEnabled = configData.system.hotkeyEnabled == true
+            ProjectState.autoloadConfig = configData.system.autoloadConfig == true
+            ProjectState.autoloadTheme = configData.system.autoloadTheme == true
+            if configData.system.tabAnimations ~= nil then
+                ProjectState.tabAnimations = configData.system.tabAnimations == true
+            end
+            if configData.system.gridLocking ~= nil then
+                ProjectState.gridLocking = configData.system.gridLocking == true
+            end
+            if configData.system.tooltipsEnabled ~= nil then
+                ProjectState.tooltipsEnabled = configData.system.tooltipsEnabled == true
+            end
+            if configData.system.hoverEffects ~= nil then
+                ProjectState.hoverEffects = configData.system.hoverEffects == true
+            end
+            ProjectState.isrbxactiveOverride = configData.system.isrbxactiveOverride == true
+            ProjectState.spotlightEnabled = configData.system.spotlightEnabled ~= false
+            ProjectState.spotlightKeybind = configData.system.spotlightKeybind or "ctrl+space"
         end
-        for _, t in ipairs(ProjectState.tabs) do
-            for _, s in ipairs(t.sections) do
-                for _, item in ipairs(s.items) do
-                    local key = t.name .. "." .. s.name .. "." .. item.label
-                    local data = configData[key]
-                    if data then
-                        if item.type == "colorpicker" then
-                            pcall(function()
-                                item.value = c3Hex("#" .. tostring(data.value or "FFFFFF"))
-                                item.alpha = data.alpha or 1
-                                safeCallback(item.callback, item.value, item.alpha)
-                            end)
-                        elseif item.type == "dropdown" then
-                            local loadedVal = data.value
-                            if type(loadedVal) ~= "table" then
-                                loadedVal = loadedVal ~= nil and {loadedVal} or {}
+        if force or ProjectState.autoloadConfig then
+            for _, t in ipairs(ProjectState.tabs) do
+                for _, s in ipairs(t.sections) do
+                    for _, item in ipairs(s.items) do
+                        local key = t.name .. "." .. s.name .. "." .. item.label
+                        local data = configData[key]
+                        if data then
+                            if item.type == "colorpicker" then
+                                pcall(function()
+                                    item.value = c3Hex("#" .. tostring(data.value or "FFFFFF"))
+                                    item.alpha = data.alpha or 1
+                                    safeCallback(item.callback, item.value, item.alpha)
+                                end)
+                            elseif item.type == "dropdown" then
+                                local loadedVal = data.value
+                                if type(loadedVal) ~= "table" then
+                                    loadedVal = loadedVal ~= nil and {loadedVal} or {}
+                                end
+                                setDropdownValue(item, loadedVal, true)
+                            else
+                                setItemValue(item, data.value, true)
                             end
-                            setDropdownValue(item, loadedVal, true)
-                        else
-                            setItemValue(item, data.value, true)
-                        end
-                        if data.keybind and item.keybind then
-                            item.keybind.value = normalizeKey(data.keybind.value)
-                            item.keybind.mode = normalizeMode(data.keybind.mode)
-                            safeCallback(item.keybind.callback, item.keybind.value and Input[item.keybind.value] and Input[item.keybind.value].id or nil, item.keybind.mode)
-                        end
-                        if data.colorpicker and item.colorpicker then
-                            pcall(function()
-                                item.colorpicker.value = c3Hex("#" .. tostring(data.colorpicker.value or "FFFFFF"))
-                                item.colorpicker.alpha = data.colorpicker.alpha or 1
-                                safeCallback(item.colorpicker.callback, item.colorpicker.value, item.colorpicker.alpha)
-                            end)
+                            if data.keybind and item.keybind then
+                                item.keybind.value = normalizeKey(data.keybind.value)
+                                item.keybind.mode = normalizeMode(data.keybind.mode)
+                                safeCallback(item.keybind.callback, item.keybind.value and Input[item.keybind.value] and Input[item.keybind.value].id or nil, item.keybind.mode)
+                            end
+                            if data.colorpicker and item.colorpicker then
+                                pcall(function()
+                                    item.colorpicker.value = c3Hex("#" .. tostring(data.colorpicker.value or "FFFFFF"))
+                                    item.colorpicker.alpha = data.colorpicker.alpha or 1
+                                    safeCallback(item.colorpicker.callback, item.colorpicker.value, item.colorpicker.alpha)
+                                end)
+                            end
                         end
                     end
                 end
@@ -4217,7 +4420,7 @@ local function saveTheme()
     pcall(makefolder, "homesick")
     local themeData = {}
     for k, v in pairs(Theme) do
-        themeData[k] = toHex(v)
+        themeData[k] = { color = toHex(v), alpha = ThemeAlpha[k] or 1.0 }
     end
     local _, json = pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), themeData)
     if json and json ~= "" then
@@ -4237,9 +4440,16 @@ local function loadTheme(json)
     if decodeOk and decodeOk == true and type(themeData) == "table" then
         for k, v in pairs(themeData) do
             if Theme[k] ~= nil then
-                Theme[k] = c3Hex("#" .. v)
+                local alphaVal = 1.0
+                if type(v) == "table" then
+                    Theme[k] = c3Hex("#" .. (v.color or "FFFFFF"))
+                    alphaVal = tonumber(v.alpha) or 1.0
+                else
+                    Theme[k] = c3Hex("#" .. v)
+                end
+                ThemeAlpha[k] = alphaVal
                 if ProjectState.themeColorPickers and ProjectState.themeColorPickers[k] then
-                    ProjectState.themeColorPickers[k]:Set(Theme[k])
+                    ProjectState.themeColorPickers[k]:Set(Theme[k], alphaVal)
                 end
             end
         end
@@ -4249,7 +4459,7 @@ end
 exportTheme = function()
     local themeData = {}
     for k, v in pairs(Theme) do
-        themeData[k] = toHex(v)
+        themeData[k] = { color = toHex(v), alpha = ThemeAlpha[k] or 1.0 }
     end
     local json = select(2, pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), themeData))
     if json and json ~= "" then
@@ -4424,7 +4634,7 @@ local function initSettings()
         if name and name ~= "" then
             local themeData = {}
             for k, v in pairs(Theme) do
-                themeData[k] = toHex(v)
+                themeData[k] = { color = toHex(v), alpha = ThemeAlpha[k] or 1.0 }
             end
             local json = select(2, pcall(game:GetService("HttpService").JSONEncode, game:GetService("HttpService"), themeData))
             if json and json ~= "" then
@@ -4435,23 +4645,45 @@ local function initSettings()
     end)
 
     local generalSec = createSection(settingsTab, "General Settings", "Full")
-    generalSec:Checkbox("isrbxactive()", false, function(val)
+    generalSec:Checkbox("isrbxactive()", ProjectState.isrbxactiveOverride == true, function(val)
         ProjectState.isrbxactiveOverride = val
+        pcall(saveConfig)
     end)
-    generalSec:Checkbox("Tab Animations", true, function(val)
+    generalSec:Checkbox("Tab Animations", ProjectState.tabAnimations ~= false, function(val)
         ProjectState.tabAnimations = val
+        pcall(saveConfig)
     end)
-    generalSec:Checkbox("Grid Locking", true, function(val)
+    generalSec:Checkbox("Grid Locking", ProjectState.gridLocking ~= false, function(val)
         ProjectState.gridLocking = val
+        pcall(saveConfig)
     end)
-    generalSec:Checkbox("show tooltips", true, function(val)
+    generalSec:Checkbox("show tooltips", ProjectState.tooltipsEnabled ~= false, function(val)
         ProjectState.tooltipsEnabled = val
+        pcall(saveConfig)
     end)
-    generalSec:Checkbox("Checkbox Animations", true, function(val)
+    generalSec:Checkbox("Checkbox Animations", ProjectState.hoverEffects ~= false, function(val)
         ProjectState.hoverEffects = val
+        pcall(saveConfig)
     end)
-    generalSec:Checkbox("Hotkey Overlay", false, function(val)
+    generalSec:Checkbox("Hotkey Overlay", ProjectState.hotkeyEnabled == true, function(val)
         ProjectState.hotkeyEnabled = val
+        pcall(saveConfig)
+    end)
+    generalSec:Checkbox("autoload config", ProjectState.autoloadConfig == true, function(val)
+        ProjectState.autoloadConfig = val
+        pcall(saveConfig)
+    end)
+    generalSec:Checkbox("autoload theme", ProjectState.autoloadTheme == true, function(val)
+        ProjectState.autoloadTheme = val
+        pcall(saveConfig)
+    end)
+    local spotlightCheckbox = generalSec:Checkbox("Spotlight Search", ProjectState.spotlightEnabled ~= false, function(val)
+        ProjectState.spotlightEnabled = val
+        pcall(saveConfig)
+    end)
+    spotlightCheckbox:AddKeybind(ProjectState.spotlightKeybind or "ctrl+space", "Toggle", true, function(key, mode)
+        ProjectState.spotlightKeybind = key
+        pcall(saveConfig)
     end)
     generalSec:Button("Toggle Layout Editor", function()
         ProjectState.layoutEditing = true
@@ -4874,20 +5106,17 @@ local function renderWindow(click, held, rightClick)
         ProjectState.x = targetX
         ProjectState.y = targetY
         clampWindow()
-        rect(ProjectState.x, ProjectState.y, w, h, Theme.accent, 199, 12, 0.25)
-        strokeRect(ProjectState.x, ProjectState.y, w, h, Theme.accent, 200, 12, 0.8)
         if not Input.m1.held then
             ProjectState.pinningDrag = false
             ProjectState.pinned = true
         end
-        return click, held, rightClick
+        x, y = ProjectState.x, ProjectState.y
     end
 
     local popupOpen = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil or ProjectState.importModal ~= nil or ProjectState.changelogOpen
     local orgClick = click
     local isClosedPinned = not ProjectState.open and ProjectState.pinned
     if isClosedPinned then
-        drawVisible = 0.35
         click = false
         held = false
         rightClick = false
@@ -5244,9 +5473,9 @@ local function renderWindow(click, held, rightClick)
     line(lineX1, lineY1, lineX2, lineY2, iconHovered and Theme.accent or Theme.sub, 20, 1.5)
 
     local pinColor = (pinHovered or ProjectState.pinned) and Theme.accent or Theme.sub
-    line(pinX - 4, pinY - 4, pinX + 4, pinY - 4, pinColor, 20, 2)
-    line(pinX - 2, pinY - 3, pinX + 2, pinY - 3, pinColor, 20, 3)
-    line(pinX, pinY - 2, pinX, pinY + 6, pinColor, 20, 1.5)
+    circle(pinX, pinY - 4, 3, pinColor, 20, true)
+    line(pinX - 3, pinY - 1, pinX + 3, pinY - 1, pinColor, 20, 1.5)
+    line(pinX, pinY, pinX, pinY + 7, pinColor, 20, 1)
 
     if orgClick and pinHovered then
         if ProjectState.pinned then
@@ -5257,6 +5486,7 @@ local function renderWindow(click, held, rightClick)
         end
         click = false
         baseClick = false
+        orgClick = false
     end
 
     if ProjectState.showPinDropdown then
@@ -5318,6 +5548,10 @@ local function renderWindow(click, held, rightClick)
     circle(cxSet, cy, 4, col, 22, false, 1.5)
     circle(cxSet, cy, 1.5, col, 23, true)
 
+    if ProjectState.pinningDrag then
+        return click, held, rightClick
+    end
+
     if ProjectState.minimized or h <= minimizedH then
         return click, held, rightClick
     end
@@ -5374,65 +5608,67 @@ local function renderWindow(click, held, rightClick)
             tabsX, tabsY, tabsWidth, tabsHeight = x + w + 8, y, tabW, h
         elseif pos == "bottom" then
             tabsX, tabsY, tabsWidth, tabsHeight = px, py + ph - tabH, pw, tabH
-            contH = ph - tabH - 6
+            contH = isClosedPinned and ph or (ph - tabH - 6)
         else
             tabsX, tabsY, tabsWidth, tabsHeight = px, py, pw, tabH
-            contY = py + tabH + 6
-            contH = ph - tabH - 6
+            contY = isClosedPinned and py or (py + tabH + 6)
+            contH = isClosedPinned and ph or (ph - tabH - 6)
         end
         
-        if pos == "left" or pos == "right" then
-            for i = 1, #shadowAlpha do
-                local offset = i * 2
-                rect(tabsX - offset, tabsY - offset + 6, tabsWidth + offset * 2, tabsHeight + offset * 2, Theme.black, 0, 12, shadowAlpha[i])
-            end
-        end
-        
-        rect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.surface, 5, 8)
-        strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.border, 6, 8)
-        
-        if ProjectState.layoutEditing then
-            local isHoveredTabs = over(tabsX, tabsY, tabsWidth, tabsHeight)
-            if click and isHoveredTabs and not popupOpen then
-                ProjectState.tabsDrag = { ProjectState.mouseX - tabsX, ProjectState.mouseY - tabsY }
-                click = false
-            end
-            
-            if ProjectState.tabsDrag then
-                if held then
-                    local mx, my = ProjectState.mouseX, ProjectState.mouseY
-                    local snapTarget = "top"
-                    local previewX, previewY, previewW, previewH = px, py, pw, tabH
-                    
-                    if mx < x + w * 0.25 then
-                        snapTarget = "left"
-                        previewX, previewY, previewW, previewH = x - tabW - 8, y, tabW, h
-                    elseif mx > x + w * 0.75 then
-                        snapTarget = "right"
-                        previewX, previewY, previewW, previewH = x + w + 8, y, tabW, h
-                    elseif my > y + h * 0.75 then
-                        snapTarget = "bottom"
-                        previewX, previewY, previewW, previewH = px, py + ph - tabH, pw, tabH
-                    end
-                    
-                    rect(previewX, previewY, previewW, previewH, Theme.accent, 200, 6, 0.3)
-                    strokeRect(previewX, previewY, previewW, previewH, Theme.accent, 201, 6)
-                    
-                    ProjectState.lastSnapTarget = snapTarget
-                else
-                    if ProjectState.lastSnapTarget then
-                        ProjectState.tabsPosition = ProjectState.lastSnapTarget
-                        pcall(saveConfig)
-                        ProjectState.lastSnapTarget = nil
-                    end
-                    ProjectState.tabsDrag = nil
+        if not isClosedPinned then
+            if pos == "left" or pos == "right" then
+                for i = 1, #shadowAlpha do
+                    local offset = i * 2
+                    rect(tabsX - offset, tabsY - offset + 6, tabsWidth + offset * 2, tabsHeight + offset * 2, Theme.black, 0, 12, shadowAlpha[i])
                 end
             end
             
-            strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.accent, 199, 8)
+            rect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.surface, 5, 8)
+            strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.border, 6, 8)
+            
+            if ProjectState.layoutEditing then
+                local isHoveredTabs = over(tabsX, tabsY, tabsWidth, tabsHeight)
+                if click and isHoveredTabs and not popupOpen then
+                    ProjectState.tabsDrag = { ProjectState.mouseX - tabsX, ProjectState.mouseY - tabsY }
+                    click = false
+                end
+                
+                if ProjectState.tabsDrag then
+                    if held then
+                        local mx, my = ProjectState.mouseX, ProjectState.mouseY
+                        local snapTarget = "top"
+                        local previewX, previewY, previewW, previewH = px, py, pw, tabH
+                        
+                        if mx < x + w * 0.25 then
+                            snapTarget = "left"
+                            previewX, previewY, previewW, previewH = x - tabW - 8, y, tabW, h
+                        elseif mx > x + w * 0.75 then
+                            snapTarget = "right"
+                            previewX, previewY, previewW, previewH = x + w + 8, y, tabW, h
+                        elseif my > y + h * 0.75 then
+                            snapTarget = "bottom"
+                            previewX, previewY, previewW, previewH = px, py + ph - tabH, pw, tabH
+                        end
+                        
+                        rect(previewX, previewY, previewW, previewH, Theme.accent, 200, 6, 0.3)
+                        strokeRect(previewX, previewY, previewW, previewH, Theme.accent, 201, 6)
+                        
+                        ProjectState.lastSnapTarget = snapTarget
+                    else
+                        if ProjectState.lastSnapTarget then
+                            ProjectState.tabsPosition = ProjectState.lastSnapTarget
+                            pcall(saveConfig)
+                            ProjectState.lastSnapTarget = nil
+                        end
+                        ProjectState.tabsDrag = nil
+                    end
+                end
+                
+                strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.accent, 199, 8)
+            end
+            
+            baseClick = renderTabs(baseClick, tabsX, tabsY, tabsWidth, tabsHeight)
         end
-        
-        baseClick = renderTabs(baseClick, tabsX, tabsY, tabsWidth, tabsHeight)
         baseClick, baseHeld, baseRightClick = renderSections(ProjectState.activeTab, baseClick, baseHeld, baseRightClick, contX, contY, contW, contH)
         
         if ProjectState.focus and baseClick and not over(contX, contY, contW, contH) then
