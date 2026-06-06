@@ -216,14 +216,9 @@ local shadowAlpha = {0.10, 0.07, 0.05, 0.03, 0.015}
 
 local changelogs = {
     "added searchable dropdowns",
-    "added pinning with grid overlay snapping and transparent closed state",
     "added autoload themes and configs separate option",
     "added hover tooltips and global settings toggle",
     "added limit max selections for multi dropdowns",
-    "fixed pin button click closing instantly",
-    "fixed snapping drag preview to draw actual window background",
-    "redesigned pin icon to a circle needle tack",
-    "hidden tab navigation bar when closed and pinned",
     "saved theme color and alpha transparency levels together",
     "added user settings checkboxes for autoload config and theme",
     "added global spotlight search palette via ctrl + space",
@@ -231,7 +226,9 @@ local changelogs = {
     "fixed tooltips cutting off with auto-wrapping and dynamic box sizing",
     "added auto-adapting keybind button sizes",
     "redesigned waiting for keybind loader to a YouTube-style dotted spinner",
-    "fixed spotlight search and key combos not polling when GUI is closed"
+    "fixed spotlight search and key combos not polling when GUI is closed",
+    "added smooth fade transitions and premium styling to spotlight search",
+    "removed pinning feature altogether"
 }
 
 local Theme = {
@@ -345,9 +342,6 @@ local ProjectState = {
     gridLocking = true,
     smoothScrolling = true,
     hoverEffects = true,
-    pinned = false,
-    pinningDrag = false,
-    showPinDropdown = false,
     tooltipsEnabled = true,
     settingsTargetH = nil,
     preSettingsH = nil,
@@ -5132,39 +5126,9 @@ end)
 
 local function renderWindow(click, held, rightClick)
     local x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
-    if ProjectState.pinningDrag then
-        local mx, my = ProjectState.mouseX, ProjectState.mouseY
-        local targetX = mx - ProjectState.dragOffset[1]
-        local targetY = my - ProjectState.dragOffset[2]
-        if ProjectState.gridLocking then
-            targetX = math.floor(targetX / 40 + 0.5) * 40
-            targetY = math.floor(targetY / 40 + 0.5) * 40
-            local vw, vh = viewportSize()
-            for gx = 0, vw, 40 do
-                line(gx, 0, gx, vh, Theme.accent, 10, 1, 0.15)
-            end
-            for gy = 0, vh, 40 do
-                line(0, gy, vw, gy, Theme.accent, 10, 1, 0.15)
-            end
-        end
-        ProjectState.x = targetX
-        ProjectState.y = targetY
-        clampWindow()
-        if not Input.m1.held then
-            ProjectState.pinningDrag = false
-            ProjectState.pinned = true
-        end
-        x, y = ProjectState.x, ProjectState.y
-    end
 
     local popupOpen = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil or ProjectState.importModal ~= nil or ProjectState.changelogOpen
     local orgClick = click
-    local isClosedPinned = not ProjectState.open and ProjectState.pinned
-    if isClosedPinned then
-        click = false
-        held = false
-        rightClick = false
-    end
 
     local baseClick = popupOpen and false or click
     local baseHeld = popupOpen and false or held
@@ -5363,15 +5327,10 @@ local function renderWindow(click, held, rightClick)
     
     if isVertTitle then
         local cogCY = titleBarY + titleBarH - 18
-        local pinCY = cogCY - 26
-        local searchIY = cogCY - 52
+        local searchIY = cogCY - 26
         setHovered = over(titleBarX + 8, cogCY - 10, 20, 20)
         cxSet = titleBarX + 18
         cy = cogCY
-        
-        pinX = titleBarX + 18
-        pinY = pinCY
-        pinHovered = over(titleBarX + 8, pinCY - 10, 20, 20)
         
         iconHovered = over(titleBarX + 8, searchIY - 10, 20, 20)
         circleX = titleBarX + 18
@@ -5388,19 +5347,15 @@ local function renderWindow(click, held, rightClick)
         cxSet = titleBarX + titleBarW - 21
         cy = titleBarY + 18
         
-        pinX = titleBarX + titleBarW - 45
-        pinY = titleBarY + 16
-        pinHovered = over(titleBarX + titleBarW - 52, titleBarY + 6, 20, 24)
-        
-        iconHovered = over(titleBarX + titleBarW - 76, titleBarY + 6, 20, 24)
-        circleX = titleBarX + titleBarW - 69
+        iconHovered = over(titleBarX + titleBarW - 52, titleBarY + 6, 20, 24)
+        circleX = titleBarX + titleBarW - 45
         circleY = titleBarY + 16
-        lineX1 = titleBarX + titleBarW - 66
+        lineX1 = titleBarX + titleBarW - 42
         lineY1 = titleBarY + 19
-        lineX2 = titleBarX + titleBarW - 62
+        lineX2 = titleBarX + titleBarW - 38
         lineY2 = titleBarY + 23
         
-        searchX = titleBarX + titleBarW - 80 - ProjectState.searchBar.width
+        searchX = titleBarX + titleBarW - 56 - ProjectState.searchBar.width
         searchY = titleBarY + 8
     end
 
@@ -5516,61 +5471,6 @@ local function renderWindow(click, held, rightClick)
     circle(circleX, circleY, 4, iconHovered and Theme.accent or Theme.sub, 20, false, 1.5)
     line(lineX1, lineY1, lineX2, lineY2, iconHovered and Theme.accent or Theme.sub, 20, 1.5)
 
-    local pinColor = (pinHovered or ProjectState.pinned) and Theme.accent or Theme.sub
-    circle(pinX, pinY - 4, 3, pinColor, 20, true)
-    line(pinX - 3, pinY - 1, pinX + 3, pinY - 1, pinColor, 20, 1.5)
-    line(pinX, pinY, pinX, pinY + 7, pinColor, 20, 1)
-
-    if orgClick and pinHovered then
-        if ProjectState.pinned then
-            ProjectState.showPinDropdown = not ProjectState.showPinDropdown
-        else
-            ProjectState.pinningDrag = true
-            ProjectState.dragOffset = { ProjectState.mouseX - ProjectState.x, ProjectState.mouseY - ProjectState.y }
-        end
-        click = false
-        baseClick = false
-        orgClick = false
-    end
-
-    if ProjectState.showPinDropdown then
-        local menuX = pinX - 60
-        local menuY = pinY + 12
-        if isVertTitle then
-            menuX = pinX + 12
-            menuY = pinY - 22
-        end
-        rect(menuX - 1, menuY - 1, 122, 46, Theme.border, 116, 4)
-        rect(menuX, menuY, 120, 44, Theme.surface, 117, 4)
-        
-        local hoverUnpin = over(menuX, menuY + 2, 120, 18)
-        local hoverChange = over(menuX, menuY + 24, 120, 18)
-        
-        rect(menuX + 2, menuY + 2, 116, 18, hoverUnpin and Theme.surface3 or Theme.surface, 118, 3)
-        txt("unpin", menuX + 10, menuY + 4, hoverUnpin and Theme.accent or Theme.text, 12, FontUI, 119)
-        
-        rect(menuX + 2, menuY + 24, 116, 18, hoverChange and Theme.surface3 or Theme.surface, 118, 3)
-        txt("change position", menuX + 10, menuY + 26, hoverChange and Theme.accent or Theme.text, 12, FontUI, 119)
-        
-        if orgClick then
-            if hoverUnpin then
-                ProjectState.pinned = false
-                ProjectState.showPinDropdown = false
-                click = false
-                baseClick = false
-            elseif hoverChange then
-                ProjectState.showPinDropdown = false
-                ProjectState.pinned = false
-                ProjectState.pinningDrag = true
-                ProjectState.dragOffset = { ProjectState.mouseX - ProjectState.x, ProjectState.mouseY - ProjectState.y }
-                click = false
-                baseClick = false
-            else
-                ProjectState.showPinDropdown = false
-            end
-        end
-    end
-
     local col = (setHovered or ProjectState.settingsActive) and Theme.accent or Theme.sub
     if ProjectState.settingsActive then
         for i = 0, 3 do
@@ -5591,10 +5491,6 @@ local function renderWindow(click, held, rightClick)
     circle(cxSet, cy, 4, Theme.surface2, 21, true)
     circle(cxSet, cy, 4, col, 22, false, 1.5)
     circle(cxSet, cy, 1.5, col, 23, true)
-
-    if ProjectState.pinningDrag then
-        return click, held, rightClick
-    end
 
     if ProjectState.minimized or h <= minimizedH then
         return click, held, rightClick
@@ -5652,67 +5548,65 @@ local function renderWindow(click, held, rightClick)
             tabsX, tabsY, tabsWidth, tabsHeight = x + w + 8, y, tabW, h
         elseif pos == "bottom" then
             tabsX, tabsY, tabsWidth, tabsHeight = px, py + ph - tabH, pw, tabH
-            contH = isClosedPinned and ph or (ph - tabH - 6)
+            contH = ph - tabH - 6
         else
             tabsX, tabsY, tabsWidth, tabsHeight = px, py, pw, tabH
-            contY = isClosedPinned and py or (py + tabH + 6)
-            contH = isClosedPinned and ph or (ph - tabH - 6)
+            contY = py + tabH + 6
+            contH = ph - tabH - 6
         end
         
-        if not isClosedPinned then
-            if pos == "left" or pos == "right" then
-                for i = 1, #shadowAlpha do
-                    local offset = i * 2
-                    rect(tabsX - offset, tabsY - offset + 6, tabsWidth + offset * 2, tabsHeight + offset * 2, Theme.black, 0, 12, shadowAlpha[i])
-                end
+        if pos == "left" or pos == "right" then
+            for i = 1, #shadowAlpha do
+                local offset = i * 2
+                rect(tabsX - offset, tabsY - offset + 6, tabsWidth + offset * 2, tabsHeight + offset * 2, Theme.black, 0, 12, shadowAlpha[i])
             end
-            
-            rect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.surface, 5, 8)
-            strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.border, 6, 8)
-            
-            if ProjectState.layoutEditing then
-                local isHoveredTabs = over(tabsX, tabsY, tabsWidth, tabsHeight)
-                if click and isHoveredTabs and not popupOpen then
-                    ProjectState.tabsDrag = { ProjectState.mouseX - tabsX, ProjectState.mouseY - tabsY }
-                    click = false
-                end
-                
-                if ProjectState.tabsDrag then
-                    if held then
-                        local mx, my = ProjectState.mouseX, ProjectState.mouseY
-                        local snapTarget = "top"
-                        local previewX, previewY, previewW, previewH = px, py, pw, tabH
-                        
-                        if mx < x + w * 0.25 then
-                            snapTarget = "left"
-                            previewX, previewY, previewW, previewH = x - tabW - 8, y, tabW, h
-                        elseif mx > x + w * 0.75 then
-                            snapTarget = "right"
-                            previewX, previewY, previewW, previewH = x + w + 8, y, tabW, h
-                        elseif my > y + h * 0.75 then
-                            snapTarget = "bottom"
-                            previewX, previewY, previewW, previewH = px, py + ph - tabH, pw, tabH
-                        end
-                        
-                        rect(previewX, previewY, previewW, previewH, Theme.accent, 200, 6, 0.3)
-                        strokeRect(previewX, previewY, previewW, previewH, Theme.accent, 201, 6)
-                        
-                        ProjectState.lastSnapTarget = snapTarget
-                    else
-                        if ProjectState.lastSnapTarget then
-                            ProjectState.tabsPosition = ProjectState.lastSnapTarget
-                            pcall(saveConfig)
-                            ProjectState.lastSnapTarget = nil
-                        end
-                        ProjectState.tabsDrag = nil
-                    end
-                end
-                
-                strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.accent, 199, 8)
-            end
-            
-            baseClick = renderTabs(baseClick, tabsX, tabsY, tabsWidth, tabsHeight)
         end
+        
+        rect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.surface, 5, 8)
+        strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.border, 6, 8)
+        
+        if ProjectState.layoutEditing then
+            local isHoveredTabs = over(tabsX, tabsY, tabsWidth, tabsHeight)
+            if click and isHoveredTabs and not popupOpen then
+                ProjectState.tabsDrag = { ProjectState.mouseX - tabsX, ProjectState.mouseY - tabsY }
+                click = false
+            end
+            
+            if ProjectState.tabsDrag then
+                if held then
+                    local mx, my = ProjectState.mouseX, ProjectState.mouseY
+                    local snapTarget = "top"
+                    local previewX, previewY, previewW, previewH = px, py, pw, tabH
+                    
+                    if mx < x + w * 0.25 then
+                        snapTarget = "left"
+                        previewX, previewY, previewW, previewH = x - tabW - 8, y, tabW, h
+                    elseif mx > x + w * 0.75 then
+                        snapTarget = "right"
+                        previewX, previewY, previewW, previewH = x + w + 8, y, tabW, h
+                    elseif my > y + h * 0.75 then
+                        snapTarget = "bottom"
+                        previewX, previewY, previewW, previewH = px, py + ph - tabH, pw, tabH
+                    end
+                    
+                    rect(previewX, previewY, previewW, previewH, Theme.accent, 200, 6, 0.3)
+                    strokeRect(previewX, previewY, previewW, previewH, Theme.accent, 201, 6)
+                    
+                    ProjectState.lastSnapTarget = snapTarget
+                else
+                    if ProjectState.lastSnapTarget then
+                        ProjectState.tabsPosition = ProjectState.lastSnapTarget
+                        pcall(saveConfig)
+                        ProjectState.lastSnapTarget = nil
+                    end
+                    ProjectState.tabsDrag = nil
+                end
+            end
+            
+            strokeRect(tabsX, tabsY, tabsWidth, tabsHeight, Theme.accent, 199, 8)
+        end
+        
+        baseClick = renderTabs(baseClick, tabsX, tabsY, tabsWidth, tabsHeight)
         baseClick, baseHeld, baseRightClick = renderSections(ProjectState.activeTab, baseClick, baseHeld, baseRightClick, contX, contY, contW, contH)
         
         if ProjectState.focus and baseClick and not over(contX, contY, contW, contH) then
@@ -5857,33 +5751,43 @@ local function renderWindow(click, held, rightClick)
         end
     end
 
-    if isClosedPinned then
-        drawVisible = 1.0
-    end
-
     return popupOpen and click or baseClick, popupOpen and held or baseHeld, popupOpen and rightClick or baseRightClick
 end
 
 local function renderSpotlightSearch(click)
-    if not ProjectState.spotlightActive then
+    local fade = ProjectState.spotlightFade or 0
+    local dt = ProjectState.dt or 0.016
+    if ProjectState.spotlightActive == true then
+        fade = math.min(1, fade + dt * 6)
+    else
+        fade = math.max(0, fade - dt * 6)
+    end
+    ProjectState.spotlightFade = fade
+
+    if fade <= 0 then
         return click
     end
+
     local vw, vh = viewportSize()
     local sx = (vw - 400) / 2
     local sy = vh * 0.3
-    rect(0, 0, vw, vh, Theme.black, 299, 0, 0.25)
-    rect(sx, sy, 400, 40, Theme.surface, 300, 8, 0.95)
-    strokeRect(sx, sy, 400, 40, Theme.accent, 301, 8)
-    txt("Search:", sx + 12, centerY(sy, 40), Theme.accent, 13, FontBold, 302)
+    rect(0, 0, vw, vh, Theme.black, 299, 0, 0.25 * fade)
+
+    rect(sx - 4, sy - 4, 408, 48, Theme.black, 298, 10, 0.2 * fade)
+    rect(sx, sy, 400, 40, Theme.surface, 300, 8, 0.85 * fade)
+    strokeRect(sx, sy, 400, 40, Theme.accent, 301, 8, fade * 0.4)
+
+    circle(sx + 20, centerY(sy, 40) - 2, 4, Theme.accent, 302, false, 1.5, 12, fade)
+    line(sx + 23, centerY(sy, 40) + 1, sx + 27, centerY(sy, 40) + 5, Theme.accent, 302, 1.5, fade)
+
     local displayVal = ProjectState.spotlightSearch.value
     if displayVal == "" and ProjectState.focus ~= ProjectState.spotlightSearch then
-        txt("type to search...", sx + 72, centerY(sy, 40), Theme.sub, 13, FontUI, 302)
+        txt("type to search...", sx + 36, centerY(sy, 40), Theme.sub, 13, FontUI, 302, false, false, nil, fade)
     else
-        txt(displayVal, sx + 72, centerY(sy, 40), Theme.text, 13, FontUI, 302)
+        txt(displayVal, sx + 36, centerY(sy, 40), Theme.text, 13, FontUI, 302, false, false, nil, fade)
     end
     if ProjectState.focus == ProjectState.spotlightSearch then
-        local curX = sx + 72 + textWidth(displayVal, 13, FontUI)
-        txt("|", curX, centerY(sy, 40), Theme.text, 13, FontUI, 303, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+        txt("|", sx + 36 + textWidth(displayVal, 13, FontUI), centerY(sy, 40), Theme.text, 13, FontUI, 303, false, false, nil, fade * clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
     end
     local matches = {}
     local query = string.lower(displayVal)
@@ -5901,8 +5805,9 @@ local function renderSpotlightSearch(click)
     if #matches > 0 and query ~= "" then
         local matchCount = math.min(#matches, 5)
         local resultsH = matchCount * 30 + 10
-        rect(sx, sy + 46, 400, resultsH, Theme.surface, 300, 8, 0.95)
-        strokeRect(sx, sy + 46, 400, resultsH, Theme.border, 301, 8)
+        rect(sx - 4, sy + 42, 408, resultsH + 8, Theme.black, 298, 10, 0.2 * fade)
+        rect(sx, sy + 46, 400, resultsH, Theme.surface, 300, 8, 0.85 * fade)
+        strokeRect(sx, sy + 46, 400, resultsH, Theme.border, 301, 8, fade * 0.8)
         ProjectState.spotlightSearch.selected = clamp(ProjectState.spotlightSearch.selected or 1, 1, matchCount)
         for i = 1, matchCount do
             local match = matches[i]
@@ -5910,13 +5815,15 @@ local function renderSpotlightSearch(click)
             local isSelected = ProjectState.spotlightSearch.selected == i
             local hovered = over(sx + 6, rowY, 388, 26)
             if isSelected or hovered then
-                rect(sx + 6, rowY, 388, 26, hovered and Theme.surface3 or Theme.surface2, 302, 4)
+                rect(sx + 6, rowY, 388, 26, hovered and Theme.surface3 or Theme.surface2, 302, 4, fade * (hovered and 0.9 or 0.6))
                 if hovered then
                     ProjectState.spotlightSearch.selected = i
                 end
+                if isSelected then
+                    rect(sx + 6, rowY, 4, 26, Theme.accent, 303, 2, fade)
+                end
             end
-            local labelText = match.tab.name .. " > " .. match.item.label
-            txt(labelText, sx + 14, centerY(rowY, 26), isSelected and Theme.accent or Theme.text, 12, FontUI, 303)
+            txt(match.tab.name .. " > " .. match.item.label, sx + 14, centerY(rowY, 26), isSelected and Theme.accent or Theme.text, 12, FontUI, 303, false, false, nil, fade)
             local valText = ""
             local mi = match.item
             if mi.type == "checkbox" or mi.type == "toggle" then
@@ -5928,7 +5835,7 @@ local function renderSpotlightSearch(click)
             elseif mi.type == "textbox" then
                 valText = mi.value ~= "" and mi.value or "-"
             end
-            txt(valText, sx + 386, centerY(rowY, 26), Theme.sub, 11, FontSystem, 303, false, false, nil, 1, true)
+            txt(valText, sx + 386 - textWidth(valText, 11, FontSystem), centerY(rowY, 26), Theme.sub, 11, FontSystem, 303, false, false, nil, fade)
         end
     end
     if click and not over(sx, sy, 400, 40) and not (#matches > 0 and query ~= "" and over(sx, sy + 46, 400, math.min(#matches, 5) * 30 + 10)) then
@@ -6056,7 +5963,7 @@ local function step()
     local held = Input.m1.held
     local rightClick = Input.m2.click
 
-    if (not ProjectState.open or #ProjectState.tabs == 0) and not ProjectState.pinned and not ProjectState.pinningDrag then
+    if not ProjectState.open or #ProjectState.tabs == 0 then
         click = renderHotkeyOverlay(click, held)
         renderWatermark(click, held)
         click = renderCustomBoxes(click, held)
