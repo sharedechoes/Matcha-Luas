@@ -215,7 +215,11 @@ local contentPad = 8
 local shadowAlpha = {0.10, 0.07, 0.05, 0.03, 0.015}
 
 local changelogs = {
-    "RELEASE!!!"
+    "added searchable dropdowns",
+    "added pinning with grid overlay snapping and transparent closed state",
+    "added autoload themes and configs separate option",
+    "added hover tooltips and global settings toggle",
+    "added limit max selections for multi dropdowns"
 }
 
 local Theme = {
@@ -329,6 +333,10 @@ local ProjectState = {
     gridLocking = true,
     smoothScrolling = true,
     hoverEffects = true,
+    pinned = false,
+    pinningDrag = false,
+    showPinDropdown = false,
+    tooltipsEnabled = true,
     settingsTargetH = nil,
     preSettingsH = nil,
     settingsTargetW = nil,
@@ -1359,6 +1367,52 @@ local function makeItem(section, item)
     elseif item.type == "dropdown" then
         function handle:UpdateChoices(newChoices)
             item.choices = copyArray(newChoices)
+            if ProjectState.dropdown and ProjectState.dropdown.item == item then
+                ProjectState.dropdown.choices = copyArray(newChoices)
+                ProjectState.dropdown.h = min(#newChoices * 22 + (ProjectState.dropdown.multi and 30 or 6), ProjectState.dropdown.multi and 234 or 210)
+                ProjectState.dropdown.y = clamp(ProjectState.dropdown.y, 8, max(8, select(2, viewportSize()) - ProjectState.dropdown.h - 8))
+                ProjectState.dropdown.scrollOffset = clamp(ProjectState.dropdown.scrollOffset or 0, 0, max(0, #newChoices - floor((ProjectState.dropdown.h - 6) / 22)))
+            end
+            return self
+        end
+        function handle:AddChoice(choice)
+            for i = 1, #item.choices do
+                if item.choices[i] == choice then return self end
+            end
+            table.insert(item.choices, choice)
+            self:UpdateChoices(item.choices)
+            return self
+        end
+        function handle:RemoveChoice(choice)
+            for i = #item.choices, 1, -1 do
+                if item.choices[i] == choice then
+                    table.remove(item.choices, i)
+                end
+            end
+            for i = #item.value, 1, -1 do
+                if item.value[i] == choice then
+                    table.remove(item.value, i)
+                end
+            end
+            self:UpdateChoices(item.choices)
+            return self
+        end
+        function handle:ClearChoices()
+            for i = #item.choices, 1, -1 do
+                item.choices[i] = nil
+            end
+            for i = #item.value, 1, -1 do
+                item.value[i] = nil
+            end
+            self:UpdateChoices(item.choices)
+            return self
+        end
+        function handle:SetSearchable(boolVal)
+            item.searchable = boolVal == true
+            return self
+        end
+        function handle:SetMaxSelections(limit)
+            item.maxSelections = tonumber(limit)
             return self
         end
     end
@@ -1459,7 +1513,7 @@ local function createSection(tab, name, side, allowLocking, defaultLock)
         return makeItem(section, item)
     end
 
-    function sectionApi:Dropdown(label, default, choices, multi, callback, tooltip)
+    function sectionApi:Dropdown(label, default, choices, multi, callback, tooltip, searchable, maxSelections)
         return makeItem(section, {
             type = "dropdown",
             label = tostring(label or "Dropdown"),
@@ -1468,6 +1522,8 @@ local function createSection(tab, name, side, allowLocking, defaultLock)
             multi = multi == true,
             callback = callback,
             tooltip = tooltip,
+            searchable = searchable == true,
+            maxSelections = tonumber(maxSelections),
         })
     end
 
@@ -1924,6 +1980,43 @@ local function processTextInput()
         return
     end
 
+    if item == ProjectState.dropdown then
+        local dd = item
+        if Input.enter.click or Input.esc.click then
+            ProjectState.focus = nil
+            return
+        end
+        local value = dd.searchQuery or ""
+        local changed = false
+        for i = 1, #InputOrder do
+            local name = InputOrder[i]
+            local input = Input[name]
+            if input.click and input.char then
+                value = value .. input.char
+                changed = true
+                break
+            elseif input.click and (name == "backspace" or name == "unbound") then
+                value = string.sub(value, 1, max(0, #value - 1))
+                changed = true
+                break
+            end
+        end
+        if changed then
+            dd.searchQuery = value
+            local filtered = {}
+            for idx = 1, #dd.item.choices do
+                local choice = dd.item.choices[idx]
+                if string.find(string.lower(tostring(choice)), string.lower(value), 1, true) then
+                    table.insert(filtered, choice)
+                end
+            end
+            dd.choices = filtered
+            dd.scrollOffset = 0
+            dd.h = min(#filtered * 22 + (dd.multi and 30 or 6) + 24, dd.multi and 234 or 210)
+        end
+        return
+    end
+
     if item == ProjectState.colorpicker then
         local cp = item
         if Input.enter.click or Input.esc.click then
@@ -2263,26 +2356,25 @@ end
 
 dDropdown = function(kind, x, y, w, choices, value, multi, callback, item, keybind)
     local vw, vh = viewportSize()
-    local height
-    if multi then
-        height = min(#choices * 22 + 30, 234)
-    else
-        height = min(#choices * 22 + 6, 210)
-    end
+    local height = min(#choices * 22 + (multi and 30 or 6) + ((item and item.searchable) and 24 or 0), multi and 234 or 210)
     ProjectState.dropdown = {
         kind = kind,
         x = clamp(x, 8, max(8, vw - w - 8)),
         y = clamp(y, 8, max(8, vh - height - 8)),
         w = w,
         h = height,
-        choices = choices,
+        choices = copyArray(choices),
         value = value,
         multi = multi == true,
         callback = callback,
         item = item,
         keybind = keybind,
         scrollOffset = 0,
+        searchQuery = "",
     }
+    if item and item.searchable then
+        ProjectState.focus = ProjectState.dropdown
+    end
     ProjectState.colorpicker = nil
 end
 
@@ -2442,6 +2534,9 @@ local function tooltip(text, x, y)
 end
 
 local function renderTooltip()
+    if ProjectState.tooltipsEnabled == false then
+        return
+    end
     local textValue = ProjectState.tooltipText
     if not textValue or clock() - ProjectState.tooltipAt < 0.35 then
         return
@@ -2466,7 +2561,7 @@ local function renderDropdown(click, rightClick)
     end
 
     local isMulti = dd.multi == true
-    local headerH = 0
+    local headerH = (dd.item and dd.item.searchable) and 24 or 0
     local maxRows = floor((dd.h - 6 - headerH) / 22)
     dd.scrollOffset = dd.scrollOffset or 0
 
@@ -2489,6 +2584,23 @@ local function renderDropdown(click, rightClick)
 
     rect(dd.x - 1, dd.y - 1, dd.w + 2, dd.h + 2, Theme.border, 110, 4)
     rect(dd.x, dd.y, dd.w, dd.h, Theme.surface, 111, 4)
+
+    if headerH > 0 then
+        rect(dd.x + 2, dd.y + 2, dd.w - 4, 20, Theme.surface2, 112, 3)
+        strokeRect(dd.x + 2, dd.y + 2, dd.w - 4, 20, (ProjectState.focus == dd) and Theme.accent or Theme.border, 113, 3)
+        txt((dd.searchQuery == "" and ProjectState.focus ~= dd) and "search..." or dd.searchQuery, dd.x + 8, textTop(dd.y + 2, 20, 11), (dd.searchQuery == "") and Theme.sub or Theme.text, 11, FontUI, 114, false, false, dd.w - 16)
+        if ProjectState.focus == dd then
+            local cursorX = dd.x + 8
+            if dd.searchQuery ~= "" then
+                cursorX = cursorX + textWidth(dd.searchQuery, 11, FontUI)
+            end
+            txt("|", cursorX, textTop(dd.y + 2, 20, 11), Theme.text, 11, FontUI, 115, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+        end
+        if click and over(dd.x + 2, dd.y + 2, dd.w - 4, 20) then
+            ProjectState.focus = dd
+            click = false
+        end
+    end
 
     if dd.scrollOffset > 0 then
         triangle(v2(dd.x + dd.w - 14, dd.y + headerH + 8), v2(dd.x + dd.w - 6, dd.y + headerH + 8), v2(dd.x + dd.w - 10, dd.y + headerH + 4), Theme.sub, 115, true)
@@ -2562,7 +2674,11 @@ local function renderDropdown(click, rightClick)
                             end
                         end
                     else
-                        newValue[#newValue + 1] = choice
+                        if dd.item.maxSelections and #newValue >= dd.item.maxSelections then
+                            warn("max selections of " .. tostring(dd.item.maxSelections) .. " reached dude")
+                        else
+                            newValue[#newValue + 1] = choice
+                        end
                     end
                     setDropdownValue(dd.item, newValue, true)
                 else
@@ -2573,7 +2689,11 @@ local function renderDropdown(click, rightClick)
                             end
                         end
                     else
-                        dd.value[#dd.value + 1] = choice
+                        if dd.maxSelections and #dd.value >= dd.maxSelections then
+                            warn("max selections of " .. tostring(dd.maxSelections) .. " reached dude")
+                        else
+                            dd.value[#dd.value + 1] = choice
+                        end
                     end
                     safeCallback(dd.callback, dd.value)
                 end
@@ -2621,12 +2741,28 @@ local function renderDropdown(click, rightClick)
 
         if click then
             if hoverAll then
-                if dd.item then
-                    setDropdownValue(dd.item, dd.choices, true)
+                local limit = dd.item and dd.item.maxSelections or dd.maxSelections
+                if limit and #dd.choices > limit then
+                    warn("max selections of " .. tostring(limit) .. " reached dude")
+                    local clampedChoices = {}
+                    for ci = 1, limit do
+                        clampedChoices[ci] = dd.choices[ci]
+                    end
+                    if dd.item then
+                        setDropdownValue(dd.item, clampedChoices, true)
+                    else
+                        for vi = #dd.value, 1, -1 do dd.value[vi] = nil end
+                        for ci = 1, limit do dd.value[ci] = clampedChoices[ci] end
+                        safeCallback(dd.callback, dd.value)
+                    end
                 else
-                    for vi = #dd.value, 1, -1 do dd.value[vi] = nil end
-                    for ci = 1, #dd.choices do dd.value[ci] = dd.choices[ci] end
-                    safeCallback(dd.callback, dd.value)
+                    if dd.item then
+                        setDropdownValue(dd.item, dd.choices, true)
+                    else
+                        for vi = #dd.value, 1, -1 do dd.value[vi] = nil end
+                        for ci = 1, #dd.choices do dd.value[ci] = dd.choices[ci] end
+                        safeCallback(dd.callback, dd.value)
+                    end
                 end
                 dd.ctxMenu = nil
                 click = false
@@ -3195,10 +3331,6 @@ end
 
 local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
     local currentX = rowX + rowW - 4
-    
-    if item.tooltip then
-        currentX = currentX - 18
-    end
 
     if item.keybind then
         currentX = currentX - 48
@@ -3519,27 +3651,21 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                     local cbExtra = 6
                     if item.colorpicker then cbExtra = cbExtra + 20 end
                     if item.keybind then cbExtra = cbExtra + 64 end
-                    if item.tooltip then cbExtra = cbExtra + 18 end
                     txt(item.label, rowX + 26, textTop(rowY, (item.keybind and 28 or itemH) - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - cbExtra, trans)
                     
                     if not isFloating then
                         click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
                     end
                     
-                    if item.tooltip and not isFloating then
-                        local qHovered = over(rowX + rowW - 16, rowY + 6, 12, 12)
-                        txt("?", rowX + rowW - 10, textTop(rowY, (item.keybind and 28 or itemH) - 2, 13), qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
-                        if qHovered and not disabled then
-                            tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
-                        end
+                    if item.tooltip and over(rowX, rowY, rowW, itemH) and not disabled and trans > 0.5 then
+                        tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
                     end
                     
                     if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled and trans > 0.5 then
                         local onKeybind = item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)
                         local onColor = item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)
-                        local onQ = item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)
                         local on9Dot = over(colX + colW - 22, sy + 8, 14, 14)
-                        if not onKeybind and not onColor and not onQ and not on9Dot then
+                        if not onKeybind and not onColor and not on9Dot then
                             setItemValue(item, not item.value, true)
                             click = false
                         end
@@ -3645,12 +3771,8 @@ local function renderSectionCard(section, colX, sy, colW, secH, clipTop, clipBot
                         drawChevronDown(dx + dw - 15, centerY(dyBox, boxH) - 2, Theme.sub, z + 15, trans)
                     end
                     
-                    if item.tooltip and not isFloating then
-                        local qHovered = over(rowX + rowW - 16, rowY + 2, 12, 12)
-                        txt("?", rowX + rowW - 10, rowY + 2, qHovered and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
-                        if qHovered and not disabled then
-                            tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
-                        end
+                    if item.tooltip and over(rowX, rowY, rowW, itemH) and not disabled and trans > 0.5 then
+                        tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
                     end
                     
                     if click and over(dx, dyBox, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
@@ -4322,6 +4444,9 @@ local function initSettings()
     generalSec:Checkbox("Grid Locking", true, function(val)
         ProjectState.gridLocking = val
     end)
+    generalSec:Checkbox("show tooltips", true, function(val)
+        ProjectState.tooltipsEnabled = val
+    end)
     generalSec:Checkbox("Checkbox Animations", true, function(val)
         ProjectState.hoverEffects = val
     end)
@@ -4408,19 +4533,16 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             rect(rowX + 4 + offset, rowY + 6 + offset, 14 * item.animState, 14 * item.animState, Theme.accent, z + 14, 4 * item.animState, trans)
         end
         
-        txt(item.label, rowX + 26, textTop(rowY, (item.keybind and 28 or itemH) - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - (6 + (item.colorpicker and 20 or 0) + (item.keybind and 64 or 0) + (item.tooltip and 18 or 0)), trans)
+        txt(item.label, rowX + 26, textTop(rowY, (item.keybind and 28 or itemH) - 2, 13), item.unsafe and Theme.unsafe or (item.value and Theme.text or Theme.sub), 13, FontSystem, z + 12, false, false, rowW - 26 - (6 + (item.colorpicker and 20 or 0) + (item.keybind and 64 or 0)), trans)
         
         click, rightClick = renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, trans)
         
-        if item.tooltip then
-            txt("?", rowX + rowW - 10, textTop(rowY, (item.keybind and 28 or itemH) - 2, 13), over(rowX + rowW - 16, rowY + 6, 12, 12) and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
-            if over(rowX + rowW - 16, rowY + 6, 12, 12) and not disabled then
-                tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
-            end
+        if item.tooltip and over(rowX, rowY, rowW, itemH) and not disabled and trans > 0.5 then
+            tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
         end
         
         if click and over(rowX, rowY, rowW, itemH) and not popupBlocking and not disabled and trans > 0.5 then
-            if not (item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)) and not (item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)) and not (item.tooltip and over(rowX + rowW - 16, rowY + 6, 12, 12)) then
+            if not (item.keybind and over(rowX + rowW - 96, rowY + 3, 46, 20)) and not (item.colorpicker and over(rowX + rowW - 127, rowY + 5, 18, 18)) then
                 setItemValue(item, not item.value, true)
                 click = false
             end
@@ -4525,11 +4647,8 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
             drawChevronDown(dx + dw - 15, centerY(dyBox, boxH) - 2, Theme.sub, z + 15, trans)
         end
         
-        if item.tooltip then
-            txt("?", rowX + rowW - 10, rowY + 2, over(rowX + rowW - 16, rowY + 2, 12, 12) and Theme.accent or Theme.sub, 13, FontSystem, z + 12, false, false, nil, trans)
-            if over(rowX + rowW - 16, rowY + 2, 12, 12) and not disabled then
-                tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
-            end
+        if item.tooltip and over(rowX, rowY, rowW, itemH) and not disabled and trans > 0.5 then
+            tooltip(item.tooltip, ProjectState.mouseX, ProjectState.mouseY)
         end
         
         if click and over(dx, dyBox, dw, boxH) and not popupBlocking and not disabled and trans > 0.5 then
@@ -4737,7 +4856,43 @@ end)
 
 local function renderWindow(click, held, rightClick)
     local x, y, w, h = ProjectState.x, ProjectState.y, ProjectState.w, ProjectState.h
+    if ProjectState.pinningDrag then
+        local mx, my = ProjectState.mouseX, ProjectState.mouseY
+        local targetX = mx - ProjectState.dragOffset[1]
+        local targetY = my - ProjectState.dragOffset[2]
+        if ProjectState.gridLocking then
+            targetX = math.floor(targetX / 40 + 0.5) * 40
+            targetY = math.floor(targetY / 40 + 0.5) * 40
+            local vw, vh = viewportSize()
+            for gx = 0, vw, 40 do
+                line(gx, 0, gx, vh, Theme.accent, 10, 1, 0.15)
+            end
+            for gy = 0, vh, 40 do
+                line(0, gy, vw, gy, Theme.accent, 10, 1, 0.15)
+            end
+        end
+        ProjectState.x = targetX
+        ProjectState.y = targetY
+        clampWindow()
+        rect(ProjectState.x, ProjectState.y, w, h, Theme.accent, 199, 12, 0.25)
+        strokeRect(ProjectState.x, ProjectState.y, w, h, Theme.accent, 200, 12, 0.8)
+        if not Input.m1.held then
+            ProjectState.pinningDrag = false
+            ProjectState.pinned = true
+        end
+        return click, held, rightClick
+    end
+
     local popupOpen = ProjectState.dropdown ~= nil or ProjectState.colorpicker ~= nil or ProjectState.importModal ~= nil or ProjectState.changelogOpen
+    local orgClick = click
+    local isClosedPinned = not ProjectState.open and ProjectState.pinned
+    if isClosedPinned then
+        drawVisible = 0.35
+        click = false
+        held = false
+        rightClick = false
+    end
+
     local baseClick = popupOpen and false or click
     local baseHeld = popupOpen and false or held
     local baseRightClick = popupOpen and false or rightClick
@@ -4935,10 +5090,15 @@ local function renderWindow(click, held, rightClick)
     
     if isVertTitle then
         local cogCY = titleBarY + titleBarH - 18
-        local searchIY = cogCY - 26
+        local pinCY = cogCY - 26
+        local searchIY = cogCY - 52
         setHovered = over(titleBarX + 8, cogCY - 10, 20, 20)
         cxSet = titleBarX + 18
         cy = cogCY
+        
+        pinX = titleBarX + 18
+        pinY = pinCY
+        pinHovered = over(titleBarX + 8, pinCY - 10, 20, 20)
         
         iconHovered = over(titleBarX + 8, searchIY - 10, 20, 20)
         circleX = titleBarX + 18
@@ -4955,15 +5115,19 @@ local function renderWindow(click, held, rightClick)
         cxSet = titleBarX + titleBarW - 21
         cy = titleBarY + 18
         
-        iconHovered = over(titleBarX + titleBarW - 52, titleBarY + 6, 20, 24)
-        circleX = titleBarX + titleBarW - 45
+        pinX = titleBarX + titleBarW - 45
+        pinY = titleBarY + 16
+        pinHovered = over(titleBarX + titleBarW - 52, titleBarY + 6, 20, 24)
+        
+        iconHovered = over(titleBarX + titleBarW - 76, titleBarY + 6, 20, 24)
+        circleX = titleBarX + titleBarW - 69
         circleY = titleBarY + 16
-        lineX1 = titleBarX + titleBarW - 42
+        lineX1 = titleBarX + titleBarW - 66
         lineY1 = titleBarY + 19
-        lineX2 = titleBarX + titleBarW - 38
+        lineX2 = titleBarX + titleBarW - 62
         lineY2 = titleBarY + 23
         
-        searchX = titleBarX + titleBarW - 56 - ProjectState.searchBar.width
+        searchX = titleBarX + titleBarW - 80 - ProjectState.searchBar.width
         searchY = titleBarY + 8
     end
 
@@ -5078,6 +5242,60 @@ local function renderWindow(click, held, rightClick)
 
     circle(circleX, circleY, 4, iconHovered and Theme.accent or Theme.sub, 20, false, 1.5)
     line(lineX1, lineY1, lineX2, lineY2, iconHovered and Theme.accent or Theme.sub, 20, 1.5)
+
+    local pinColor = (pinHovered or ProjectState.pinned) and Theme.accent or Theme.sub
+    line(pinX - 4, pinY - 4, pinX + 4, pinY - 4, pinColor, 20, 2)
+    line(pinX - 2, pinY - 3, pinX + 2, pinY - 3, pinColor, 20, 3)
+    line(pinX, pinY - 2, pinX, pinY + 6, pinColor, 20, 1.5)
+
+    if orgClick and pinHovered then
+        if ProjectState.pinned then
+            ProjectState.showPinDropdown = not ProjectState.showPinDropdown
+        else
+            ProjectState.pinningDrag = true
+            ProjectState.dragOffset = { ProjectState.mouseX - ProjectState.x, ProjectState.mouseY - ProjectState.y }
+        end
+        click = false
+        baseClick = false
+    end
+
+    if ProjectState.showPinDropdown then
+        local menuX = pinX - 60
+        local menuY = pinY + 12
+        if isVertTitle then
+            menuX = pinX + 12
+            menuY = pinY - 22
+        end
+        rect(menuX - 1, menuY - 1, 122, 46, Theme.border, 116, 4)
+        rect(menuX, menuY, 120, 44, Theme.surface, 117, 4)
+        
+        local hoverUnpin = over(menuX, menuY + 2, 120, 18)
+        local hoverChange = over(menuX, menuY + 24, 120, 18)
+        
+        rect(menuX + 2, menuY + 2, 116, 18, hoverUnpin and Theme.surface3 or Theme.surface, 118, 3)
+        txt("unpin", menuX + 10, menuY + 4, hoverUnpin and Theme.accent or Theme.text, 12, FontUI, 119)
+        
+        rect(menuX + 2, menuY + 24, 116, 18, hoverChange and Theme.surface3 or Theme.surface, 118, 3)
+        txt("change position", menuX + 10, menuY + 26, hoverChange and Theme.accent or Theme.text, 12, FontUI, 119)
+        
+        if orgClick then
+            if hoverUnpin then
+                ProjectState.pinned = false
+                ProjectState.showPinDropdown = false
+                click = false
+                baseClick = false
+            elseif hoverChange then
+                ProjectState.showPinDropdown = false
+                ProjectState.pinned = false
+                ProjectState.pinningDrag = true
+                ProjectState.dragOffset = { ProjectState.mouseX - ProjectState.x, ProjectState.mouseY - ProjectState.y }
+                click = false
+                baseClick = false
+            else
+                ProjectState.showPinDropdown = false
+            end
+        end
+    end
 
     local col = (setHovered or ProjectState.settingsActive) and Theme.accent or Theme.sub
     if ProjectState.settingsActive then
@@ -5226,7 +5444,7 @@ local function renderWindow(click, held, rightClick)
     local botY = y + h - 24
     local botH = 24
     line(x + 2, botY, x + w - 2, botY, Theme.border, 8)
-    txt((ProjectState.badgeText and ProjectState.badgeText ~= "") and (ProjectState.badgeText .. " | v1.3.6") or "v1.0.0", x + 14, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
+    txt((ProjectState.badgeText and ProjectState.badgeText ~= "") and (ProjectState.badgeText .. " | v1.3.8") or "v1.3.8", x + 14, textTop(botY, botH, 11), Theme.sub, 11, FontUI, 10)
     line(x + w - 13, y + h - 5, x + w - 5, y + h - 13, Theme.sub, 10, 1)
     line(x + w - 10, y + h - 5, x + w - 5, y + h - 10, Theme.sub, 10, 1)
     line(x + w - 7, y + h - 5, x + w - 5, y + h - 7, Theme.sub, 10, 1)
@@ -5359,6 +5577,10 @@ local function renderWindow(click, held, rightClick)
         end
     end
 
+    if isClosedPinned then
+        drawVisible = 1.0
+    end
+
     return popupOpen and click or baseClick, popupOpen and held or baseHeld, popupOpen and rightClick or baseRightClick
 end
 
@@ -5479,7 +5701,7 @@ local function step()
     local held = Input.m1.held
     local rightClick = Input.m2.click
 
-    if not ProjectState.open or #ProjectState.tabs == 0 then
+    if (not ProjectState.open or #ProjectState.tabs == 0) and not ProjectState.pinned and not ProjectState.pinningDrag then
         click = renderHotkeyOverlay(click, held)
         renderWatermark(click, held)
         click = renderCustomBoxes(click, held)
@@ -5787,6 +6009,19 @@ homesick.CreateBox = function(self, config)
         return self
     end
 
+    function box:UpdateChoices(id, choices)
+        if self.elements[id] and self.elements[id].type == "dropdown" then
+            self.elements[id].choices = copyArray(choices)
+            if ProjectState.dropdown and ProjectState.dropdown.item == self.elements[id] then
+                ProjectState.dropdown.choices = copyArray(choices)
+                ProjectState.dropdown.h = min(#choices * 22 + (ProjectState.dropdown.multi and 30 or 6), ProjectState.dropdown.multi and 234 or 210)
+                ProjectState.dropdown.y = clamp(ProjectState.dropdown.y, 8, max(8, select(2, viewportSize()) - ProjectState.dropdown.h - 8))
+                ProjectState.dropdown.scrollOffset = clamp(ProjectState.dropdown.scrollOffset or 0, 0, max(0, #choices - floor((ProjectState.dropdown.h - 6) / 22)))
+            end
+        end
+        return self
+    end
+
     ProjectState.customBoxes = ProjectState.customBoxes or {}
     table.insert(ProjectState.customBoxes, box)
     return box
@@ -5846,6 +6081,15 @@ homesick.createWindow = function(title, width, height)
                     return wSelf
                 end
                 
+                widgetWrap.getValue = function(wSelf)
+                    return wSelf.rawItem.item.value
+                end
+                
+                widgetWrap.setValue = function(wSelf, val)
+                    wSelf.rawItem:Set(val)
+                    return wSelf
+                end
+                
                 return widgetWrap
             end
             
@@ -5872,6 +6116,15 @@ homesick.createWindow = function(title, width, height)
                     return wSelf
                 end
                 
+                widgetWrap.getValue = function(wSelf)
+                    return wSelf.rawItem.item.value
+                end
+                
+                widgetWrap.setValue = function(wSelf, val)
+                    wSelf.rawItem:Set(val)
+                    return wSelf
+                end
+                
                 return widgetWrap
             end
             
@@ -5885,6 +6138,15 @@ homesick.createWindow = function(title, width, height)
                 
                 widgetWrap.addTooltip = function(wSelf, text)
                     wSelf.rawItem.item.tooltip = text
+                    return wSelf
+                end
+                
+                widgetWrap.getValue = function(wSelf)
+                    return wSelf.rawItem.item.value
+                end
+                
+                widgetWrap.setValue = function(wSelf, val)
+                    wSelf.rawItem:Set(val)
                     return wSelf
                 end
                 
@@ -5918,14 +6180,23 @@ homesick.createWindow = function(title, width, height)
                     return wSelf
                 end
                 
+                widgetWrap.getValue = function(wSelf)
+                    return wSelf.rawItem.item.value
+                end
+                
+                widgetWrap.setValue = function(wSelf, val)
+                    wSelf.rawItem:Set(val)
+                    return wSelf
+                end
+                
                 return widgetWrap
             end
             
-            secWrap.addDropdown = function(sSelf, id, label, choices, default, callback)
+            secWrap.addDropdown = function(sSelf, id, label, choices, default, callback, searchable, maxSelections)
                 local widgetWrap = {
                     id = id,
                     type = "Dropdown",
-                    rawItem = sSelf.rawSec:Dropdown(label, default, choices, false, callback)
+                    rawItem = sSelf.rawSec:Dropdown(label, default, choices, false, callback, nil, searchable, maxSelections)
                 }
                 widgetWrap.rawItem.item.id = id
                 
@@ -5934,24 +6205,97 @@ homesick.createWindow = function(title, width, height)
                     return wSelf
                 end
                 
-                return widgetWrap
-            end
-            
-            secWrap.addMultiDropdown = function(sSelf, id, label, choices, default, callback)
-                local widgetWrap = {
-                    id = id,
-                    type = "MultiDropdown",
-                    rawItem = sSelf.rawSec:Dropdown(label, default, choices, true, callback)
-                }
-                widgetWrap.rawItem.item.id = id
+                widgetWrap.setSearchable = function(wSelf, boolVal)
+                    wSelf.rawItem:SetSearchable(boolVal)
+                    return wSelf
+                end
                 
-                widgetWrap.addTooltip = function(wSelf, text)
-                    wSelf.rawItem.item.tooltip = text
+                widgetWrap.setMaxSelections = function(wSelf, limit)
+                    wSelf.rawItem:SetMaxSelections(limit)
                     return wSelf
                 end
                 
                 widgetWrap.updateChoices = function(wSelf, newChoices)
                     wSelf.rawItem:UpdateChoices(newChoices)
+                    return wSelf
+                end
+                
+                widgetWrap.addChoice = function(wSelf, choice)
+                    wSelf.rawItem:AddChoice(choice)
+                    return wSelf
+                end
+                
+                widgetWrap.removeChoice = function(wSelf, choice)
+                    wSelf.rawItem:RemoveChoice(choice)
+                    return wSelf
+                end
+                
+                widgetWrap.clearChoices = function(wSelf)
+                    wSelf.rawItem:ClearChoices()
+                    return wSelf
+                end
+                
+                widgetWrap.getValue = function(wSelf)
+                    return wSelf.rawItem.item.value
+                end
+                
+                widgetWrap.setValue = function(wSelf, val)
+                    wSelf.rawItem:Set(val)
+                    return wSelf
+                end
+                
+                return widgetWrap
+            end
+            
+            secWrap.addMultiDropdown = function(sSelf, id, label, choices, default, callback, searchable, maxSelections)
+                local widgetWrap = {
+                    id = id,
+                    type = "MultiDropdown",
+                    rawItem = sSelf.rawSec:Dropdown(label, default, choices, true, callback, nil, searchable, maxSelections)
+                }
+                widgetWrap.rawItem.item.id = id
+                
+                widgetWrap.addTooltip = function(wSelf, text)
+                    wSelf.rawItem.item.tooltip = text
+                    return wSelf
+                end
+                
+                widgetWrap.setSearchable = function(wSelf, boolVal)
+                    wSelf.rawItem:SetSearchable(boolVal)
+                    return wSelf
+                end
+                
+                widgetWrap.setMaxSelections = function(wSelf, limit)
+                    wSelf.rawItem:SetMaxSelections(limit)
+                    return wSelf
+                end
+                
+                widgetWrap.updateChoices = function(wSelf, newChoices)
+                    wSelf.rawItem:UpdateChoices(newChoices)
+                    return wSelf
+                end
+                
+                widgetWrap.addChoice = function(wSelf, choice)
+                    wSelf.rawItem:AddChoice(choice)
+                    return wSelf
+                end
+                
+                widgetWrap.removeChoice = function(wSelf, choice)
+                    wSelf.rawItem:RemoveChoice(choice)
+                    return wSelf
+                end
+                
+                widgetWrap.clearChoices = function(wSelf)
+                    wSelf.rawItem:ClearChoices()
+                    return wSelf
+                end
+                
+                widgetWrap.getValue = function(wSelf)
+                    return wSelf.rawItem.item.value
+                end
+                
+                widgetWrap.setValue = function(wSelf, val)
+                    wSelf.rawItem:Set(val)
                     return wSelf
                 end
                 
@@ -5981,6 +6325,15 @@ homesick.createWindow = function(title, width, height)
                     return wSelf
                 end
                 
+                widgetWrap.getValue = function(wSelf)
+                    return wSelf.rawItem.item.label
+                end
+                
+                widgetWrap.setValue = function(wSelf, val)
+                    wSelf.rawItem:Set(val)
+                    return wSelf
+                end
+                
                 return widgetWrap
             end
             
@@ -5990,7 +6343,35 @@ homesick.createWindow = function(title, width, height)
         return tabWrap
     end
     
+    windowWrap.autoloadConfig = function(wSelf, name)
+        wSelf.configName = name
+        return wSelf
+    end
+    
+    windowWrap.autoloadTheme = function(wSelf, name)
+        wSelf.themeName = name
+        return wSelf
+    end
+    
     windowWrap.render = function(wSelf)
+        if wSelf.configName and not wSelf.configLoaded then
+            wSelf.configLoaded = true
+            pcall(function()
+                local raw = readfile("homesick/" .. wSelf.configName .. ".json")
+                if raw and raw ~= "" then
+                    loadConfig(raw)
+                end
+            end)
+        end
+        if wSelf.themeName and not wSelf.themeLoaded then
+            wSelf.themeLoaded = true
+            pcall(function()
+                local raw = readfile("homesick/themes/" .. wSelf.themeName .. ".json")
+                if raw and raw ~= "" then
+                    loadTheme(raw)
+                end
+            end)
+        end
         ui:SetOpen(wSelf.visible == true)
     end
     
