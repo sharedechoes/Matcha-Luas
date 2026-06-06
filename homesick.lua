@@ -230,7 +230,8 @@ local changelogs = {
     "added loading spinner and mod combos for keybinds",
     "fixed tooltips cutting off with auto-wrapping and dynamic box sizing",
     "added auto-adapting keybind button sizes",
-    "redesigned waiting for keybind loader to a YouTube-style dotted spinner"
+    "redesigned waiting for keybind loader to a YouTube-style dotted spinner",
+    "fixed spotlight search and key combos not polling when GUI is closed"
 }
 
 local Theme = {
@@ -1880,9 +1881,26 @@ local function updateInput()
     else
         local keysToPoll = {}
         if menuKey then keysToPoll[menuKey] = true end
+        if ProjectState.spotlightEnabled ~= false then
+            local sk = ProjectState.spotlightKeybind or "ctrl+space"
+            local plus = string.find(sk, "+", 1, true)
+            if plus then
+                keysToPoll[string.sub(sk, 1, plus - 1)] = true
+                keysToPoll[string.sub(sk, plus + 1)] = true
+            else
+                keysToPoll[sk] = true
+            end
+        end
         for _, item in ipairs(keybindItems) do
             if item.keybind and item.keybind.value then
-                keysToPoll[item.keybind.value] = true
+                local val = item.keybind.value
+                local plus = string.find(val, "+", 1, true)
+                if plus then
+                    keysToPoll[string.sub(val, 1, plus - 1)] = true
+                    keysToPoll[string.sub(val, plus + 1)] = true
+                else
+                    keysToPoll[val] = true
+                end
             end
         end
 
