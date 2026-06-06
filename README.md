@@ -10,3 +10,6 @@ Requests can be sent to me on Discord, my tag is **sharedechoes** & my ID is **1
 
 # QoL
 [Visual Breadcrumbs](https://github.com/sharedechoes/Matcha-Luas/blob/main/breadcrumbs.lua)
+[NekoCursor](https://github.com/sharedechoes/Matcha-Luas/blob/main/nekocursor.lua)
+[Matcha Discord RPC](https://github.com/sharedechoes/Matcha-Luas/blob/main/discordrpc.lua) | [Python RPC Bridge](https://github.com/sharedechoes/Matcha-Luas/blob/main/rpc.py) **RUN PYTHON BEFORE LUA**
+[RGB Chinahat](https://github.com/sharedechoes/Matcha-Luas/blob/main/Chinahat.lua)
