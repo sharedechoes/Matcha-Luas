@@ -577,6 +577,7 @@ local function setOpen(open)
         return
     end
     ProjectState.open = open
+    ProjectState.spotlightActive = false
     ProjectState.drag = nil
     ProjectState.sliderDrag = nil
     ProjectState.scrollDrag = nil
@@ -5820,6 +5821,81 @@ local function renderWindow(click, held, rightClick)
     return popupOpen and click or baseClick, popupOpen and held or baseHeld, popupOpen and rightClick or baseRightClick
 end
 
+local function renderSpotlightSearch(click)
+    if not ProjectState.spotlightActive then
+        return click
+    end
+    local vw, vh = viewportSize()
+    local sx = (vw - 400) / 2
+    local sy = vh * 0.3
+    rect(0, 0, vw, vh, Theme.black, 299, 0, 0.25)
+    rect(sx, sy, 400, 40, Theme.surface, 300, 8, 0.95)
+    strokeRect(sx, sy, 400, 40, Theme.accent, 301, 8)
+    txt("Search:", sx + 12, centerY(sy, 40), Theme.accent, 13, FontBold, 302)
+    local displayVal = ProjectState.spotlightSearch.value
+    if displayVal == "" and ProjectState.focus ~= ProjectState.spotlightSearch then
+        txt("type to search...", sx + 72, centerY(sy, 40), Theme.sub, 13, FontUI, 302)
+    else
+        txt(displayVal, sx + 72, centerY(sy, 40), Theme.text, 13, FontUI, 302)
+    end
+    if ProjectState.focus == ProjectState.spotlightSearch then
+        local curX = sx + 72 + textWidth(displayVal, 13, FontUI)
+        txt("|", curX, centerY(sy, 40), Theme.text, 13, FontUI, 303, false, false, nil, clamp(0.5 + 0.5 * math.sin(clock() * 8), 0, 1))
+    end
+    local matches = {}
+    local query = string.lower(displayVal)
+    for _, t in ipairs(ProjectState.tabs) do
+        for _, s in ipairs(t.sections) do
+            for _, item in ipairs(s.items) do
+                if item.type ~= "divider" and item.type ~= "label" then
+                    if query == "" or string.find(string.lower(item.label), query, 1, true) then
+                        matches[#matches + 1] = { tab = t, section = s, item = item }
+                    end
+                end
+            end
+        end
+    end
+    if #matches > 0 and query ~= "" then
+        local matchCount = math.min(#matches, 5)
+        local resultsH = matchCount * 30 + 10
+        rect(sx, sy + 46, 400, resultsH, Theme.surface, 300, 8, 0.95)
+        strokeRect(sx, sy + 46, 400, resultsH, Theme.border, 301, 8)
+        ProjectState.spotlightSearch.selected = clamp(ProjectState.spotlightSearch.selected or 1, 1, matchCount)
+        for i = 1, matchCount do
+            local match = matches[i]
+            local rowY = sy + 51 + (i - 1) * 30
+            local isSelected = ProjectState.spotlightSearch.selected == i
+            local hovered = over(sx + 6, rowY, 388, 26)
+            if isSelected or hovered then
+                rect(sx + 6, rowY, 388, 26, hovered and Theme.surface3 or Theme.surface2, 302, 4)
+                if hovered then
+                    ProjectState.spotlightSearch.selected = i
+                end
+            end
+            local labelText = match.tab.name .. " > " .. match.item.label
+            txt(labelText, sx + 14, centerY(rowY, 26), isSelected and Theme.accent or Theme.text, 12, FontUI, 303)
+            local valText = ""
+            local mi = match.item
+            if mi.type == "checkbox" or mi.type == "toggle" then
+                valText = mi.value and "on" or "off"
+            elseif mi.type == "slider" then
+                valText = tostring(mi.value)
+            elseif mi.type == "dropdown" then
+                valText = mi.value[1] or "-"
+            elseif mi.type == "textbox" then
+                valText = mi.value ~= "" and mi.value or "-"
+            end
+            txt(valText, sx + 386, centerY(rowY, 26), Theme.sub, 11, FontSystem, 303, false, false, nil, 1, true)
+        end
+    end
+    if click and not over(sx, sy, 400, 40) and not (#matches > 0 and query ~= "" and over(sx, sy + 46, 400, math.min(#matches, 5) * 30 + 10)) then
+        ProjectState.spotlightActive = false
+        ProjectState.focus = nil
+        click = false
+    end
+    return click
+end
+
 local function step()
     local isTyping = ProjectState.focus ~= nil
     if isTyping ~= ProjectState.lastIsTyping then
@@ -5942,6 +6018,7 @@ local function step()
         renderWatermark(click, held)
         click = renderCustomBoxes(click, held)
         renderNotifications()
+        click = renderSpotlightSearch(click)
         hideUnused()
         return
     end
@@ -5983,6 +6060,7 @@ local function step()
     renderNotifications()
     click = renderHotkeyOverlay(click, held)
     click = renderCustomBoxes(click, held)
+    click = renderSpotlightSearch(click)
     hideUnused()
 end
 
@@ -6631,8 +6709,11 @@ homesick.createWindow = function(title, width, height)
         end
     })
     
+    pcall(loadConfig)
     initSettings()
-    pcall(loadTheme)
+    if ProjectState.autoloadTheme then
+        pcall(loadTheme)
+    end
 
     return windowWrap
 end
