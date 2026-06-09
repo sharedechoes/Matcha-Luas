@@ -2840,7 +2840,7 @@ local function renderDropdown(click, rightClick)
                         end
                     else
                         if dd.item.maxSelections and #newValue >= dd.item.maxSelections then
-                            warn("max selections of " .. tostring(dd.item.maxSelections) .. " reached dude")
+                            warn("max selections of " .. tostring(dd.item.maxSelections) .. " reached")
                         else
                             newValue[#newValue + 1] = choice
                         end
@@ -2855,7 +2855,7 @@ local function renderDropdown(click, rightClick)
                         end
                     else
                         if dd.maxSelections and #dd.value >= dd.maxSelections then
-                            warn("max selections of " .. tostring(dd.maxSelections) .. " reached dude")
+                            warn("max selections of " .. tostring(dd.maxSelections) .. " reached")
                         else
                             dd.value[#dd.value + 1] = choice
                         end
@@ -2908,7 +2908,7 @@ local function renderDropdown(click, rightClick)
             if hoverAll then
                 local limit = dd.item and dd.item.maxSelections or dd.maxSelections
                 if limit and #dd.choices > limit then
-                    warn("max selections of " .. tostring(limit) .. " reached dude")
+                    warn("max selections of " .. tostring(limit) .. " reached")
                     local clampedChoices = {}
                     for ci = 1, limit do
                         clampedChoices[ci] = dd.choices[ci]
@@ -4681,6 +4681,31 @@ local function initSettings()
             end
         end
     end)
+    themeSection:Button("Reset to Default", function()
+        for k, v in pairs({
+            bg = c3(36, 33, 31),
+            surface = c3(30, 27, 25),
+            surface2 = c3(44, 40, 37),
+            surface3 = c3(54, 50, 46),
+            text = c3(245, 242, 238),
+            sub = c3(150, 142, 135),
+            accent = c3(232, 208, 162),
+            green = c3(52, 199, 89),
+            red = c3(255, 69, 58),
+            yellow = c3(255, 204, 0),
+            unsafe = c3(255, 226, 84),
+            border = c3(60, 55, 52),
+            white = c3(255, 255, 255),
+            black = c3(0, 0, 0),
+        }) do
+            Theme[k] = v
+            ThemeAlpha[k] = 1.0
+            if ProjectState.themeColorPickers and ProjectState.themeColorPickers[k] then
+                ProjectState.themeColorPickers[k]:Set(v)
+            end
+        end
+        saveTheme()
+    end)
 
     local generalSec = createSection(settingsTab, "General Settings", "Full")
     generalSec:Checkbox("isrbxactive()", ProjectState.isrbxactiveOverride == true, function(val)
@@ -4843,7 +4868,7 @@ local function renderSearchFeature(item, rowX, rowY, rowW, click, held, rightCli
                         item.alpha = ProjectState.copiedAlpha or 1
                         safeCallback(item.callback, item.value, item.alpha)
                     else
-                        warn("color clipboard empty")
+                        warn("color clipboard is empty")
                     end
                 end
             end, nil, nil)
