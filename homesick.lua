@@ -343,6 +343,7 @@ local ProjectState = {
     smoothScrolling = true,
     hoverEffects = true,
     tooltipsEnabled = true,
+    caretEnabled = true,
     settingsTargetH = nil,
     preSettingsH = nil,
     settingsTargetW = nil,
@@ -853,7 +854,7 @@ local function wrapLines(value, maxWidth, size, font)
 end
 
 local function txt(value, x, y, color, size, font, z, centered, outline, maxWidth, transparency)
-    if value == nil or value == "" then
+    if value == nil or value == "" or (value == "|" and ProjectState.caretEnabled == false) then
         return
     end
     if maxWidth then
@@ -1567,6 +1568,20 @@ local function createSection(tab, name, side, allowLocking, defaultLock)
             type = "divider",
             label = label and tostring(label) or nil,
         })
+    end
+
+    function sectionApi:SetSize(w, h)
+        if w then
+            section.customWidth = w
+        end
+        if h then
+            section.customHeight = h
+        end
+        return self
+    end
+
+    function sectionApi:overrideSize(w, h)
+        return self:SetSize(w, h)
     end
 
     return sectionApi
@@ -3509,6 +3524,9 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
             keyText = item.keybind.value
         end
         local textToDraw = string.upper(keyText):gsub("%+", " + ")
+        if not item.keybind.listening then
+            textToDraw = textToDraw .. " [" .. string.sub(item.keybind.mode or "Hold", 1, 1):upper() .. "]"
+        end
         local neededW = math.max(46, textWidth(textToDraw, 12, FontUI) + 12)
         currentX = currentX - neededW - 2
         local keyX = currentX
@@ -3518,10 +3536,6 @@ local function renderToggleExtras(item, rowX, rowY, rowW, click, rightClick, tra
         strokeRect(keyX, rowY + 3, neededW, 20, hovered and Theme.accent or Theme.border, 46, 4, trans)
 
         txt(textToDraw, keyX + neededW / 2, centerY(rowY + 3, 20), (item.keybind.listening or item.keybind.value) and Theme.text or Theme.sub, 12, FontUI, 52, true, false, neededW - 4, trans)
-
-        local modeLabel = item.keybind.mode == "Toggle" and "[Toggle]" or item.keybind.mode == "Always" and "[Always]" or "[Hold]"
-        local modeLabelColor = item.keybind.mode == "Hold" and Theme.sub or Theme.accent
-        txt(modeLabel, keyX + neededW / 2, rowY + 22, modeLabelColor, 9, FontUI, 52, true, false, neededW, trans)
 
         if item.keybind.listening then
             for j = 1, 8 do
@@ -4079,7 +4093,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     local leftTotal = 0
     for i = 1, #leftSecs do
         local sec = leftSecs[i]
-        local colW = (sec.side == "Full") and pw or floor((pw - 10) / 2)
+        local colW = sec.customWidth or ((sec.side == "Full") and pw or floor((pw - 10) / 2))
         local rowW = colW - 24
         local secH = sec.customHeight or 28
         if not sec.customHeight then
@@ -4095,7 +4109,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
     local rightTotal = 0
     for i = 1, #rightSecs do
         local sec = rightSecs[i]
-        local colW = (sec.side == "Full") and pw or floor((pw - 10) / 2)
+        local colW = sec.customWidth or ((sec.side == "Full") and pw or floor((pw - 10) / 2))
         local rowW = colW - 24
         local secH = sec.customHeight or 28
         if not sec.customHeight then
@@ -4232,18 +4246,18 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
         if section.side == "Full" then
             targetLocalX = 0
             targetLocalY = max(leftY, rightY) - sy
-            targetLocalW = pw
+            targetLocalW = section.customWidth or pw
             leftY = max(leftY, rightY) + secH + 10
             rightY = leftY
         elseif section.side == "Right" then
-            targetLocalX = colW + 10
+            targetLocalW = section.customWidth or colW
+            targetLocalX = (section.customWidth and (pw - section.customWidth)) or (colW + 10)
             targetLocalY = rightY - sy
-            targetLocalW = colW
             rightY = rightY + secH + 10
         else
+            targetLocalW = section.customWidth or colW
             targetLocalX = 0
             targetLocalY = leftY - sy
-            targetLocalW = colW
             leftY = leftY + secH + 10
         end
 
@@ -4265,7 +4279,7 @@ local function renderSections(tab, click, held, rightClick, px, contY, pw, contH
             dragSec,
             ProjectState.mouseX - ProjectState.dragOffset[1],
             ProjectState.mouseY - ProjectState.dragOffset[2],
-            (dragSec.side == "Full") and pw or colW,
+            dragSec.customWidth or ((dragSec.side == "Full") and pw or colW),
             dragSec.calculatedHeight,
             clipTop,
             clipBottom,
@@ -4330,6 +4344,7 @@ local function serializeConfigData()
         isrbxactiveOverride = ProjectState.isrbxactiveOverride,
         spotlightEnabled = ProjectState.spotlightEnabled,
         spotlightKeybind = ProjectState.spotlightKeybind,
+        caretEnabled = ProjectState.caretEnabled ~= false,
     }
     for _, t in ipairs(ProjectState.tabs) do
         for _, s in ipairs(t.sections) do
@@ -4395,6 +4410,11 @@ local function loadConfig(json, force)
             ProjectState.isrbxactiveOverride = configData.system.isrbxactiveOverride == true
             ProjectState.spotlightEnabled = configData.system.spotlightEnabled ~= false
             ProjectState.spotlightKeybind = configData.system.spotlightKeybind or "ctrl+space"
+            if configData.system.caretEnabled ~= nil then
+                ProjectState.caretEnabled = configData.system.caretEnabled == true
+            else
+                ProjectState.caretEnabled = true
+            end
         end
         if force or ProjectState.autoloadConfig then
             for _, t in ipairs(ProjectState.tabs) do
@@ -4466,28 +4486,40 @@ local function saveTheme()
     end
 end
 
-local function loadTheme(json)
-    if not json then
-        local ok, raw = pcall(readfile, "homesick/theme.json")
-        if ok and raw then
-            json = raw
+local function loadTheme(jsonOrTable)
+    local themeData = nil
+    if type(jsonOrTable) == "table" then
+        themeData = jsonOrTable
+    else
+        local json = jsonOrTable or select(2, pcall(readfile, "homesick/theme.json"))
+        if json and json ~= "" then
+            local ok, decoded = pcall(game:GetService("HttpService").JSONDecode, game:GetService("HttpService"), json)
+            if ok then themeData = decoded end
         end
     end
-    if not json or json == "" then return end
-    local decodeOk, themeData = pcall(game:GetService("HttpService").JSONDecode, game:GetService("HttpService"), json)
-    if decodeOk and decodeOk == true and type(themeData) == "table" then
+    if type(themeData) == "table" then
         for k, v in pairs(themeData) do
             if Theme[k] ~= nil then
                 local alphaVal = 1.0
+                local colorVal = nil
                 if type(v) == "table" then
-                    Theme[k] = c3Hex("#" .. (v.color or "FFFFFF"))
-                    alphaVal = tonumber(v.alpha) or 1.0
+                    if v.color then
+                        colorVal = c3Hex(string.sub(v.color, 1, 1) == "#" and v.color or "#" .. v.color)
+                        alphaVal = tonumber(v.alpha) or 1.0
+                    else
+                        colorVal = c3(v[1] or 255, v[2] or 255, v[3] or 255)
+                    end
+                elseif type(v) == "userdata" then
+                    colorVal = v
                 else
-                    Theme[k] = c3Hex("#" .. v)
+                    colorVal = c3Hex(string.sub(tostring(v), 1, 1) == "#" and tostring(v) or "#" .. tostring(v))
                 end
-                ThemeAlpha[k] = alphaVal
-                if ProjectState.themeColorPickers and ProjectState.themeColorPickers[k] then
-                    ProjectState.themeColorPickers[k]:Set(Theme[k], alphaVal)
+                if colorVal then
+                    Theme[k] = colorVal
+                    ThemeAlpha[k] = alphaVal
+                    if ProjectState.themeColorPickers and ProjectState.themeColorPickers[k] then
+                        ProjectState.themeColorPickers[k]:Set(colorVal, alphaVal)
+                    end
                 end
             end
         end
@@ -4738,6 +4770,10 @@ local function initSettings()
     end)
     generalSec:Checkbox("autoload theme", ProjectState.autoloadTheme == true, function(val)
         ProjectState.autoloadTheme = val
+        pcall(saveConfig)
+    end)
+    generalSec:Checkbox("writing caret", ProjectState.caretEnabled ~= false, function(val)
+        ProjectState.caretEnabled = val
         pcall(saveConfig)
     end)
     local spotlightCheckbox = generalSec:Checkbox("Spotlight Search", ProjectState.spotlightEnabled ~= false, function(val)
@@ -6093,7 +6129,93 @@ end
 safeWriteGlobal("homesick", ui)
 safeWriteGlobal("homesickUI", ui)
 
+local settingNames = {
+    tabanimations = "tabAnimations",
+    gridlocking = "gridLocking",
+    tooltips = "tooltipsEnabled",
+    tooltipsenabled = "tooltipsEnabled",
+    hovereffects = "hoverEffects",
+    hotkey = "hotkeyEnabled",
+    hotkeyenabled = "hotkeyEnabled",
+    autoloadconfig = "autoloadConfig",
+    autoloadtheme = "autoloadTheme",
+    spotlight = "spotlightEnabled",
+    spotlightenabled = "spotlightEnabled",
+    caret = "caretEnabled",
+    caretenabled = "caretEnabled",
+    isrbxactiveoverride = "isrbxactiveOverride"
+}
+
+local function syncSettingsUI()
+    if not ProjectState.settingsTab then return end
+    for _, s in ipairs(ProjectState.settingsTab.sections) do
+        for _, item in ipairs(s.items) do
+            if item.label == "isrbxactive()" then
+                item.value = ProjectState.isrbxactiveOverride == true
+            elseif item.label == "Tab Animations" then
+                item.value = ProjectState.tabAnimations ~= false
+            elseif item.label == "Grid Locking" then
+                item.value = ProjectState.gridLocking ~= false
+            elseif item.label == "show tooltips" then
+                item.value = ProjectState.tooltipsEnabled ~= false
+            elseif item.label == "Checkbox Animations" then
+                item.value = ProjectState.hoverEffects ~= false
+            elseif item.label == "Hotkey Overlay" then
+                item.value = ProjectState.hotkeyEnabled == true
+            elseif item.label == "autoload config" then
+                item.value = ProjectState.autoloadConfig == true
+            elseif item.label == "autoload theme" then
+                item.value = ProjectState.autoloadTheme == true
+            elseif item.label == "Spotlight Search" then
+                item.value = ProjectState.spotlightEnabled ~= false
+            elseif item.label == "writing caret" then
+                item.value = ProjectState.caretEnabled ~= false
+            end
+        end
+    end
+end
+
 local homesick = { changelogEnabled = true }
+
+homesick.setSetting = function(self, name, value)
+    if type(self) ~= "table" or self.createWindow == nil then
+        value = name
+        name = self
+    end
+    local key = settingNames[tostring(name):lower()] or name
+    if ProjectState[key] ~= nil then
+        ProjectState[key] = (value == true)
+        pcall(saveConfig)
+        syncSettingsUI()
+    end
+end
+
+homesick.getSetting = function(self, name)
+    if type(self) ~= "table" or self.createWindow == nil then
+        name = self
+    end
+    return ProjectState[settingNames[tostring(name):lower()] or name]
+end
+
+homesick.toggleSetting = function(self, name)
+    if type(self) ~= "table" or self.createWindow == nil then
+        name = self
+    end
+    local key = settingNames[tostring(name):lower()] or name
+    if ProjectState[key] ~= nil then
+        ProjectState[key] = not ProjectState[key]
+        pcall(saveConfig)
+        syncSettingsUI()
+        return ProjectState[key]
+    end
+end
+
+homesick.setTheme = function(self, themeData)
+    if type(self) ~= "table" or self.createWindow == nil then
+        themeData = self
+    end
+    loadTheme(themeData)
+end
 
 homesick.GetDrawing = function(self, kind)
     return ui:GetDrawing(kind)
@@ -6346,6 +6468,15 @@ homesick.createWindow = function(title, width, height)
                 rawSec = tSelf.rawTab:Section(secName, column, allowLocking, defaultLock),
                 type = "Section"
             }
+            
+            secWrap.setSize = function(sSelf, w, h)
+                sSelf.rawSec:SetSize(w, h)
+                return sSelf
+            end
+            secWrap.overrideSize = function(sSelf, w, h)
+                sSelf.rawSec:overrideSize(w, h)
+                return sSelf
+            end
             
             secWrap.addToggle = function(sSelf, id, label, default, callback)
                 local widgetWrap = {
@@ -6654,12 +6785,16 @@ homesick.createWindow = function(title, width, height)
         end
         if wSelf.themeName and not wSelf.themeLoaded then
             wSelf.themeLoaded = true
-            pcall(function()
-                local raw = readfile("homesick/themes/" .. wSelf.themeName .. ".json")
-                if raw and raw ~= "" then
-                    loadTheme(raw)
-                end
-            end)
+            if type(wSelf.themeName) == "table" then
+                loadTheme(wSelf.themeName)
+            else
+                pcall(function()
+                    local raw = readfile("homesick/themes/" .. wSelf.themeName .. ".json")
+                    if raw and raw ~= "" then
+                        loadTheme(raw)
+                    end
+                end)
+            end
         end
         ui:SetOpen(wSelf.visible == true)
     end
