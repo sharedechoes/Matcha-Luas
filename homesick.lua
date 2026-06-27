@@ -2868,8 +2868,10 @@ local function renderDropdown(click, rightClick)
         end
         visibleRatio = clamp(visibleRatio, 0, 1)
 
+        local hovered = over(dd.x, rowY, dd.w - (hasScroll and 12 or 0), 22) and rowY >= topBoundary - 10 and rowY + 22 <= bottomBoundary + 10
+        local isDeletable = dd.item and dd.item.deletable
+
         if visibleRatio > 0.05 then
-            local hovered = over(dd.x, rowY, dd.w - (hasScroll and 12 or 0), 22) and (rowY >= topBoundary - 10) and (rowY + 22 <= bottomBoundary + 10)
             if selected or hovered then
                 local rectY = max(topBoundary, rowY)
                 local rectH = min(bottomBoundary, rowY + 22) - rectY
@@ -2885,7 +2887,6 @@ local function renderDropdown(click, rightClick)
                 end
             end
 
-            local isDeletable = dd.item and dd.item.deletable
             local textMaxW = dd.w - 24 - (isDeletable and 20 or 0) - (hasScroll and 12 or 0)
             txt(tostring(choice), textX, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontSystem, 113, false, false, textMaxW, visibleRatio)
         end
