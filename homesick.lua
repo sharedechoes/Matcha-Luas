@@ -2782,14 +2782,47 @@ local function renderDropdown(click, rightClick)
         end
     end
 
-    if dd.scrollOffset > 0 then
-        triangle(v2(dd.x + dd.w - 14, dd.y + headerH + 8), v2(dd.x + dd.w - 6, dd.y + headerH + 8), v2(dd.x + dd.w - 10, dd.y + headerH + 4), Theme.sub, 115, true)
-    end
-    if dd.scrollOffset + maxRows < #dd.choices then
-        triangle(v2(dd.x + dd.w - 14, dd.y + dd.h - 8), v2(dd.x + dd.w - 6, dd.y + dd.h - 8), v2(dd.x + dd.w - 10, dd.y + dd.h - 4), Theme.sub, 115, true)
+    local totalItems = #dd.choices
+    local hasScroll = totalItems > maxRows
+    
+    if hasScroll then
+        local sbW = 5
+        local sbX = dd.x + dd.w - sbW - 3
+        local sbY = dd.y + headerH + 4
+        local sbH = dd.h - headerH - 8
+        
+        rect(sbX, sbY, sbW, sbH, Theme.surface2, 112, 2)
+        
+        local thumbH = clamp((maxRows / totalItems) * sbH, 15, sbH)
+        local maxScroll = totalItems - maxRows
+        local scrollPercent = dd.scrollOffset / maxScroll
+        local thumbY = sbY + scrollPercent * (sbH - thumbH)
+        
+        local sbHovered = over(sbX - 3, sbY, sbW + 6, sbH)
+        if click and sbHovered then
+            ProjectState.draggingDropdownScroll = true
+        end
+        if not Input.m1.held then
+            ProjectState.draggingDropdownScroll = false
+        end
+        if ProjectState.draggingDropdownScroll then
+            local relativeY = ProjectState.mouseY - sbY - (thumbH / 2)
+            local targetPercent = clamp(relativeY / (sbH - thumbH), 0, 1)
+            dd.scrollOffset = floor(targetPercent * maxScroll + 0.5)
+            thumbY = sbY + targetPercent * (sbH - thumbH)
+        end
+        
+        rect(sbX, thumbY, sbW, thumbH, (sbHovered or ProjectState.draggingDropdownScroll) and Theme.accent or Theme.border, 114, 2)
+    else
+        if dd.scrollOffset > 0 then
+            triangle(v2(dd.x + dd.w - 14, dd.y + headerH + 8), v2(dd.x + dd.w - 6, dd.y + headerH + 8), v2(dd.x + dd.w - 10, dd.y + headerH + 4), Theme.sub, 115, true)
+        end
+        if dd.scrollOffset + maxRows < totalItems then
+            triangle(v2(dd.x + dd.w - 14, dd.y + dd.h - 8), v2(dd.x + dd.w - 6, dd.y + dd.h - 8), v2(dd.x + dd.w - 10, dd.y + dd.h - 4), Theme.sub, 115, true)
+        end
     end
 
-    for idx = 1, min(#dd.choices, maxRows) do
+    for idx = 1, min(totalItems, maxRows) do
         local actualIndex = idx + dd.scrollOffset
         local choice = dd.choices[actualIndex]
         if not choice then break end
@@ -2808,9 +2841,9 @@ local function renderDropdown(click, rightClick)
             end
         end
 
-        local hovered = over(dd.x, rowY, dd.w, 22)
+        local hovered = over(dd.x, rowY, dd.w - (hasScroll and 12 or 0), 22)
         if selected or hovered then
-            rect(dd.x + 2, rowY, dd.w - 4, 22, hovered and Theme.surface3 or Theme.surface2, 112, 3)
+            rect(dd.x + 2, rowY, dd.w - 4 - (hasScroll and 10 or 0), 22, hovered and Theme.surface3 or Theme.surface2, 112, 3)
         end
         local textX = dd.x + 10
         if selected then
@@ -2819,7 +2852,7 @@ local function renderDropdown(click, rightClick)
         end
 
         local isDeletable = dd.item and dd.item.deletable
-        local textMaxW = dd.w - 24 - (isDeletable and 20 or 0)
+        local textMaxW = dd.w - 24 - (isDeletable and 20 or 0) - (hasScroll and 12 or 0)
         txt(tostring(choice), textX, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontSystem, 113, false, false, textMaxW)
 
         if isDeletable then
