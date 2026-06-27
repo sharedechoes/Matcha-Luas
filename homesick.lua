@@ -2785,6 +2785,18 @@ local function renderDropdown(click, rightClick)
     local totalItems = #dd.choices
     local hasScroll = totalItems > maxRows
     
+    dd.visualScrollOffset = dd.visualScrollOffset or dd.scrollOffset or 0
+    if ProjectState.smoothScrollEnabled ~= false then
+        local dtValue = ProjectState.dt or 1/60
+        if dtValue <= 0 then dtValue = 1/60 end
+        dd.visualScrollOffset = dd.visualScrollOffset + (dd.scrollOffset - dd.visualScrollOffset) * (1 - math.exp(-15 * dtValue))
+        if math.abs(dd.visualScrollOffset - dd.scrollOffset) < 0.01 then
+            dd.visualScrollOffset = dd.scrollOffset
+        end
+    else
+        dd.visualScrollOffset = dd.scrollOffset
+    end
+
     if hasScroll then
         local sbW = 5
         local sbX = dd.x + dd.w - sbW - 3
@@ -2795,8 +2807,9 @@ local function renderDropdown(click, rightClick)
         
         local thumbH = clamp((maxRows / totalItems) * sbH, 15, sbH)
         local maxScroll = totalItems - maxRows
-        local scrollPercent = dd.scrollOffset / maxScroll
-        local thumbY = sbY + scrollPercent * (sbH - thumbH)
+        
+        local thumbPercent = dd.visualScrollOffset / maxScroll
+        local thumbY = sbY + thumbPercent * (sbH - thumbH)
         
         local sbHovered = over(sbX - 3, sbY, sbW + 6, sbH)
         if click and sbHovered then
@@ -2809,7 +2822,6 @@ local function renderDropdown(click, rightClick)
             local relativeY = ProjectState.mouseY - sbY - (thumbH / 2)
             local targetPercent = clamp(relativeY / (sbH - thumbH), 0, 1)
             dd.scrollOffset = floor(targetPercent * maxScroll + 0.5)
-            thumbY = sbY + targetPercent * (sbH - thumbH)
         end
         
         rect(sbX, thumbY, sbW, thumbH, (sbHovered or ProjectState.draggingDropdownScroll) and Theme.accent or Theme.border, 114, 2)
@@ -2822,12 +2834,17 @@ local function renderDropdown(click, rightClick)
         end
     end
 
-    for idx = 1, min(totalItems, maxRows) do
-        local actualIndex = idx + dd.scrollOffset
+    local startIdx = floor(dd.visualScrollOffset) + 1
+    local endIdx = min(totalItems, startIdx + maxRows + 1)
+    local fractionalOffset = dd.visualScrollOffset - floor(dd.visualScrollOffset)
+    local pixelOffset = fractionalOffset * 22
+
+    for actualIndex = startIdx, endIdx do
         local choice = dd.choices[actualIndex]
         if not choice then break end
         
-        local rowY = dd.y + 3 + headerH + (idx - 1) * 22
+        local idx = actualIndex - startIdx + 1
+        local rowY = dd.y + 3 + headerH + (idx - 1) * 22 - pixelOffset
         local selected = false
 
         if dd.kind == "keymode" then
@@ -2841,19 +2858,37 @@ local function renderDropdown(click, rightClick)
             end
         end
 
-        local hovered = over(dd.x, rowY, dd.w - (hasScroll and 12 or 0), 22)
-        if selected or hovered then
-            rect(dd.x + 2, rowY, dd.w - 4 - (hasScroll and 10 or 0), 22, hovered and Theme.surface3 or Theme.surface2, 112, 3)
+        local topBoundary = dd.y + headerH + 3
+        local bottomBoundary = dd.y + dd.h - 3
+        local visibleRatio = 1
+        if rowY < topBoundary then
+            visibleRatio = 1 - (topBoundary - rowY) / 22
+        elseif rowY + 22 > bottomBoundary then
+            visibleRatio = 1 - (rowY + 22 - bottomBoundary) / 22
         end
-        local textX = dd.x + 10
-        if selected then
-            textX = dd.x + 20
-            rect(dd.x + 10, rowY + 5, 2, 12, Theme.accent, 114)
-        end
+        visibleRatio = clamp(visibleRatio, 0, 1)
 
-        local isDeletable = dd.item and dd.item.deletable
-        local textMaxW = dd.w - 24 - (isDeletable and 20 or 0) - (hasScroll and 12 or 0)
-        txt(tostring(choice), textX, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontSystem, 113, false, false, textMaxW)
+        if visibleRatio > 0.05 then
+            local hovered = over(dd.x, rowY, dd.w - (hasScroll and 12 or 0), 22) and (rowY >= topBoundary - 10) and (rowY + 22 <= bottomBoundary + 10)
+            if selected or hovered then
+                local rectY = max(topBoundary, rowY)
+                local rectH = min(bottomBoundary, rowY + 22) - rectY
+                rect(dd.x + 2, rectY, dd.w - 4 - (hasScroll and 10 or 0), rectH, hovered and Theme.surface3 or Theme.surface2, 112, 3, visibleRatio)
+            end
+            local textX = dd.x + 10
+            if selected then
+                textX = dd.x + 20
+                local lineY = max(topBoundary, rowY + 5)
+                local lineH = min(bottomBoundary, rowY + 17) - lineY
+                if lineH > 0 then
+                    rect(dd.x + 10, lineY, 2, lineH, Theme.accent, 114, 0, visibleRatio)
+                end
+            end
+
+            local isDeletable = dd.item and dd.item.deletable
+            local textMaxW = dd.w - 24 - (isDeletable and 20 or 0) - (hasScroll and 12 or 0)
+            txt(tostring(choice), textX, textTop(rowY, 22, 13), selected and Theme.accent or Theme.text, 13, FontSystem, 113, false, false, textMaxW, visibleRatio)
+        end
 
         if isDeletable then
             local trashW = 18
@@ -4378,6 +4413,7 @@ local function serializeConfigData()
         spotlightEnabled = ProjectState.spotlightEnabled,
         spotlightKeybind = ProjectState.spotlightKeybind,
         caretEnabled = ProjectState.caretEnabled ~= false,
+        smoothScrollEnabled = ProjectState.smoothScrollEnabled ~= false,
     }
     for _, t in ipairs(ProjectState.tabs) do
         for _, s in ipairs(t.sections) do
@@ -4447,6 +4483,11 @@ local function loadConfig(json, force)
                 ProjectState.caretEnabled = configData.system.caretEnabled == true
             else
                 ProjectState.caretEnabled = true
+            end
+            if configData.system.smoothScrollEnabled ~= nil then
+                ProjectState.smoothScrollEnabled = configData.system.smoothScrollEnabled == true
+            else
+                ProjectState.smoothScrollEnabled = true
             end
         end
         if force or ProjectState.autoloadConfig then
@@ -4807,6 +4848,10 @@ local function initSettings()
     end)
     generalSec:Checkbox("writing caret", ProjectState.caretEnabled ~= false, function(val)
         ProjectState.caretEnabled = val
+        pcall(saveConfig)
+    end)
+    generalSec:Checkbox("smooth scrolling", ProjectState.smoothScrollEnabled ~= false, function(val)
+        ProjectState.smoothScrollEnabled = val
         pcall(saveConfig)
     end)
     local spotlightCheckbox = generalSec:Checkbox("Spotlight Search", ProjectState.spotlightEnabled ~= false, function(val)
