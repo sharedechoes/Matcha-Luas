@@ -274,7 +274,6 @@ trackConnection(game:GetService("RunService").RenderStepped:Connect(function()
         draw_highscore.Visible = false
         draw_left_cover.Visible = false
         draw_right_cover.Visible = false
-        draw_coin_icon.Visible = false
         for i = 1, 6 do draw_pipes[i].Visible = false end
         for i = 1, 4 do draw_digits[i].Visible = false end
         for i = 1, 4 do draw_high_digits[i].Visible = false end
